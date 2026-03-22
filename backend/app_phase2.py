@@ -452,159 +452,157 @@ def format_design_document(doc: dict) -> str:
 
 
 def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
-    """生成データからExcelファイルを作成（見やすいフォーマット）"""
+    """生成データから1シート形式のExcelファイルを作成（参考スプレッドシート準拠）"""
     wb = Workbook()
-    wb.remove(wb.active)
+    ws = wb.active
+    ws.title = "手順書"
 
-    # --- カラー定義 ---
-    PRIMARY = "1F4E79"       # ダークブルー（ヘッダー）
-    PRIMARY_LIGHT = "D6E4F0"  # ライトブルー（偶数行）
-    ACCENT = "2E75B6"        # アクセントブルー（タイトル）
-    WHITE = "FFFFFF"
-    GRAY_BG = "F2F2F2"       # 奇数行
-    BORDER_COLOR = "B4C6E7"  # 薄いボーダー
+    # --- スタイル定義 ---
+    GRAY_BG = "EFEFEF"
+    font9 = Font(name="Yu Gothic UI", size=9)
+    font9_bold = Font(name="Yu Gothic UI", size=9, bold=True)
+    font10 = Font(name="Yu Gothic UI", size=10)
+    section_fill = PatternFill(start_color=GRAY_BG, end_color=GRAY_BG, fill_type="solid")
+    wrap = Alignment(wrap_text=True, vertical="top")
 
-    # --- フォント ---
-    title_font = Font(name="Yu Gothic UI", bold=True, size=14, color=ACCENT)
-    subtitle_font = Font(name="Yu Gothic UI", size=9, color="666666")
-    header_font = Font(name="Yu Gothic UI", bold=True, size=10, color=WHITE)
-    cell_font = Font(name="Yu Gothic UI", size=9)
-    cell_font_bold = Font(name="Yu Gothic UI", bold=True, size=9, color=PRIMARY)
-    step_font = Font(name="Yu Gothic UI", bold=True, size=11, color=ACCENT)
+    STEP_MARKS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩",
+                  "⑪", "⑫", "⑬", "⑭", "⑮", "⑯", "⑰", "⑱", "⑲", "⑳"]
 
-    # --- 塗りつぶし ---
-    header_fill = PatternFill(start_color=PRIMARY, end_color=PRIMARY, fill_type="solid")
-    even_fill = PatternFill(start_color=PRIMARY_LIGHT, end_color=PRIMARY_LIGHT, fill_type="solid")
-    odd_fill = PatternFill(start_color=GRAY_BG, end_color=GRAY_BG, fill_type="solid")
-    white_fill = PatternFill(start_color=WHITE, end_color=WHITE, fill_type="solid")
+    # --- 列幅設定（均一グリッド） ---
+    ws.column_dimensions["A"].width = 4
+    for c in "BCDEFGHIJKLMNOPQRSTU":
+        ws.column_dimensions[c].width = 13
 
-    # --- ボーダー ---
-    thin_side = Side(style="thin", color=BORDER_COLOR)
-    thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
-    bottom_accent = Border(bottom=Side(style="medium", color=ACCENT))
+    # --- セクション帯を書く関数 ---
+    def write_section_header(row, title_text):
+        for col in range(1, 21):  # A-T
+            cell = ws.cell(row=row, column=col)
+            cell.fill = section_fill
+        ws.cell(row=row, column=2, value=title_text).font = font9_bold
 
-    # --- アラインメント ---
-    wrap_top = Alignment(wrap_text=True, vertical="top")
-    wrap_center = Alignment(wrap_text=True, vertical="center", horizontal="center")
-    center = Alignment(horizontal="center", vertical="center")
+    # --- セクション探索 ---
+    sections = generation_data.get("sections", [])
+    overview_sec = next((s for s in sections if s.get("sheet_name") == "概要"), None)
+    prep_sec = next((s for s in sections if "準備" in s.get("sheet_name", "")), None)
+    proc_sec = next((s for s in sections if "加工" in s.get("sheet_name", "") or "結合" in s.get("sheet_name", "")), None)
+    check_sec = next((s for s in sections if "確認" in s.get("sheet_name", "")), None)
+    verify_sec = next((s for s in sections if "検証" in s.get("sheet_name", "")), None)
 
-    # --- カラム幅のヒント ---
-    COL_WIDTH_HINTS = {
-        "Step": 6, "No": 6,
-        "操作種別(b→dash名)": 18, "操作種別": 18,
-        "UI操作パス": 40,
-        "操作内容・設定値": 50, "操作内容": 40,
-        "保存ファイル名": 22,
-        "結果の状態": 28, "結果": 28,
-        "確認ポイント": 28, "確認結果": 12,
-        "備考": 20,
-        "項目": 18, "内容": 55,
-        "データファイル名": 22, "テーブル名": 18,
-        "用途": 25, "使用カラム": 40, "主要カラム": 35,
-        "アウトプットカラム": 20, "確認項目": 20,
-        "ソース": 20, "加工方法": 30,
-        "期待値": 25, "期待結果": 25,
-        "検証カテゴリ": 14, "検証項目": 22, "検証方法": 35,
-        "実際結果": 12, "OK/NG": 8, "対処方法": 25,
-        "ソースカラム/加工方法": 30,
-    }
+    cur_row = 1
 
-    for i, section in enumerate(generation_data.get("sections", [])):
-        sheet_name = section.get("sheet_name", f"Sheet{i+1}")[:31]
-        ws = wb.create_sheet(sheet_name)
-        ws.sheet_properties.tabColor = ACCENT
+    # ========== ■ フロー セクション ==========
+    write_section_header(cur_row, "■ フロー")
+    cur_row += 1
 
-        title = section.get("title", sheet_name)
-        columns = section.get("columns", [])
-        rows = section.get("rows", [])
-        num_cols = len(columns) if columns else 1
+    # データ準備テーブルをボックスで配置
+    if prep_sec and prep_sec.get("rows"):
+        cur_row += 1  # 空行
+        tables = prep_sec["rows"]
+        col_start = 3  # C列から開始
+        for t_idx, table_row in enumerate(tables):
+            tbl_name = table_row[1] if len(table_row) > 1 else f"テーブル{t_idx+1}"
+            usage = table_row[2] if len(table_row) > 2 else ""
+            cols_info = table_row[3] if len(table_row) > 3 else ""
 
-        # --- タイトル行 ---
-        title_cell = ws.cell(row=1, column=1, value=title)
-        title_cell.font = title_font
-        if num_cols > 1:
-            ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=num_cols)
+            base_col = col_start + t_idx * 5  # 5列ごとに配置
+            if base_col > 18:
+                break
 
-        # サブタイトル（件数表示）
-        sub_cell = ws.cell(row=2, column=1, value=f"（{len(rows)} 件）")
-        sub_cell.font = subtitle_font
+            # テーブル名ラベル
+            ws.cell(row=cur_row, column=base_col, value="ID").font = font9
+            id_cell = ws.cell(row=cur_row + 1, column=base_col, value=tbl_name)
+            id_cell.font = font9
+            # マージして箱っぽく
+            end_col = base_col + 2
+            ws.merge_cells(start_row=cur_row + 1, start_column=base_col,
+                          end_row=cur_row + 3, end_column=end_col)
+            id_cell.alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
 
-        # --- ヘッダー行（row=4、row3は余白） ---
-        header_row = 4
-        ws.row_dimensions[3].height = 6  # 余白行
-        ws.row_dimensions[header_row].height = 28
+        cur_row += 5  # テーブルボックス分
 
-        for j, col_name in enumerate(columns):
-            cell = ws.cell(row=header_row, column=j + 1, value=col_name)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.border = thin_border
-            cell.alignment = center
+    cur_row += 1  # 空行
 
-        # --- データ行 ---
-        data_start = header_row + 1
-        for r_idx, row_data in enumerate(rows):
-            row_num = data_start + r_idx
-            is_even = r_idx % 2 == 0
-            row_fill = white_fill if is_even else odd_fill
+    # ========== ■ 手順書 セクション ==========
+    write_section_header(cur_row, "■ 手順書")
+    cur_row += 1
 
-            # 行の高さ（内容に応じて調整）
-            max_lines = 1
-            for c_idx, value in enumerate(row_data):
-                val_str = str(value) if value else ""
-                lines = val_str.count("\n") + 1
-                max_lines = max(max_lines, lines)
-            ws.row_dimensions[row_num].height = max(18, min(max_lines * 15, 120))
+    if proc_sec and proc_sec.get("rows"):
+        proc_rows = proc_sec["rows"]
+        step_counter = 0  # ①②③ のカウンタ
 
-            for c_idx, value in enumerate(row_data):
-                val_str = str(value) if value else ""
-                cell = ws.cell(row=row_num, column=c_idx + 1, value=val_str)
-                cell.border = thin_border
-                cell.alignment = wrap_top
-                cell.fill = row_fill
+        for p_idx, p_row in enumerate(proc_rows):
+            cur_row += 1  # 空行（各ステップ間に空行）
 
-                col_name = columns[c_idx] if c_idx < len(columns) else ""
+            step_val = p_row[0] if len(p_row) > 0 else ""  # Step番号
+            op_type = p_row[1] if len(p_row) > 1 else ""   # 操作種別
+            # 設定値は列3（操作内容・設定値）を使う
+            settings = p_row[3] if len(p_row) > 3 else ""
 
-                # Step列は太字・センタリング
-                if col_name in ("Step", "No") and val_str:
-                    cell.font = step_font
-                    cell.alignment = wrap_center
-                # 操作種別は太字
-                elif "操作種別" in col_name:
-                    cell.font = cell_font_bold
-                    cell.alignment = wrap_top
-                # OK/NG列はセンタリング
-                elif col_name in ("OK/NG", "確認結果"):
-                    cell.font = cell_font
-                    cell.alignment = wrap_center
-                else:
-                    cell.font = cell_font
+            # B列: ステップマーク（①②③...） - Step番号がある場合のみ
+            if step_val and str(step_val).strip():
+                mark = STEP_MARKS[step_counter] if step_counter < len(STEP_MARKS) else f"({step_counter+1})"
+                ws.cell(row=cur_row, column=2, value=mark).font = font9
+                step_counter += 1
 
-        # --- カラム幅設定 ---
-        for col_idx in range(1, num_cols + 1):
-            col_name = columns[col_idx - 1] if col_idx <= len(columns) else ""
-            col_letter = ws.cell(row=header_row, column=col_idx).column_letter
+            # C列: サブ番号
+            sub_num = p_row[0] if len(p_row) > 0 and p_row[0] else ""
+            if sub_num:
+                ws.cell(row=cur_row, column=3, value=float(sub_num) if sub_num else "").font = font9
 
-            if col_name in COL_WIDTH_HINTS:
-                ws.column_dimensions[col_letter].width = COL_WIDTH_HINTS[col_name]
-            else:
-                # 自動計算
-                max_len = max(len(col_name) * 2, 10)
-                for row_idx in range(data_start, ws.max_row + 1):
-                    val = ws.cell(row=row_idx, column=col_idx).value
-                    if val:
-                        first_line = str(val).split("\n")[0]
-                        max_len = max(max_len, len(first_line) * 1.3)
-                ws.column_dimensions[col_letter].width = min(max_len, 50)
+            # D列: 操作種別
+            ws.cell(row=cur_row, column=4, value=op_type).font = font9
 
-        # --- フリーズペイン（ヘッダー固定） ---
-        ws.freeze_panes = f"A{data_start}"
+            # J列: 設定値（改行あり）
+            settings_cell = ws.cell(row=cur_row, column=10, value=settings)
+            settings_cell.font = font9
+            settings_cell.alignment = wrap
 
-        # --- 印刷設定 ---
-        ws.page_setup.orientation = "landscape"
-        ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 0
-        ws.sheet_properties.pageSetUpPr.fitToPage = True
+    cur_row += 2  # 空行
+
+    # ========== ■ 最終確認 セクション ==========
+    if check_sec and check_sec.get("rows"):
+        write_section_header(cur_row, "■ 最終確認")
+        cur_row += 1
+
+        # ヘッダー行
+        for j, col_name in enumerate(check_sec.get("columns", [])):
+            cell = ws.cell(row=cur_row, column=j + 2, value=col_name)
+            cell.font = font9_bold
+            cell.fill = section_fill
+        cur_row += 1
+
+        for check_row in check_sec["rows"]:
+            for c_idx, val in enumerate(check_row):
+                cell = ws.cell(row=cur_row, column=c_idx + 2, value=str(val) if val else "")
+                cell.font = font9
+                cell.alignment = wrap
+            cur_row += 1
+
+    cur_row += 1
+
+    # ========== ■ 検証観点 セクション ==========
+    if verify_sec and verify_sec.get("rows"):
+        write_section_header(cur_row, "■ 検証観点")
+        cur_row += 1
+
+        for j, col_name in enumerate(verify_sec.get("columns", [])):
+            cell = ws.cell(row=cur_row, column=j + 2, value=col_name)
+            cell.font = font9_bold
+            cell.fill = section_fill
+        cur_row += 1
+
+        for v_row in verify_sec["rows"]:
+            for c_idx, val in enumerate(v_row):
+                cell = ws.cell(row=cur_row, column=c_idx + 2, value=str(val) if val else "")
+                cell.font = font9
+                cell.alignment = wrap
+            cur_row += 1
+
+    # --- 印刷設定 ---
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
 
     title = generation_data.get("title", "データパレット構築手順書")
     filename = f"{title}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
