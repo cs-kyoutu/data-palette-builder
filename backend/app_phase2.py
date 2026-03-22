@@ -488,37 +488,101 @@ def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
     check_sec = next((s for s in sections if "確認" in s.get("sheet_name", "")), None)
     verify_sec = next((s for s in sections if "検証" in s.get("sheet_name", "")), None)
 
+    # --- 3x3ボックスを描画する関数 ---
+    box_border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
+    )
+    box_align = Alignment(wrap_text=True, vertical="center", horizontal="center")
+
+    def draw_box(row, col, label, id_label="ID"):
+        """3x3マージセルのボックスを描画。上にIDラベル付き"""
+        # ID ラベル（ボックス上部、マージ）
+        ws.cell(row=row, column=col, value=id_label).font = font9
+        if col + 1 <= 20:
+            ws.merge_cells(start_row=row, start_column=col + 1,
+                          end_row=row, end_column=col + 2)
+        # ボックス本体（3行×3列マージ）
+        box_cell = ws.cell(row=row + 1, column=col, value=label)
+        box_cell.font = font10
+        box_cell.alignment = box_align
+        ws.merge_cells(start_row=row + 1, start_column=col,
+                      end_row=row + 3, end_column=col + 2)
+        # ボーダー
+        for r in range(row + 1, row + 4):
+            for c in range(col, col + 3):
+                ws.cell(row=r, column=c).border = box_border
+
     cur_row = 1
 
     # ========== ■ フロー セクション ==========
     write_section_header(cur_row, "■ フロー")
-    cur_row += 1
+    cur_row += 2  # 空行
 
-    # データ準備テーブルをボックスで配置
-    if prep_sec and prep_sec.get("rows"):
-        cur_row += 1  # 空行
+    # フロー図：テーブルとステップの関係を可視化
+    if prep_sec and prep_sec.get("rows") and proc_sec and proc_sec.get("rows"):
         tables = prep_sec["rows"]
-        col_start = 3  # C列から開始
-        for t_idx, table_row in enumerate(tables):
-            tbl_name = table_row[1] if len(table_row) > 1 else f"テーブル{t_idx+1}"
-            usage = table_row[2] if len(table_row) > 2 else ""
-            cols_info = table_row[3] if len(table_row) > 3 else ""
+        proc_rows = proc_sec["rows"]
 
-            base_col = col_start + t_idx * 5  # 5列ごとに配置
-            if base_col > 18:
+        # メインステップ抽出
+        main_steps = [r for r in proc_rows if r[0] and str(r[0]).strip()]
+
+        # テーブル名リスト
+        tbl_names = [t[1] if len(t) > 1 else f"テーブル{i}" for i, t in enumerate(tables)]
+
+        # どのステップでどのテーブルが初登場するか判定
+        tbl_first_step = {}
+        for t_name in tbl_names:
+            for s_idx, step in enumerate(main_steps):
+                combined = " ".join(str(step[c]) for c in range(len(step)) if step[c])
+                if t_name in combined:
+                    tbl_first_step[t_name] = s_idx
+                    break
+            if t_name not in tbl_first_step:
+                tbl_first_step[t_name] = 0
+
+        # Step1で使われるテーブル → 上段の先頭に配置
+        upper_tables = [t for t in tbl_names if tbl_first_step.get(t, 0) == 0]
+        lower_tables = [(t, tbl_first_step[t]) for t in tbl_names if tbl_first_step.get(t, 0) > 0]
+
+        flow_id_row = cur_row
+        base_col = 3  # C列
+
+        # 上段: 最初のテーブル → ①→②→③...
+        if upper_tables:
+            draw_box(flow_id_row, base_col, upper_tables[0])
+
+        # ステップボックス（5列間隔で横に配置）
+        step_col_map = {}
+        for s_idx in range(len(main_steps)):
+            s_col = base_col + 5 + s_idx * 5
+            if s_col + 2 > 21:
                 break
+            mark = STEP_MARKS[s_idx] if s_idx < len(STEP_MARKS) else f"({s_idx+1})"
+            draw_box(flow_id_row, s_col, mark)
+            step_col_map[s_idx] = s_col
 
-            # テーブル名ラベル
-            ws.cell(row=cur_row, column=base_col, value="ID").font = font9
-            id_cell = ws.cell(row=cur_row + 1, column=base_col, value=tbl_name)
-            id_cell.font = font9
-            # マージして箱っぽく
-            end_col = base_col + 2
-            ws.merge_cells(start_row=cur_row + 1, start_column=base_col,
-                          end_row=cur_row + 3, end_column=end_col)
-            id_cell.alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
+            # 横矢印（→）
+            arrow_col = s_col - 1
+            if arrow_col > base_col + 2:
+                ws.cell(row=flow_id_row + 2, column=arrow_col, value="→").font = font10
 
-        cur_row += 5  # テーブルボックス分
+        # 最初のテーブル→①の矢印
+        if step_col_map:
+            first_step_col = step_col_map[0]
+            ws.cell(row=flow_id_row + 2, column=first_step_col - 1, value="→").font = font10
+
+        # 下段: 後から結合されるテーブルを、対応するステップの下に配置
+        if lower_tables:
+            lower_row = flow_id_row + 5
+            for t_name, s_idx in lower_tables:
+                t_col = step_col_map.get(s_idx, base_col)
+                draw_box(lower_row, t_col, t_name)
+                # 上矢印（↑）：下段テーブル → 上段ステップ
+                ws.cell(row=lower_row - 1, column=t_col + 1, value="↑").font = font10
+            cur_row = lower_row + 5
+        else:
+            cur_row = flow_id_row + 5
 
     cur_row += 1  # 空行
 
