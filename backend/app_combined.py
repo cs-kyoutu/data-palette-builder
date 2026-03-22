@@ -154,6 +154,10 @@ async def doala_image():
 async def cloud_logo():
     return FileResponse(FRONTEND_PATH / "cloud_logo.svg", media_type="image/svg+xml")
 
+@app.get("/favicon.svg")
+async def favicon():
+    return FileResponse(FRONTEND_PATH / "favicon.svg", media_type="image/svg+xml")
+
 
 # --- APIエンドポイント ---
 
