@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "data-palette-combined",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["start_combined.py"],
+      "port": 8005
+    }
+  ]
+}
