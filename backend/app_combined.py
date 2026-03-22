@@ -155,8 +155,12 @@ async def cloud_logo():
     return FileResponse(FRONTEND_PATH / "cloud_logo.svg", media_type="image/svg+xml")
 
 @app.get("/favicon.svg")
-async def favicon():
+async def favicon_svg():
     return FileResponse(FRONTEND_PATH / "favicon.svg", media_type="image/svg+xml")
+
+@app.get("/favicon.png")
+async def favicon_png():
+    return FileResponse(FRONTEND_PATH / "favicon.png", media_type="image/png")
 
 
 # --- APIエンドポイント ---
