@@ -136,6 +136,7 @@ class ChatResponse(BaseModel):
     status: str  # "asking" | "design_ready" | "done" | "error"
     design_download_url: str | None = None
     procedure_download_url: str | None = None
+    procedure_text: str | None = None  # 手順書テキスト（ダウンロード代替用）
     design_summary: dict | None = None  # 設計書プレビュー用
 
 
@@ -563,6 +564,7 @@ async def generate_procedure(req: ProcedureRequest):
         )
         session["procedure_file"] = filepath
         session["procedure_filename"] = filename
+        session["procedure_text"] = procedure_text
 
         return ChatResponse(
             session_id=req.session_id,
@@ -570,12 +572,15 @@ async def generate_procedure(req: ProcedureRequest):
             status="done",
             design_download_url=f"/api/download/{req.session_id}/design",
             procedure_download_url=f"/api/download/{req.session_id}/procedure",
+            procedure_text=procedure_text,
         )
     except Exception as e:
+        # Excel生成に失敗してもテキストは返す
         return ChatResponse(
             session_id=req.session_id,
-            reply=f"Excel生成でエラー: {e}",
-            status="error",
+            reply=f"Excel生成でエラーが発生しましたが、テキスト版は生成できました。",
+            status="done",
+            procedure_text=procedure_text,
             design_download_url=f"/api/download/{req.session_id}/design",
         )
 

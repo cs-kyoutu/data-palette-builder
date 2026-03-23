@@ -437,6 +437,49 @@
       color: var(--primary-dark);
       border: 2px solid var(--border);
     }
+    .procedure-text-wrapper {
+      margin: 12px 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .procedure-text-toggle {
+      display: block;
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: none;
+      text-align: left;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--primary-dark);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .procedure-text-toggle:hover { background: var(--primary-bg); }
+    .procedure-text-content {
+      padding: 14px;
+      font-size: 12px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      background: var(--surface);
+      max-height: 500px;
+      overflow-y: auto;
+      font-family: "Noto Sans JP", monospace;
+    }
+    .procedure-text-copy {
+      display: block;
+      width: 100%;
+      padding: 8px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .procedure-text-copy:hover { background: var(--primary-dark); }
     .download-btn.outlined:hover {
       border-color: var(--primary);
       background: var(--primary-bg);
@@ -1122,6 +1165,9 @@
       document.getElementById("aiInputArea").classList.remove("visible");
       removeLoadingSpinner();
       showDownloadButtons(data.design_download_url, data.procedure_download_url);
+      if (data.procedure_text) {
+        showProcedureText(data.procedure_text);
+      }
     }
   }
 
@@ -1373,8 +1419,14 @@
       if (data.status === "done") {
         renderMessage("ai", data.reply);
         showDownloadButtons(data.design_download_url, data.procedure_download_url);
+        if (data.procedure_text) {
+          showProcedureText(data.procedure_text);
+        }
       } else {
         renderMessage("ai", "手順書生成に失敗しました: " + data.reply);
+        if (data.procedure_text) {
+          showProcedureText(data.procedure_text);
+        }
       }
     } catch(e) {
       removeLoadingSpinner();
@@ -1443,6 +1495,47 @@
     }
 
     container.appendChild(area);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function showProcedureText(text) {
+    var container = document.getElementById("aiMessages");
+    var wrapper = document.createElement("div");
+    wrapper.className = "procedure-text-wrapper";
+
+    var toggle = document.createElement("button");
+    toggle.className = "procedure-text-toggle";
+    toggle.textContent = "▶ 手順書テキストを表示（ダウンロードできない場合はこちらをコピー）";
+    toggle.onclick = function() {
+      var content = wrapper.querySelector(".procedure-text-content");
+      if (content.style.display === "none") {
+        content.style.display = "block";
+        toggle.textContent = "▼ 手順書テキストを閉じる";
+      } else {
+        content.style.display = "none";
+        toggle.textContent = "▶ 手順書テキストを表示（ダウンロードできない場合はこちらをコピー）";
+      }
+    };
+    wrapper.appendChild(toggle);
+
+    var content = document.createElement("pre");
+    content.className = "procedure-text-content";
+    content.style.display = "none";
+    content.textContent = text;
+    wrapper.appendChild(content);
+
+    var copyBtn = document.createElement("button");
+    copyBtn.className = "procedure-text-copy";
+    copyBtn.textContent = "テキストをコピー";
+    copyBtn.onclick = function() {
+      navigator.clipboard.writeText(text).then(function() {
+        copyBtn.textContent = "✓ コピーしました";
+        setTimeout(function() { copyBtn.textContent = "テキストをコピー"; }, 2000);
+      });
+    };
+    wrapper.appendChild(copyBtn);
+
+    container.appendChild(wrapper);
     container.scrollTop = container.scrollHeight;
   }
 </script>
