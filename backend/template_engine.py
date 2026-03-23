@@ -152,6 +152,27 @@ def render_集約(settings: dict) -> str:
 
 def render_IF文(settings: dict) -> str:
     """IF文の手順テキストを生成"""
+    # 期間判定パターン
+    if settings.get("type") == "period":
+        date_col = settings.get("date_column", "")
+        start_col = settings.get("start_column", "")
+        end_col = settings.get("end_column", "")
+        true_val = settings.get("true_value", "")
+        false_val = settings.get("false_value", "")
+
+        lines = ["『IF文』", "《絶対期間》を選択"]
+        if start_col and end_col:
+            lines.append(f"「{date_col}」が[開始日]「{start_col}」と[終了日]「{end_col}」《指定の期間に一致する》の場合、\"\"{true_val}\"\"に変換")
+        elif start_col:
+            lines.append(f"「{date_col}」が[開始日]「{start_col}」《指定の期間に一致する》の場合、\"\"{true_val}\"\"に変換")
+        elif end_col:
+            lines.append(f"「{date_col}」が[終了日]「{end_col}」《指定の期間に一致する》の場合、\"\"{true_val}\"\"に変換")
+        lines.append(f"いずれの条件分岐にも該当しない場合、\"\"{false_val}\"\"に変換")
+        lines.append("[開始日時/終了日時を含めない]にチェックを入れない")
+        lines.append("[期間指定にカラムを使用する]にチェックを入れる")
+        return "\n".join(lines)
+
+    # 通常パターン
     conditions = settings.get("conditions", [])
     else_value = settings.get("else_value", "《空白》")
 
@@ -161,8 +182,15 @@ def render_IF文(settings: dict) -> str:
         condition = cond.get("condition", "")
         value = cond.get("value", "")
         result = cond.get("result", "")
+        # カラム参照の場合
         if "カラム" in condition or "カラムの値" in condition:
             lines.append(f"「{col}」が「{value}」《{condition}》の場合、\"\"{result}\"\"に変換")
+        # カンマ区切り複数値一致
+        elif "カンマ区切り" in condition:
+            lines.append(f"「{col}」が\"\"{value}\"\"《{condition}》の場合、\"\"{result}\"\"に変換")
+        # 結果がカラム参照の場合
+        elif result.startswith("「") and result.endswith("」"):
+            lines.append(f"「{col}」が\"\"{value}\"\"《{condition}》の場合、{result}に変換")
         else:
             lines.append(f"「{col}」が\"\"{value}\"\"《{condition}》の場合、\"\"{result}\"\"に変換")
     lines.append(f"いずれの条件分岐にも該当しない場合、{else_value}に変換")
