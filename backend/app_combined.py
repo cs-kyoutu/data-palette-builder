@@ -466,22 +466,47 @@ async def design_feedback(req: ChatRequest):
 
 @app.post("/api/generate-procedure", response_model=ChatResponse)
 async def generate_procedure(req: ProcedureRequest):
-    """設計書承認後にPhase2（手順書生成）を実行"""
+    """
+    設計書承認後にPhase2（手順書生成）を実行。
+    ハイブリッド方式: AI精査 → テンプレートエンジンで手順書テキスト生成 → Excel出力
+    """
+    from .template_engine import render_procedure, render_group
+
     session = sessions.get(req.session_id)
     if not session or not session.get("design_doc"):
         raise HTTPException(404, "設計書が見つかりません。先にPhase1を完了してください。")
 
     design_doc = session["design_doc"]
 
+    # --- Phase2前半: AIが設計書を精査・補完 ---
+    # processing_groupsの検証、不足stepの追加、カラム名の確認等
     try:
         design_text = format_design_document(design_doc)
-        system_prompt_p2 = SYSTEM_PROMPT_PHASE2.format(design_document=design_text)
+        ai_review_prompt = f"""以下の設計書のprocessing_groupsを精査してください。
 
+{design_text}
+
+## やること
+1. processing_groupsの各stepが正しいb→dash操作になっているか確認
+2. 不足しているstepがあれば追加（型変換、カラム名変更、削除等）
+3. 各stepのsettingsに必要な変数がすべて含まれているか確認・補完
+4. テンプレート縦→横変換後のカラム名変更stepが含まれているか確認
+
+## 出力
+精査・補完済みのprocessing_groupsをJSON形式で出力してください。
+変更がなくてもそのまま出力してください。
+
+```json
+{{
+  "processing_groups": [...],
+  "review_notes": ["精査で追加・修正した内容のメモ"]
+}}
+```
+"""
         response_p2 = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=16384,
-            system=system_prompt_p2,
-            messages=[{"role": "user", "content": "設計書の内容に基づいて完全な手順書を生成してください。質問不要。JSON出力のみ。"}],
+            max_tokens=12000,
+            messages=[{"role": "user", "content": ai_review_prompt}],
         )
         p2_text = response_p2.content[0].text
     except anthropic.APIError as e:
@@ -492,34 +517,180 @@ async def generate_procedure(req: ProcedureRequest):
             design_download_url=f"/api/download/{req.session_id}/design",
         )
 
+    # --- AIの精査結果からprocessing_groupsを取得 ---
+    reviewed_groups = None
     if "```json" in p2_text:
         try:
             p2_json_str = p2_text.split("```json")[1].split("```")[0].strip()
-            generation_data = json.loads(p2_json_str)
+            review_result = json.loads(p2_json_str)
+            reviewed_groups = review_result.get("processing_groups")
+        except (json.JSONDecodeError, IndexError):
+            pass
 
-            if generation_data.get("action") == "generate":
-                filepath, filename = build_spreadsheet(generation_data)
-                session["procedure_file"] = filepath
-                session["procedure_filename"] = filename
+    # AIの精査が失敗した場合は元の設計書を使う
+    if not reviewed_groups:
+        reviewed_groups = design_doc.get("processing_groups", [])
+        if not reviewed_groups:
+            # 旧形式: processing_stepsから変換
+            steps = design_doc.get("processing_steps", [])
+            if steps:
+                reviewed_groups = [{"group": "A", "name": "メイン処理", "steps": steps}]
 
-                return ChatResponse(
-                    session_id=req.session_id,
-                    reply="手順書の生成が完了しました！",
-                    status="done",
-                    design_download_url=f"/api/download/{req.session_id}/design",
-                    procedure_download_url=f"/api/download/{req.session_id}/procedure",
-                )
-        except (json.JSONDecodeError, IndexError) as e:
-            return ChatResponse(
-                session_id=req.session_id,
-                reply=f"手順書の解析に失敗: {e}",
-                status="error",
-                design_download_url=f"/api/download/{req.session_id}/design",
-            )
+    # --- Phase2後半: テンプレートエンジンで手順書テキスト生成 ---
+    procedure_text_parts = []
+    for group in reviewed_groups:
+        procedure_text_parts.append(render_group(group))
 
-    return ChatResponse(
-        session_id=req.session_id,
-        reply="手順書の生成に失敗しました。設計書をダウンロードして手動で確認してください。",
-        status="error",
-        design_download_url=f"/api/download/{req.session_id}/design",
+    procedure_text = "\n\n".join(procedure_text_parts)
+
+    # --- Excel出力（手順書テキストをシートに書き込み） ---
+    try:
+        filepath, filename = _build_procedure_excel(
+            design_doc=design_doc,
+            groups=reviewed_groups,
+            procedure_text=procedure_text,
+        )
+        session["procedure_file"] = filepath
+        session["procedure_filename"] = filename
+
+        return ChatResponse(
+            session_id=req.session_id,
+            reply="手順書の生成が完了しました！",
+            status="done",
+            design_download_url=f"/api/download/{req.session_id}/design",
+            procedure_download_url=f"/api/download/{req.session_id}/procedure",
+        )
+    except Exception as e:
+        return ChatResponse(
+            session_id=req.session_id,
+            reply=f"Excel生成でエラー: {e}",
+            status="error",
+            design_download_url=f"/api/download/{req.session_id}/design",
+        )
+
+
+def _build_procedure_excel(design_doc: dict, groups: list, procedure_text: str) -> tuple[str, str]:
+    """テンプレートエンジンの出力からExcelファイルを生成"""
+    from .template_engine import render_step
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "手順書"
+
+    # --- スタイル定義 ---
+    font9 = Font(name="Noto Sans JP", size=9)
+    font10 = Font(name="Noto Sans JP", size=10)
+    font_bold = Font(name="Noto Sans JP", size=9, bold=True)
+    header_fill = PatternFill(start_color="FFEFEFEF", end_color="FFEFEFEF", fill_type="solid")
+    header_align = Alignment(wrap_text=True, vertical="center")
+    cell_align = Alignment(wrap_text=True, vertical="top")
+    thin_border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
     )
+
+    # 列幅設定
+    col_widths = {"A": 4, "B": 6, "C": 6, "D": 14, "E": 14, "F": 14, "G": 14, "H": 14, "I": 14, "J": 50}
+    for col, width in col_widths.items():
+        ws.column_dimensions[col].width = width
+
+    cur_row = 1
+
+    # --- ■ フロー セクション ---
+    ws.cell(row=cur_row, column=2, value="■ フロー").font = font_bold
+    for c in range(1, 11):
+        ws.cell(row=cur_row, column=c).fill = header_fill
+    cur_row += 2
+
+    # フロー図: グループをボックスで表示
+    STEP_MARKS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"]
+    box_border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
+    )
+    box_align = Alignment(wrap_text=True, vertical="center", horizontal="center")
+
+    base_col = 3
+    for g_idx, group in enumerate(groups):
+        if g_idx >= len(STEP_MARKS):
+            break
+        s_col = base_col + g_idx * 5
+        if s_col + 2 > 20:
+            break
+        mark = STEP_MARKS[g_idx]
+        label = f"{mark}\n{group.get('name', '')}"
+
+        # ボックス本体（3行×3列マージ）
+        cell = ws.cell(row=cur_row, column=s_col, value=label)
+        cell.font = font9
+        cell.alignment = box_align
+        ws.merge_cells(start_row=cur_row, start_column=s_col,
+                      end_row=cur_row + 2, end_column=s_col + 2)
+        for r in range(cur_row, cur_row + 3):
+            for c in range(s_col, s_col + 3):
+                ws.cell(row=r, column=c).border = box_border
+
+        # 矢印
+        if g_idx > 0:
+            ws.cell(row=cur_row + 1, column=s_col - 1, value="→").font = font10
+
+    cur_row += 5
+
+    # --- ■ 手順書 セクション ---
+    ws.cell(row=cur_row, column=2, value="■ 手順書").font = font_bold
+    for c in range(1, 11):
+        ws.cell(row=cur_row, column=c).fill = header_fill
+    cur_row += 2
+
+    # ヘッダー行
+    headers = ["", "グループ", "Step", "操作種別", "使用データ", "", "", "", "", "操作内容・設定値"]
+    for c_idx, h in enumerate(headers):
+        cell = ws.cell(row=cur_row, column=c_idx + 1, value=h)
+        cell.font = font_bold
+        cell.fill = PatternFill(start_color="FFD6EAF8", end_color="FFD6EAF8", fill_type="solid")
+        cell.border = thin_border
+    cur_row += 1
+
+    # 各グループ・ステップを出力
+    for g_idx, group in enumerate(groups):
+        mark = STEP_MARKS[g_idx] if g_idx < len(STEP_MARKS) else f"({g_idx+1})"
+        group_name = group.get("name", "")
+        steps = group.get("steps", [])
+
+        for s_idx, step in enumerate(steps):
+            operation = step.get("operation", "")
+            save_as = step.get("save_as", "")
+            step_num = step.get("step", "")
+            input_data = group.get("input_data", "")
+
+            # 操作内容をテンプレートエンジンでレンダリング
+            procedure_content = render_step(step)
+
+            # 行を書き込み
+            row_data = [
+                "",
+                mark if s_idx == 0 else "",
+                step_num if step_num else "",
+                operation,
+                input_data if s_idx == 0 else "",
+                "", "", "", "",
+                procedure_content,
+            ]
+            for c_idx, val in enumerate(row_data):
+                cell = ws.cell(row=cur_row, column=c_idx + 1, value=val)
+                cell.font = font9
+                cell.alignment = cell_align
+                cell.border = thin_border
+
+            cur_row += 1
+            # 空行
+            cur_row += 1
+
+    # 保存
+    summary = design_doc.get("summary", "手順書")
+    safe_summary = "".join(c for c in summary if c not in r'\/:*?"<>|')[:30]
+    filename = f"{safe_summary}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filepath = str(OUTPUT_DIR / filename)
+    wb.save(filepath)
+
+    return filepath, filename
