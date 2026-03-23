@@ -1,0 +1,7 @@
+operation: テンプレート 曜日算出
+format: |
+  テンプレート『日付型カラムから「曜日」を算出』
+  「{column}」が日付型カラムに選択され、「{new_column}」が追加されました
+variables:
+  column: { type: text }
+  new_column: { type: text }

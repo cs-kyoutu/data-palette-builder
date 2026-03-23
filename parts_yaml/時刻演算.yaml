@@ -1,0 +1,31 @@
+operation: 時刻演算
+format_column: |
+  『時刻演算』
+  「{left_column}」《{operator}》「{right_column}」、[計算結果]を《{unit}》で算出
+  クレンジングタスクの保存名を""{task_name}""にする
+  表示方法《{keep_original}》を選択
+format_today: |
+  『時刻演算』
+  《本日の日付》《{operator}》「{right_column}」　[計算結果]を《{unit}》で算出
+  クレンジングタスクの保存名を""{task_name}""にする
+  表示方法《{keep_original}》を選択
+format_custom: |
+  『時刻演算』
+  「{left_column}」《{operator}》《カスタム：""{custom_value}""》　[計算結果]を《{unit}》で算出
+  クレンジングタスクの保存名を""{task_name}""にする
+  表示方法《{keep_original}》を選択
+variables:
+  left_column: { type: text }
+  operator:
+    type: enum
+    values: ["-", "+"]
+  right_column: { type: text, optional: true }
+  custom_value: { type: text, optional: true }
+  unit:
+    type: enum
+    values: [日, 時間, 秒, ヶ月]
+  task_name: { type: text }
+  keep_original:
+    type: enum
+    values: [残す, 残さない]
+  use_today: { type: boolean, default: false }

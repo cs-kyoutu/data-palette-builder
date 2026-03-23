@@ -1,0 +1,10 @@
+operation: 名寄せ
+format: |
+  『名寄せ』
+  {keys_text}を名寄せするキーとして、「{priority_column}」を《{priority_order}》に名寄せする
+variables:
+  keys: { type: column_list }
+  priority_column: { type: text }
+  priority_order:
+    type: enum
+    values: [最も新しい日時, 最も古い日時, 最も新しい日付, 最も古い日付]

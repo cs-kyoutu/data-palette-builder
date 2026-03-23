@@ -1,0 +1,16 @@
+operation: ランキング
+format_group: |
+  『ランキング』
+  「{group_key}」をグループ化する単位として、「{sort_column}」を《{sort_order}》に《{tie_handling}》で順位付けする
+format_all: |
+  『ランキング』
+  「{sort_column}」を《{sort_order}》に《{tie_handling}》で順位付けする
+variables:
+  group_key: { type: text, optional: true }
+  sort_column: { type: text }
+  sort_order:
+    type: enum
+    values: [大きい順, 小さい順]
+  tie_handling:
+    type: enum
+    values: [同率あり(順位飛ばしあり), 同率あり(順位飛ばしなし), 同率なし]

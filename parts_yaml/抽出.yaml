@@ -1,0 +1,31 @@
+operation: 抽出
+format_head: |
+  『抽出』
+  「{column}」の《先頭》から""{length}""文字目までを《{data_type}》で抽出
+  《{save_method}》にて保存
+  クレンジングタスクの保存名を""{task_name}""にする
+format_mid: |
+  『抽出』
+  「{column}」の《中間》の""{start}""文字目〜""{end}""文字目を《{data_type}》で抽出
+  《{save_method}》にて保存
+  クレンジングタスクの保存名を""{task_name}""にする
+format_tail: |
+  『抽出』
+  「{column}」の《末尾》から""{length}""文字目までを《{data_type}》で抽出
+  《{save_method}》にて保存
+  クレンジングタスクの保存名を""{task_name}""にする
+variables:
+  column: { type: text }
+  method:
+    type: enum
+    values: [先頭, 中間, 末尾]
+  length: { type: integer }
+  start: { type: integer, optional: true }
+  end: { type: integer, optional: true }
+  data_type:
+    type: enum
+    values: [テキスト型, 整数型]
+  save_method:
+    type: enum
+    values: [上書き保存, 名前を付けて保存]
+  task_name: { type: text }

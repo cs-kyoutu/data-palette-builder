@@ -1,0 +1,13 @@
+operation: 分割
+format: |
+  『分割』
+  「{column}」を[区切り文字]""{delimiter}""で、[開始位置]《{direction}》から《{count}》列に分割する
+  クレンジングタスクの保存名を{new_columns_text}にする
+variables:
+  column: { type: text }
+  delimiter: { type: text }
+  direction:
+    type: enum
+    values: [左, 右]
+  count: { type: integer }
+  new_columns: { type: list }

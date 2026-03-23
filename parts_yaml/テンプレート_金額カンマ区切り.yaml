@@ -1,0 +1,6 @@
+operation: テンプレート 金額をカンマ区切り
+format: |
+  テンプレート『金額をカンマ区切りにした値へ変換』
+  「{column}」が金額に該当するカラムに選択され、「{column}」に上書き保存されました
+variables:
+  column: { type: text }

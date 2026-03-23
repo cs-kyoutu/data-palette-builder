@@ -1,0 +1,19 @@
+operation: 型変換
+format: |
+  『型変換』
+  「{column}」を《{target_type}》に変換
+  型変換エラーの処理は、《{error_handling}》を選択
+  《{save_method}》にて保存
+  クレンジングタスクの保存名を""{task_name}""にする
+variables:
+  column: { type: text }
+  target_type:
+    type: enum
+    values: [テキスト型, 整数型, 小数型, 日付型, 日時型, 真偽値型]
+  error_handling:
+    type: enum
+    values: [Nullに変換する, クレンジングを中止する]
+  save_method:
+    type: enum
+    values: [上書き保存, 名前を付けて保存]
+  task_name: { type: text }

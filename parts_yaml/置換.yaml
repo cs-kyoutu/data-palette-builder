@@ -1,0 +1,18 @@
+operation: 置換
+format: |
+  『置換』
+  「{column}」の{match_type}""{from_value}""を""{to_value}""に置換
+  《{save_method}》にて保存
+  クレンジングタスクの保存名を""{task_name}""にする
+variables:
+  column: { type: text }
+  match_type:
+    type: enum
+    values: ["", "《正規表現》"]
+    default: ""
+  from_value: { type: text }
+  to_value: { type: text }
+  save_method:
+    type: enum
+    values: [上書き保存, 名前を付けて保存]
+  task_name: { type: text }

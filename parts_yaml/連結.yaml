@@ -1,0 +1,15 @@
+operation: 連結
+format: |
+  『連結』
+  「{column_1}」と「{column_2}」を選択
+  [テキスト挿入]を押下し、カラムとカラムの間に""{separator}""を挿入し、[適用]を押下する
+  クレンジングタスクの保存名を""{task_name}""にする
+  表示方法《{keep_original}》を選択
+variables:
+  column_1: { type: text }
+  column_2: { type: text }
+  separator: { type: text }
+  task_name: { type: text }
+  keep_original:
+    type: enum
+    values: [残す, 残さない]

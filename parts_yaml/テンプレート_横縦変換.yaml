@@ -1,0 +1,8 @@
+operation: テンプレート 横持ちを縦持ちに変換
+format: |
+  『テンプレート『顧客ごとに横持ちのデータを縦に並べて変換』』
+  [縦持ちにしたいカラム]に{horizontal_columns_text}を選択し、[適用]を押下する
+  [縦持ちにしたいカラム以外に残したいカラム]に{keep_columns_text}を選択し、[適用]を押下する
+variables:
+  horizontal_columns: { type: column_list }
+  keep_columns: { type: column_list }

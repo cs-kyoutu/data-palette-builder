@@ -1,0 +1,13 @@
+operation: 集約
+format: |
+  『集約』
+  {group_keys_text}を集約のキーとして、{aggregations_text}で集約
+variables:
+  group_keys: { type: column_list }
+  aggregations:
+    type: list
+    item:
+      column: { type: text }
+      function:
+        type: enum
+        values: [カウント, ユニークカウント, 合計, 平均, 最大値, 最小値, 最新日時, 最古日時, 行結合]
