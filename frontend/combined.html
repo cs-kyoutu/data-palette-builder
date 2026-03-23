@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>データパレット構築 設計書・手順書ジェネレーター</title>
-  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="icon" type="image/png" href="/bdash_hakase.png">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -1135,7 +1135,7 @@
     avatar.className = "avatar";
     if (role === "ai") {
       const img = document.createElement("img");
-      img.src = "/doala.png";
+      img.src = "/bdash_hakase.png";
       img.alt = "AI";
       avatar.appendChild(img);
     } else {
@@ -1255,7 +1255,7 @@
     var msg = document.createElement("div");
     msg.className = "ai-msg ai";
     msg.id = "typing";
-    msg.innerHTML = '<div class="avatar"><img src="/doala.png" alt="AI"></div><div class="bubble"><div class="typing-indicator"><span></span><span></span><span></span></div></div>';
+    msg.innerHTML = '<div class="avatar"><img src="/bdash_hakase.png" alt="AI"></div><div class="bubble"><div class="typing-indicator"><span></span><span></span><span></span></div></div>';
     container.appendChild(msg);
     container.scrollTop = container.scrollHeight;
   }

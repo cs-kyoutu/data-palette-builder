@@ -149,7 +149,11 @@ async def index():
 
 @app.get("/doala.png")
 async def doala_image():
-    return FileResponse(FRONTEND_PATH / "doala.png", media_type="image/png")
+    return FileResponse(FRONTEND_PATH / "bdash_hakase.png", media_type="image/png")
+
+@app.get("/bdash_hakase.png")
+async def bdash_hakase():
+    return FileResponse(FRONTEND_PATH / "bdash_hakase.png", media_type="image/png")
 
 @app.get("/cloud_logo.svg")
 async def cloud_logo():
@@ -157,11 +161,18 @@ async def cloud_logo():
 
 @app.get("/favicon.svg")
 async def favicon_svg():
+    hakase = FRONTEND_PATH / "bdash_hakase.png"
+    if hakase.exists():
+        return FileResponse(hakase, media_type="image/png")
     return FileResponse(FRONTEND_PATH / "favicon.svg", media_type="image/svg+xml")
 
 @app.get("/favicon.png")
 async def favicon_png():
-    return FileResponse(FRONTEND_PATH / "favicon.png", media_type="image/png")
+    return FileResponse(FRONTEND_PATH / "bdash_hakase.png", media_type="image/png")
+
+@app.get("/favicon.ico")
+async def favicon_ico():
+    return FileResponse(FRONTEND_PATH / "bdash_hakase.png", media_type="image/png")
 
 
 # --- APIエンドポイント ---
