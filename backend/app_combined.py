@@ -481,7 +481,7 @@ async def generate_procedure(req: ProcedureRequest):
     設計書承認後にPhase2（手順書生成）を実行。
     ハイブリッド方式: AI精査 → テンプレートエンジンで手順書テキスト生成 → Excel出力
     """
-    from .template_engine import render_procedure, render_group
+    from .template_engine_v2 import render_procedure, render_group
 
     session = sessions.get(req.session_id)
     if not session or not session.get("design_doc"):
@@ -582,7 +582,7 @@ async def generate_procedure(req: ProcedureRequest):
 
 def _build_procedure_excel(design_doc: dict, groups: list, procedure_text: str) -> tuple[str, str]:
     """テンプレートエンジンの出力からExcelファイルを生成"""
-    from .template_engine import render_step
+    from .template_engine_v2 import render_step
 
     wb = Workbook()
     ws = wb.active
