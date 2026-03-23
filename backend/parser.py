@@ -10,8 +10,11 @@ import openpyxl
 
 
 # --- ヘッダー行の自動検出用キーワード ---
-INPUT_HEADER_KEYWORDS = {"カラム名", "項目名", "name", "column", "フィールド名", "フィールド"}
+INPUT_HEADER_KEYWORDS = {"カラム名", "項目名", "name", "column", "フィールド名", "フィールド", "カラム論理名"}
 OUTPUT_HEADER_KEYWORDS = {"カラム名", "項目名", "name", "column"}
+
+# b→dashメタデータ形式の検出キーワード
+BDASH_META_KEYWORDS = {"データファイル名", "カラム論理名", "データ型"}
 
 
 def _detect_header_row(ws, keywords: set[str]) -> int | None:
@@ -30,6 +33,56 @@ def _get_col_index(header_row: list, *candidates: str) -> int | None:
         if val and str(val).strip().lower() in {c.lower() for c in candidates}:
             return i
     return None
+
+
+# =============================================================
+# b→dashメタデータ形式の判定・解析
+# =============================================================
+
+def _is_bdash_meta_format(header: list[str]) -> bool:
+    """b→dashメタデータ形式かどうか判定"""
+    header_lower = {str(v).strip().lower() for v in header if v}
+    return len(BDASH_META_KEYWORDS & {h for h in header_lower if h in {"データファイル名", "カラム論理名", "データ型"}}) >= 2
+
+
+def _parse_bdash_meta(rows: list, header: list[str]) -> list[dict]:
+    """
+    b→dashメタデータ形式を解析
+    データファイル名でグループ化し、カラム論理名・データ型・顧客IDフラグを抽出
+    返り値: [{table_name, columns: [{name, type, description, is_customer_id}]}]
+    """
+    tbl_col = _get_col_index(header, "データファイル名")
+    name_col = _get_col_index(header, "カラム論理名")
+    type_col = _get_col_index(header, "データ型")
+    cid_col = _get_col_index(header, "顧客IDフラグ", "顧客idフラグ")
+
+    if tbl_col is None or name_col is None:
+        return []
+
+    # データファイル名でグループ化
+    tables_dict: dict[str, list[dict]] = {}
+    for row in rows:
+        if not row or all(v is None for v in row):
+            continue
+        tbl_name = str(row[tbl_col]).strip() if len(row) > tbl_col and row[tbl_col] else ""
+        col_name = str(row[name_col]).strip() if len(row) > name_col and row[name_col] else ""
+        if not tbl_name or not col_name:
+            continue
+
+        col_type = str(row[type_col]).strip() if type_col is not None and len(row) > type_col and row[type_col] else ""
+        is_cid = False
+        if cid_col is not None and len(row) > cid_col and row[cid_col]:
+            cid_val = str(row[cid_col]).strip().lower()
+            is_cid = cid_val in {"true", "1", "○", "yes"}
+
+        if tbl_name not in tables_dict:
+            tables_dict[tbl_name] = []
+        col_entry = {"name": col_name, "type": col_type, "description": ""}
+        if is_cid:
+            col_entry["description"] = "顧客ID（結合キー）"
+        tables_dict[tbl_name].append(col_entry)
+
+    return [{"table_name": name, "columns": cols} for name, cols in tables_dict.items()]
 
 
 # =============================================================
@@ -56,13 +109,18 @@ def parse_input_excel(file_path: str) -> list[dict]:
 
         header = [str(v).strip() if v else "" for v in rows[0]]
 
-        # カラム名、型、説明の列を特定
-        name_col = _get_col_index(header, "カラム名", "項目名", "name", "column", "フィールド名")
+        # b→dashメタデータ形式の自動検出
+        if _is_bdash_meta_format(header):
+            meta_tables = _parse_bdash_meta(rows[1:], header)
+            tables.extend(meta_tables)
+            continue
+
+        # 通常形式: カラム名、型、説明の列を特定
+        name_col = _get_col_index(header, "カラム名", "項目名", "name", "column", "フィールド名", "カラム論理名")
         type_col = _get_col_index(header, "型", "type", "データ型", "形式")
         desc_col = _get_col_index(header, "説明", "description", "備考", "定義", "概要")
 
         if name_col is None:
-            # ヘッダーが見つからなければ最初の列をカラム名とする
             name_col = 0
 
         columns = []
@@ -101,7 +159,12 @@ def parse_input_csv(file_path: str, table_name: str | None = None) -> list[dict]
         return []
 
     header = [v.strip() for v in rows[0]]
-    name_col = _get_col_index(header, "カラム名", "項目名", "name", "column", "フィールド名")
+
+    # b→dashメタデータ形式の自動検出
+    if _is_bdash_meta_format(header):
+        return _parse_bdash_meta(rows[1:], header)
+
+    name_col = _get_col_index(header, "カラム名", "項目名", "name", "column", "フィールド名", "カラム論理名")
     type_col = _get_col_index(header, "型", "type", "データ型", "形式")
     desc_col = _get_col_index(header, "説明", "description", "備考", "定義", "概要")
 
