@@ -256,6 +256,46 @@
     }
     .text-ok-btn:hover { background: var(--primary-dark); }
 
+    /* Input preview */
+    .input-preview-section { margin-bottom: 12px; }
+    .input-preview-section summary {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--primary-dark);
+      cursor: pointer;
+      padding: 6px 0;
+    }
+    .input-preview-section summary::marker { color: var(--primary); }
+    .input-preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      margin-top: 4px;
+    }
+    .input-preview-table th {
+      background: var(--primary-bg);
+      color: var(--primary-dark);
+      font-weight: 600;
+      text-align: left;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+    }
+    .input-preview-table td {
+      padding: 3px 8px;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .input-preview-table tr:nth-child(even) td { background: #fafbfc; }
+    .cid-badge {
+      display: inline-block;
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--primary);
+      color: white;
+      margin-left: 4px;
+    }
+
     /* Generate button */
     .generate-area {
       margin-bottom: 16px;
@@ -653,6 +693,9 @@
         </div>
 
         <div class="file-list" id="inputFileList"></div>
+
+        <!-- インプットプレビュー -->
+        <div id="inputPreviewArea" class="hidden"></div>
       </div>
 
       <!-- Right: Output -->
@@ -764,10 +807,10 @@
 
   function parseInputText() {
     const text = document.getElementById("inputTextInput").value.trim();
-    if (!text) { inputTables = []; document.getElementById("inputCount").textContent = inputTables.length + " テーブル"; updateGenerateBtn(); return; }
+    if (!text) { inputTables = []; document.getElementById("inputCount").textContent = inputTables.length + " テーブル"; renderInputPreview(); updateGenerateBtn(); return; }
 
     const lines = text.split("\n").filter(l => l.trim());
-    if (!lines.length) { inputTables = []; document.getElementById("inputCount").textContent = inputTables.length + " テーブル"; updateGenerateBtn(); return; }
+    if (!lines.length) { inputTables = []; document.getElementById("inputCount").textContent = inputTables.length + " テーブル"; renderInputPreview(); updateGenerateBtn(); return; }
 
     const firstLine = lines[0].toLowerCase();
     const isBdashMeta = firstLine.includes("データファイル名") && firstLine.includes("カラム論理名");
@@ -829,7 +872,7 @@
       btn.textContent = "OK";
       btn.style.background = "";
     }
-    document.getElementById("inputCount").textContent = inputTables.length + " テーブル";
+    document.getElementById("inputCount").textContent = inputTables.length + " テーブル"; renderInputPreview();
     updateGenerateBtn();
   }
 
@@ -859,7 +902,7 @@
       table_name: t.table_name,
       columns: t.columns.map(c => ({ name: c.name, type: c.type || "", description: c.description || "" })),
     }));
-    document.getElementById("inputCount").textContent = inputTables.length + " テーブル";
+    document.getElementById("inputCount").textContent = inputTables.length + " テーブル"; renderInputPreview();
     updateGenerateBtn();
   }
 
@@ -898,7 +941,7 @@
         alert("ファイル解析に失敗しました: " + file.name);
       }
     }
-    document.getElementById("inputCount").textContent = inputTables.length + " テーブル";
+    document.getElementById("inputCount").textContent = inputTables.length + " テーブル"; renderInputPreview();
     updateGenerateBtn();
   }
 
@@ -939,6 +982,29 @@
       document.getElementById("outputCount").textContent = "未設定";
     }
     updateGenerateBtn();
+  }
+
+  // --- Input preview ---
+  function renderInputPreview() {
+    const area = document.getElementById("inputPreviewArea");
+    if (!inputTables.length) {
+      area.classList.add("hidden");
+      area.innerHTML = "";
+      return;
+    }
+    let html = "";
+    for (const table of inputTables) {
+      html += `<details class="input-preview-section" open>`;
+      html += `<summary>${table.table_name}（${table.columns.length}カラム）</summary>`;
+      html += `<table class="input-preview-table"><tr><th>カラム名</th><th>データ型</th></tr>`;
+      for (const col of table.columns) {
+        const cidBadge = col.description && col.description.includes("顧客ID") ? `<span class="cid-badge">結合キー</span>` : "";
+        html += `<tr><td>${col.name}${cidBadge}</td><td>${col.type}</td></tr>`;
+      }
+      html += `</table></details>`;
+    }
+    area.innerHTML = html;
+    area.classList.remove("hidden");
   }
 
   // --- Generate button state ---
