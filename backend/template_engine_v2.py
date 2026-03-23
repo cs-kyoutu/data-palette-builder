@@ -112,7 +112,11 @@ def _apply_aliases(fmt_vars: dict, operation: str):
     keys_to_add = {}
     for old_key, new_key in ALIASES.items():
         if old_key in fmt_vars and new_key not in fmt_vars and new_key != "_keep_columns":
-            keys_to_add[new_key] = fmt_vars[old_key]
+            val = fmt_vars[old_key]
+            # リストが期待されるキーに文字列が来た場合はリスト化
+            if new_key in ("keys", "group_keys", "columns") and isinstance(val, str):
+                val = [val]
+            keys_to_add[new_key] = val
     fmt_vars.update(keys_to_add)
 
     # group_byがリストの場合、先頭要素をgroup_keyに
@@ -174,14 +178,21 @@ def _apply_aliases(fmt_vars: dict, operation: str):
         fmt_vars.setdefault("duplicate_handling", "統合処理をエラーにする")
         fmt_vars.setdefault("update_setting", "更新しない")
 
-    # 名寄せ: key_columnsがリスト→keysに
-    if operation in ("名寄せ",) and "key_columns" in fmt_vars and "keys" not in fmt_vars:
-        fmt_vars["keys"] = fmt_vars["key_columns"]
+    # 名寄せ: key_columns/key_columnをkeysに（文字列→リスト変換含む）
+    if operation in ("名寄せ",):
+        for src in ("key_columns", "key_column"):
+            if src in fmt_vars and "keys" not in fmt_vars:
+                v = fmt_vars[src]
+                fmt_vars["keys"] = v if isinstance(v, list) else [v]
 
     # 連結: separator補完
     if operation in ("連結",):
         fmt_vars.setdefault("separator", " ")
         fmt_vars.setdefault("keep_original", "残さない")
+
+    # 置換: match_typeデフォルト
+    if operation in ("置換",):
+        fmt_vars.setdefault("match_type", "")
 
     # テンプレート: pivot_columns → horizontal_columns
     if "pivot_columns" in fmt_vars and "horizontal_columns" not in fmt_vars:
