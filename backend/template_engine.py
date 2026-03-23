@@ -412,6 +412,20 @@ def render_テンプレート_曜日算出(settings: dict) -> str:
     return f"テンプレート『日付型カラムから「曜日」を算出』\n「{col}」が日付型カラムに選択され、「{new_col}」が追加されました"
 
 
+def render_テンプレート_横縦変換(settings: dict) -> str:
+    """横持ち→縦持ち変換テンプレートの手順テキストを生成"""
+    h_cols = settings.get("horizontal_columns", [])
+    k_cols = settings.get("keep_columns", [])
+    h_str = "、".join(f"「{c}」" for c in h_cols) if isinstance(h_cols, list) else h_cols
+    k_str = "、".join(f"「{c}」" for c in k_cols) if isinstance(k_cols, list) else k_cols
+    lines = [
+        "『テンプレート『顧客ごとに横持ちのデータを縦に並べて変換』』",
+        f"[縦持ちにしたいカラム]に{h_str}を選択し、[適用]を押下する",
+        f"[縦持ちにしたいカラム以外に残したいカラム]に{k_str}を選択し、[適用]を押下する",
+    ]
+    return "\n".join(lines)
+
+
 def render_除外(settings: dict) -> str:
     """除外の手順テキストを生成"""
     col = settings.get("column", "")
@@ -487,6 +501,8 @@ RENDERERS = {
     "テンプレート 曜日算出": render_テンプレート_曜日算出,
     "テンプレート 日付型カラムから曜日を算出": render_テンプレート_曜日算出,
     "除外": render_除外,
+    "テンプレート 横持ちを縦持ちに変換": render_テンプレート_横縦変換,
+    "テンプレート 横縦変換": render_テンプレート_横縦変換,
     "書式変換": render_書式変換,
     "複製": render_複製,
     "テンプレート 3カラム連結": render_テンプレート_3カラム連結,
