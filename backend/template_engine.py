@@ -331,6 +331,87 @@ def render_分割(settings: dict) -> str:
     return f"『分割』\n対象カラム: {col}\n区切り文字: {delim}\n{direction}\n分割数: {count}\n新カラム名: {new_cols_str}"
 
 
+def render_参照(settings: dict) -> str:
+    """参照の手順テキストを生成"""
+    pattern = settings.get("pattern", "最初の値")
+    group_key = settings.get("group_key", "")
+    sort_col = settings.get("sort_column", "")
+    sort_order = settings.get("sort_order", "昇順")
+    value_col = settings.get("value_column", "")
+    null_handling = settings.get("null_handling", "無視する")
+    task = settings.get("task_name", "")
+
+    lines = [
+        "『参照』",
+        f"《{pattern}》を選択し、[適用]を押下する",
+        f"「{group_key}」でグループ化、「{sort_col}」の《{sort_order}》でソートを行い",
+        f"「{value_col}」を参照する",
+        f"空文字/Nullの値を《{null_handling}》を選択し[適用]を押下する",
+    ]
+    if task:
+        lines.append(f'クレンジングタスクの保存名を""{task}""にする')
+    return "\n".join(lines)
+
+
+def render_テキスト挿入(settings: dict) -> str:
+    """テキスト挿入の手順テキストを生成"""
+    col = settings.get("column", "")
+    position = settings.get("position", "文末")
+    text = settings.get("text", "")
+    text_head = settings.get("text_head", "")
+    text_tail = settings.get("text_tail", "")
+    save = settings.get("save_method", "上書き保存")
+    task = settings.get("task_name", col)
+
+    lines = ["『テキスト挿入』"]
+    if text_head and text_tail:
+        lines.append(f"「{col}」の《文頭》に\"\"{text_head}\"\"、《文末》に\"\"{text_tail}\"\"を挿入")
+    else:
+        lines.append(f"「{col}」の《{position}》に\"\"{text}\"\"を挿入")
+    lines.append(f"《{save}》にて保存")
+    lines.append(f'クレンジングタスクの保存名を""{task}""にする')
+    return "\n".join(lines)
+
+
+def render_四則演算(settings: dict) -> str:
+    """四則演算の手順テキストを生成"""
+    left = settings.get("column_left", "")
+    op = settings.get("operator", "+")
+    right = settings.get("column_right", "")
+    fixed = settings.get("fixed_value", "")
+    decimal = settings.get("decimal_place", "1")
+    rounding = settings.get("rounding", "四捨五入")
+    task = settings.get("task_name", "")
+    keep = settings.get("keep_original", "残す")
+
+    if fixed:
+        right_str = f"\"\"{fixed}\"\""
+    else:
+        right_str = f"「{right}」"
+
+    lines = [
+        "『四則演算』",
+        f"「{left}」《{op}》{right_str}、[端数処理]は小数第《{decimal}》位を、《{rounding}》する",
+    ]
+    if task:
+        lines.append(f'クレンジングタスクの保存名を""{task}""にする')
+    lines.append(f"表示方法《{keep}》を選択")
+    return "\n".join(lines)
+
+
+def render_テンプレート_金額カンマ(settings: dict) -> str:
+    """金額カンマ区切りテンプレートの手順テキストを生成"""
+    col = settings.get("column", "")
+    return f"テンプレート『金額をカンマ区切りにした値へ変換』\n「{col}」が金額に該当するカラムに選択され、「{col}」に上書き保存されました"
+
+
+def render_テンプレート_曜日算出(settings: dict) -> str:
+    """曜日算出テンプレートの手順テキストを生成"""
+    col = settings.get("column", "")
+    new_col = settings.get("new_column", f"{col.replace('日付', '')}曜日")
+    return f"テンプレート『日付型カラムから「曜日」を算出』\n「{col}」が日付型カラムに選択され、「{new_col}」が追加されました"
+
+
 # --- メインレンダラー ---
 
 RENDERERS = {
@@ -354,6 +435,13 @@ RENDERERS = {
     "抽出": render_抽出,
     "名寄せ": render_名寄せ,
     "分割": render_分割,
+    "参照": render_参照,
+    "テキスト挿入": render_テキスト挿入,
+    "四則演算": render_四則演算,
+    "テンプレート 金額をカンマ区切り": render_テンプレート_金額カンマ,
+    "テンプレート 金額カンマ区切り": render_テンプレート_金額カンマ,
+    "テンプレート 曜日算出": render_テンプレート_曜日算出,
+    "テンプレート 日付型カラムから曜日を算出": render_テンプレート_曜日算出,
 }
 
 
