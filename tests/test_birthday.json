@@ -1,0 +1,21 @@
+{
+  "processing_groups": [
+    {
+      "group": "A",
+      "name": "誕生日施策データ",
+      "input_data": "顧客テーブル",
+      "steps": [
+        {"step": 1, "operation": "抽出", "save_as": null, "settings": {"column": "生年月日", "method": "末尾", "length": 5, "data_type": "テキスト型", "save_method": "名前を付けて保存", "task_name": "誕生月日"}},
+        {"step": 2, "operation": "IF文", "save_as": null, "settings": {"conditions": [{"column": "誕生月日", "condition": "次に完全一致", "value": "02/29", "result": "02/28"}], "else_value": "《元の値のまま》"}},
+        {"step": null, "operation": "カラム名の変更", "save_as": null, "settings": {"renames": [{"from": "IF文", "to": "誕生月日"}]}},
+        {"step": 3, "operation": "追加", "save_as": null, "settings": {"base_column": "生年月日", "position": "右に追加", "data_type": "日付型", "is_execution_date": true}},
+        {"step": 4, "operation": "抽出", "save_as": null, "settings": {"column": "追加列", "method": "先頭", "length": 5, "data_type": "テキスト型", "save_method": "上書き保存", "task_name": "本年"}},
+        {"step": 5, "operation": "連結", "save_as": null, "settings": {"column_1": "本年", "column_2": "誕生月日", "separator": "", "task_name": "今年の誕生日テキスト", "keep_original": "残す"}},
+        {"step": 6, "operation": "型変換", "save_as": null, "settings": {"column": "今年の誕生日テキスト", "target_type": "日付型", "error_handling": "クレンジングを中止する", "save_method": "名前を付けて保存", "task_name": "今年の誕生日"}},
+        {"step": 7, "operation": "時刻演算", "save_as": null, "settings": {"left_column": "今年の誕生日", "operator": "-", "right_column": "本日日付", "unit": "日", "task_name": "誕生日までの日数", "keep_original": "残す"}},
+        {"step": 8, "operation": "抽出", "save_as": null, "settings": {"column": "誕生月日", "method": "先頭", "length": 2, "data_type": "テキスト型", "save_method": "名前を付けて保存", "task_name": "誕生月"}},
+        {"step": 9, "operation": "削除", "save_as": "誕生日施策データ", "settings": {"columns": ["追加列", "本年", "誕生月日", "今年の誕生日テキスト"]}}
+      ]
+    }
+  ]
+}
