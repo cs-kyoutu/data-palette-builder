@@ -547,6 +547,7 @@
       <div class="input-method-toggle">
         <button class="toggle-btn active" onclick="switchInputMethod('preset')">プリセット</button>
         <button class="toggle-btn" onclick="switchInputMethod('upload')">ファイルアップロード</button>
+        <button class="toggle-btn" onclick="switchInputMethod('text')">テキスト入力</button>
       </div>
 
       <!-- プリセット -->
@@ -566,6 +567,13 @@
           <p>テーブル定義書をドロップ<br>または クリックして選択（Excel / CSV）</p>
           <input type="file" id="inputFileInput" accept=".xlsx,.xls,.csv" multiple>
         </div>
+      </div>
+
+      <!-- テキスト入力 -->
+      <div id="inputText" class="hidden">
+        <textarea class="text-input-area" id="inputTextInput"
+          placeholder="テーブル定義をテキストで入力&#10;&#10;テーブル名を【】で囲み、その下にカラムを記述:&#10;&#10;【顧客】&#10;顧客ID テキスト&#10;メールアドレス テキスト&#10;姓 テキスト&#10;名 テキスト&#10;&#10;【受注】&#10;受注ID テキスト&#10;顧客ID テキスト&#10;受注日時 日時&#10;受注金額 整数&#10;&#10;※タブ/スペース区切りでカラム名・データ型を記述"
+          oninput="parseInputText()"></textarea>
       </div>
 
       <div class="file-list" id="inputFileList"></div>
@@ -676,10 +684,63 @@
     event.target.classList.add("active");
     document.getElementById("inputPreset").classList.toggle("hidden", method !== "preset");
     document.getElementById("inputUpload").classList.toggle("hidden", method !== "upload");
+    document.getElementById("inputText").classList.toggle("hidden", method !== "text");
 
     if (method === "preset" && selectedPresetKey) {
       togglePreset(selectedPresetKey);
     }
+    if (method === "text") {
+      parseInputText();
+    }
+  }
+
+  function parseInputText() {
+    const text = document.getElementById("inputTextInput").value.trim();
+    if (!text) {
+      inputTables = [];
+      renderInputPreview();
+      updateGenerateBtn();
+      return;
+    }
+
+    const tables = [];
+    let currentTable = null;
+    const lines = text.split("\n");
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // テーブル名検出: 【テーブル名】 or [テーブル名]
+      const tableMatch = trimmed.match(/^[【\[](.+?)[】\]]/);
+      if (tableMatch) {
+        if (currentTable && currentTable.columns.length > 0) {
+          tables.push(currentTable);
+        }
+        currentTable = { table_name: tableMatch[1].trim(), columns: [] };
+        continue;
+      }
+
+      // カラム行: タブ or 2つ以上のスペースで区切り
+      if (currentTable) {
+        const parts = trimmed.split(/\t+|\s{2,}/);
+        if (parts.length >= 1) {
+          const name = parts[0].trim();
+          const type = parts.length >= 2 ? parts[1].trim() : "";
+          const desc = parts.length >= 3 ? parts[2].trim() : "";
+          if (name) {
+            currentTable.columns.push({ name, type, description: desc });
+          }
+        }
+      }
+    }
+    if (currentTable && currentTable.columns.length > 0) {
+      tables.push(currentTable);
+    }
+
+    inputTables = tables;
+    renderInputPreview();
+    updateGenerateBtn();
   }
 
   function switchOutputMethod(method) {
