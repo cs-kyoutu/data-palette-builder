@@ -412,6 +412,16 @@ def render_テンプレート_曜日算出(settings: dict) -> str:
     return f"テンプレート『日付型カラムから「曜日」を算出』\n「{col}」が日付型カラムに選択され、「{new_col}」が追加されました"
 
 
+def render_除外(settings: dict) -> str:
+    """除外の手順テキストを生成"""
+    col = settings.get("column", "")
+    scope = settings.get("scope", "全ての")
+    text = settings.get("text", "")
+    save = settings.get("save_method", "上書き保存")
+    task = settings.get("task_name", col)
+    return f"『除外』\n「{col}」の《{scope}》\"\"{text}\"\"を除外\n《{save}》にて保存\nクレンジングタスクの保存名を\"\"{task}\"\"にする"
+
+
 def render_テンプレート_3カラム連結(settings: dict) -> str:
     """3カラム以上連結テンプレートの手順テキストを生成"""
     columns = settings.get("columns", [])
@@ -476,6 +486,7 @@ RENDERERS = {
     "テンプレート 金額カンマ区切り": render_テンプレート_金額カンマ,
     "テンプレート 曜日算出": render_テンプレート_曜日算出,
     "テンプレート 日付型カラムから曜日を算出": render_テンプレート_曜日算出,
+    "除外": render_除外,
     "書式変換": render_書式変換,
     "複製": render_複製,
     "テンプレート 3カラム連結": render_テンプレート_3カラム連結,
