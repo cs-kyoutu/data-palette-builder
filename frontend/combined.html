@@ -239,6 +239,22 @@
     }
     .text-input-area:focus { border-color: var(--primary); outline: none; }
     .text-input-area::placeholder { color: var(--text-muted); }
+    .text-ok-btn {
+      display: block;
+      width: 100%;
+      margin-top: 8px;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: var(--primary);
+      color: white;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .text-ok-btn:hover { background: var(--primary-dark); }
 
     /* Generate button */
     .generate-area {
@@ -607,6 +623,7 @@
         <div class="input-method-toggle">
           <button class="toggle-btn active" onclick="switchInputMethod('preset', this)">プリセット</button>
           <button class="toggle-btn" onclick="switchInputMethod('upload', this)">ファイルアップロード</button>
+          <button class="toggle-btn" onclick="switchInputMethod('text', this)">テキスト入力</button>
         </div>
 
         <!-- Preset -->
@@ -626,6 +643,13 @@
             <p>テーブル定義書をドロップ<br>または クリックして選択（Excel / CSV）</p>
             <input type="file" id="inputFileInput" accept=".xlsx,.xls,.csv" multiple>
           </div>
+        </div>
+
+        <!-- Text input -->
+        <div id="inputText" class="hidden">
+          <textarea class="text-input-area" id="inputTextInput"
+            placeholder="テーブル定義をテキストで入力&#10;&#10;■ b→dashメタデータ形式（タブ区切りで貼り付け）:&#10;データファイル名&#9;カラム論理名&#9;データ型&#9;顧客IDフラグ&#10;顧客&#9;顧客ID&#9;テキスト型&#9;★TRUE&#10;顧客&#9;メールアドレス&#9;テキスト型&#10;&#10;■ 手入力形式:&#10;【顧客】&#10;顧客ID テキスト&#10;メールアドレス テキスト"></textarea>
+          <button class="text-ok-btn" onclick="parseInputText()">OK</button>
         </div>
 
         <div class="file-list" id="inputFileList"></div>
@@ -735,6 +759,78 @@
     btn.classList.add("active");
     document.getElementById("inputPreset").classList.toggle("hidden", method !== "preset");
     document.getElementById("inputUpload").classList.toggle("hidden", method !== "upload");
+    document.getElementById("inputText").classList.toggle("hidden", method !== "text");
+  }
+
+  function parseInputText() {
+    const text = document.getElementById("inputTextInput").value.trim();
+    if (!text) { inputTables = []; document.getElementById("inputCount").textContent = inputTables.length + " テーブル"; updateGenerateBtn(); return; }
+
+    const lines = text.split("\n").filter(l => l.trim());
+    if (!lines.length) { inputTables = []; document.getElementById("inputCount").textContent = inputTables.length + " テーブル"; updateGenerateBtn(); return; }
+
+    const firstLine = lines[0].toLowerCase();
+    const isBdashMeta = firstLine.includes("データファイル名") && firstLine.includes("カラム論理名");
+    let tables = [];
+
+    if (isBdashMeta) {
+      const headers = lines[0].split(/\t/);
+      const tblIdx = headers.findIndex(h => h.trim() === "データファイル名");
+      const nameIdx = headers.findIndex(h => h.trim() === "カラム論理名");
+      const typeIdx = headers.findIndex(h => h.trim() === "データ型");
+      const cidIdx = headers.findIndex(h => h.trim() === "顧客IDフラグ");
+      if (tblIdx >= 0 && nameIdx >= 0) {
+        const tablesDict = {};
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(/\t/);
+          const tblName = parts[tblIdx] ? parts[tblIdx].trim() : "";
+          const colName = parts[nameIdx] ? parts[nameIdx].trim() : "";
+          if (!tblName || !colName) continue;
+          const colType = typeIdx >= 0 && parts[typeIdx] ? parts[typeIdx].trim() : "";
+          const isCid = cidIdx >= 0 && parts[cidIdx] ? /true|★true|1|○|yes/i.test(parts[cidIdx].trim()) : false;
+          if (!tablesDict[tblName]) tablesDict[tblName] = [];
+          tablesDict[tblName].push({ name: colName, type: colType, description: isCid ? "顧客ID（結合キー）" : "" });
+        }
+        tables = Object.entries(tablesDict).map(([name, cols]) => ({ table_name: name, columns: cols }));
+      }
+    } else {
+      let currentTable = null;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const tableMatch = trimmed.match(/^[【\[](.+?)[】\]]/);
+        if (tableMatch) {
+          if (currentTable && currentTable.columns.length > 0) tables.push(currentTable);
+          currentTable = { table_name: tableMatch[1].trim(), columns: [] };
+          continue;
+        }
+        if (currentTable) {
+          const parts = trimmed.split(/\t+|\s{2,}/);
+          const name = parts[0] ? parts[0].trim() : "";
+          const type = parts[1] ? parts[1].trim() : "";
+          if (name) currentTable.columns.push({ name, type, description: "" });
+        }
+      }
+      if (currentTable && currentTable.columns.length > 0) tables.push(currentTable);
+    }
+
+    inputTables = tables;
+    const textarea = document.getElementById("inputTextInput");
+    const btn = document.querySelector("#inputText .text-ok-btn");
+    if (tables.length > 0) {
+      const totalCols = tables.reduce((s, t) => s + t.columns.length, 0);
+      textarea.style.opacity = "0.6";
+      textarea.style.borderColor = "var(--accent-green)";
+      btn.textContent = `✓ ${tables.length}テーブル / ${totalCols}カラム 読み込み済み`;
+      btn.style.background = "var(--accent-green)";
+    } else {
+      textarea.style.opacity = "1";
+      textarea.style.borderColor = "";
+      btn.textContent = "OK";
+      btn.style.background = "";
+    }
+    document.getElementById("inputCount").textContent = inputTables.length + " テーブル";
+    updateGenerateBtn();
   }
 
   function switchOutputMethod(method, btn) {

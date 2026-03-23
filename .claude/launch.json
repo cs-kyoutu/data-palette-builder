@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "data-palette-combined",
+      "name": "data-palette-builder",
       "runtimeExecutable": "python",
       "runtimeArgs": ["start_combined.py"],
-      "port": 8005
+      "port": 8002
     }
   ]
 }
