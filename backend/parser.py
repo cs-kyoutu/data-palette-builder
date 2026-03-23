@@ -10,8 +10,17 @@ import openpyxl
 
 
 # --- ヘッダー行の自動検出用キーワード ---
-INPUT_HEADER_KEYWORDS = {"カラム名", "項目名", "name", "column", "フィールド名", "フィールド", "カラム論理名"}
-OUTPUT_HEADER_KEYWORDS = {"カラム名", "項目名", "name", "column"}
+INPUT_HEADER_KEYWORDS = {
+    "カラム名", "項目名", "name", "column", "フィールド名", "フィールド",
+    "カラム論理名", "カラム物理名", "列名", "属性名", "項目",
+    "テーブル名", "データファイル名",
+}
+OUTPUT_HEADER_KEYWORDS = {
+    "カラム名", "項目名", "name", "column", "列名", "フィールド名",
+    "定義", "definition", "説明",
+    "素材になる", "インプットカラム", "インプットデータ",
+    "ソースカラム", "ソーステーブル", "source",
+}
 
 # b→dashメタデータ形式の検出キーワード
 BDASH_META_KEYWORDS = {"データファイル名", "カラム論理名", "データ型"}
@@ -19,19 +28,37 @@ BDASH_META_KEYWORDS = {"データファイル名", "カラム論理名", "デー
 
 def _detect_header_row(ws, keywords: set[str]) -> int | None:
     """ヘッダー行を自動検出（キーワードに一致するセルがある行）"""
-    for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=min(ws.max_row, 20), values_only=True), start=1):
+    keywords_lower = {k.lower() for k in keywords}
+    for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=min(ws.max_row, 30), values_only=True), start=1):
         for cell_val in row:
-            if cell_val and str(cell_val).strip().lower() in {k.lower() for k in keywords}:
+            if not cell_val:
+                continue
+            cell_str = str(cell_val).strip().lower().replace("\n", "")
+            # 完全一致
+            if cell_str in keywords_lower:
                 return row_idx
+            # 部分一致（改行入りヘッダー対応: "素材になる\nカラム名" 等）
+            for kw in keywords_lower:
+                if kw in cell_str or cell_str in kw:
+                    return row_idx
     # 見つからなければ1行目をヘッダーとする
     return 1
 
 
 def _get_col_index(header_row: list, *candidates: str) -> int | None:
-    """ヘッダー行から指定キーワードに一致する列インデックスを返す"""
+    """ヘッダー行から指定キーワードに一致する列インデックスを返す（部分一致対応）"""
+    candidates_lower = {c.lower() for c in candidates}
     for i, val in enumerate(header_row):
-        if val and str(val).strip().lower() in {c.lower() for c in candidates}:
+        if not val:
+            continue
+        val_str = str(val).strip().lower().replace("\n", "")
+        # 完全一致
+        if val_str in candidates_lower:
             return i
+        # 部分一致
+        for c in candidates_lower:
+            if c in val_str or val_str in c:
+                return i
     return None
 
 
@@ -116,9 +143,9 @@ def parse_input_excel(file_path: str) -> list[dict]:
             continue
 
         # 通常形式: カラム名、型、説明の列を特定
-        name_col = _get_col_index(header, "カラム名", "項目名", "name", "column", "フィールド名", "カラム論理名")
-        type_col = _get_col_index(header, "型", "type", "データ型", "形式")
-        desc_col = _get_col_index(header, "説明", "description", "備考", "定義", "概要")
+        name_col = _get_col_index(header, "カラム名", "項目名", "name", "column", "フィールド名", "カラム論理名", "列名", "属性名", "項目", "カラム物理名")
+        type_col = _get_col_index(header, "型", "type", "データ型", "形式", "data_type", "タイプ")
+        desc_col = _get_col_index(header, "説明", "description", "備考", "定義", "概要", "用途", "コメント", "memo")
 
         if name_col is None:
             name_col = 0
@@ -165,8 +192,8 @@ def parse_input_csv(file_path: str, table_name: str | None = None) -> list[dict]
         return _parse_bdash_meta(rows[1:], header)
 
     name_col = _get_col_index(header, "カラム名", "項目名", "name", "column", "フィールド名", "カラム論理名")
-    type_col = _get_col_index(header, "型", "type", "データ型", "形式")
-    desc_col = _get_col_index(header, "説明", "description", "備考", "定義", "概要")
+    type_col = _get_col_index(header, "型", "type", "データ型", "形式", "data_type", "タイプ")
+    desc_col = _get_col_index(header, "説明", "description", "備考", "定義", "概要", "用途", "コメント", "memo")
 
     if name_col is None:
         name_col = 0
@@ -208,18 +235,19 @@ def parse_output_excel(file_path: str) -> dict:
 
     # ヘッダー行を検出
     header_idx = 0
+    header_keywords = ["カラム名", "項目名", "name", "column", "列名", "フィールド名", "定義", "素材になる"]
     for i, row in enumerate(rows):
-        vals = [str(v).strip().lower() if v else "" for v in row]
-        if any(k in vals for k in ["カラム名", "項目名", "name"]):
+        vals = [str(v).strip().lower().replace("\n", "") if v else "" for v in row]
+        if any(k in v for v in vals for k in header_keywords):
             header_idx = i
             break
 
     header = [str(v).strip() if v else "" for v in rows[header_idx]]
 
-    name_col = _get_col_index(header, "カラム名", "項目名", "name")
-    def_col = _get_col_index(header, "定義", "説明", "definition", "description")
-    src_col_col = _get_col_index(header, "インプットカラム", "元カラム", "source_column", "ソースカラム")
-    src_tbl_col = _get_col_index(header, "インプットデータ", "元テーブル", "source_table", "ソーステーブル")
+    name_col = _get_col_index(header, "カラム名", "項目名", "name", "column", "列名", "フィールド名")
+    def_col = _get_col_index(header, "定義", "説明", "definition", "description", "備考", "用途")
+    src_col_col = _get_col_index(header, "インプットカラム", "元カラム", "source_column", "ソースカラム", "素材になるカラム名", "素材になる\nカラム名")
+    src_tbl_col = _get_col_index(header, "インプットデータ", "元テーブル", "source_table", "ソーステーブル", "素材になるID/データファイル名", "素材になる\nID/データファイル名")
 
     if name_col is None:
         # フォールバック: 列順序で推定（B列=カラム名, C列=定義, D列=インプットカラム, E列=インプットデータ）
