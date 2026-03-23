@@ -92,7 +92,7 @@ def load_skill(name: str) -> str:
 def select_skills(input_tables: list[dict], output_mapping: dict) -> list[str]:
     """インプット/アウトプット定義を分析し、ロードすべきスキル名のリストを返す"""
     # 常にロードするスキル
-    skills = ["base_operations", "design_patterns", "hearing_defaults"]
+    skills = ["base_operations", "design_patterns", "hearing_defaults", "procedure_format"]
 
     # アウトプットのカラム名・定義を結合してキーワード検索用テキストを作る
     output_text = ""
