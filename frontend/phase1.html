@@ -283,6 +283,22 @@
     }
     .text-input-area:focus { border-color: var(--primary); outline: none; }
     .text-input-area::placeholder { color: var(--text-muted); }
+    .text-ok-btn {
+      display: block;
+      width: 100%;
+      margin-top: 8px;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: var(--primary);
+      color: white;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .text-ok-btn:hover { background: var(--primary-dark); }
 
     /* Generate button */
     .generate-area {
@@ -572,8 +588,8 @@
       <!-- テキスト入力 -->
       <div id="inputText" class="hidden">
         <textarea class="text-input-area" id="inputTextInput"
-          placeholder="テーブル定義をテキストで入力&#10;&#10;テーブル名を【】で囲み、その下にカラムを記述:&#10;&#10;【顧客】&#10;顧客ID テキスト&#10;メールアドレス テキスト&#10;姓 テキスト&#10;名 テキスト&#10;&#10;【受注】&#10;受注ID テキスト&#10;顧客ID テキスト&#10;受注日時 日時&#10;受注金額 整数&#10;&#10;※タブ/スペース区切りでカラム名・データ型を記述"
-          oninput="parseInputText()"></textarea>
+          placeholder="テーブル定義をテキストで入力&#10;&#10;テーブル名を【】で囲み、その下にカラムを記述:&#10;&#10;【顧客】&#10;顧客ID テキスト&#10;メールアドレス テキスト&#10;姓 テキスト&#10;名 テキスト&#10;&#10;【受注】&#10;受注ID テキスト&#10;顧客ID テキスト&#10;受注日時 日時&#10;受注金額 整数&#10;&#10;※タブ/スペース区切りでカラム名・データ型を記述"></textarea>
+        <button class="text-ok-btn" onclick="parseInputText()">OK</button>
       </div>
 
       <div class="file-list" id="inputFileList"></div>
@@ -607,6 +623,7 @@
       <div id="outputText" class="hidden">
         <textarea class="text-input-area" id="outputTextInput"
           placeholder="最終テーブルのカラム定義をテキストで入力&#10;&#10;例:&#10;顧客ID - 顧客テーブルの顧客ID&#10;メールアドレス - 顧客テーブルのメールアドレス&#10;最終カート投入日 - webアクセスログから算出&#10;カート投入商品名1 - 商品テーブルの商品名"></textarea>
+        <button class="text-ok-btn" onclick="parseOutputText()">OK</button>
       </div>
 
       <div class="file-list" id="outputFileList"></div>
@@ -739,7 +756,64 @@
     }
 
     inputTables = tables;
+    if (tables.length > 0) {
+      // OKフィードバック: テキストエリアを読み取り専用にして確認済み表示
+      const textarea = document.getElementById("inputTextInput");
+      textarea.style.opacity = "0.6";
+      textarea.style.borderColor = "var(--accent-green)";
+      const btn = document.querySelector("#inputText .text-ok-btn");
+      btn.textContent = `✓ ${tables.length}テーブル読み込み済み（編集して再度OKで更新）`;
+      btn.style.background = "var(--accent-green)";
+    }
     renderInputPreview();
+    updateGenerateBtn();
+  }
+
+  function parseOutputText() {
+    const text = document.getElementById("outputTextInput").value.trim();
+    if (!text) {
+      outputMapping = null;
+      renderOutputPreview();
+      updateGenerateBtn();
+      return;
+    }
+
+    const columns = [];
+    const lines = text.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // "カラム名 - 説明" or "カラム名  ソーステーブル  ソースカラム"
+      const dashMatch = trimmed.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+      if (dashMatch) {
+        columns.push({
+          name: dashMatch[1].trim(),
+          definition: dashMatch[2].trim(),
+          source_column: "",
+          source_table: "",
+        });
+      } else {
+        const parts = trimmed.split(/\t+|\s{2,}/);
+        columns.push({
+          name: parts[0] ? parts[0].trim() : "",
+          definition: parts[1] ? parts[1].trim() : "",
+          source_column: parts[2] ? parts[2].trim() : "",
+          source_table: parts[3] ? parts[3].trim() : "",
+        });
+      }
+    }
+
+    outputMapping = { columns: columns.filter(c => c.name) };
+    if (outputMapping.columns.length > 0) {
+      const textarea = document.getElementById("outputTextInput");
+      textarea.style.opacity = "0.6";
+      textarea.style.borderColor = "var(--accent-green)";
+      const btn = document.querySelector("#outputText .text-ok-btn");
+      btn.textContent = `✓ ${outputMapping.columns.length}カラム読み込み済み（編集して再度OKで更新）`;
+      btn.style.background = "var(--accent-green)";
+    }
+    renderOutputPreview();
     updateGenerateBtn();
   }
 
