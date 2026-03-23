@@ -93,6 +93,16 @@ def render_step(step: dict) -> str:
     # 絞込み: conditions をテキストに変換
     if operation in ("絞込み",) and "conditions" in settings:
         fmt_vars["conditions_text"] = _render_conditions(settings)
+        # 単一条件の場合はcolumn/conditionも直接展開
+        if len(settings["conditions"]) == 1:
+            cond = settings["conditions"][0]
+            fmt_vars["column"] = cond.get("column", "")
+            value = cond.get("value", "")
+            condition = cond.get("condition", "")
+            if value:
+                fmt_vars["condition"] = f"\"\"{value}\"\"{condition}"
+            else:
+                fmt_vars["condition"] = condition
 
     # 集約: aggregations をテキストに変換
     if operation in ("集約",) and "aggregations" in settings:
@@ -111,6 +121,10 @@ def render_step(step: dict) -> str:
         for r in settings["renames"]:
             rename_lines.append(f"「{r['from']}」を\"\"{r['to']}\"\"に変更する")
         fmt_vars["renames_text"] = "\n".join(rename_lines)
+        # 単一の場合はold_name/new_nameも展開
+        if len(settings["renames"]) == 1:
+            fmt_vars["old_name"] = settings["renames"][0]["from"]
+            fmt_vars["new_name"] = settings["renames"][0]["to"]
 
     # 分割: new_columns をテキストに変換
     if "new_columns" in fmt_vars and isinstance(fmt_vars["new_columns"], list):
@@ -203,7 +217,7 @@ def _render_conditions(settings: dict) -> str:
         condition = cond.get("condition", "")
         value = cond.get("value", "")
         if value:
-            lines.append(f"「{col}」が{value}{condition}")
+            lines.append(f"「{col}」が\"\"{value}\"\"{condition}")
         else:
             lines.append(f"「{col}」が{condition}")
         if i < len(conditions) - 1:

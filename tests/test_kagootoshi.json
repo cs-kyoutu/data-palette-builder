@@ -1,0 +1,54 @@
+{
+  "processing_groups": [
+    {
+      "group": "A",
+      "name": "かご落ちデータリマインド_パーツ①",
+      "input_data": "webアクセスログデータ（7日分）",
+      "steps": [
+        {"step": 1, "operation": "カラム名の変更", "save_as": null, "settings": {"renames": [{"from": "リレーション項目_25", "to": "MEMBER_ID"}, {"from": "リレーション項目_26", "to": "ITEM_CD"}]}},
+        {"step": 2, "operation": "絞込み", "save_as": null, "settings": {"conditions": [{"column": "ページURL", "condition": "《次で始まる》", "value": "https://www.cibone.com"}], "logic": "AND"}},
+        {"step": 3, "operation": "IF文", "save_as": null, "settings": {"conditions": [{"column": "ページURL", "condition": "次を含む", "value": "cart_complete.html,cart_3ds_complete.html,cart_yamato_atobarai_sp_complete.html", "result": "「PV/Click日時」"}], "else_value": "《空白》"}},
+        {"step": null, "operation": "カラム名の変更", "save_as": null, "settings": {"renames": [{"from": "IF文", "to": "受注日時"}]}},
+        {"step": 4, "operation": "参照", "save_as": null, "settings": {"pattern": "最初の値", "group_key": "ビジターID", "sort_column": "受注日時", "sort_order": "降順", "value_column": "受注日時", "null_handling": "無視する", "task_name": "最新受注日時"}},
+        {"step": 5, "operation": "型変換", "save_as": null, "settings": {"column": "最新受注日時", "target_type": "日時型", "error_handling": "クレンジングを中止する", "save_method": "上書き保存", "task_name": "最新受注日時"}},
+        {"step": 6, "operation": "時刻演算", "save_as": null, "settings": {"left_column": "PV/Click日時", "operator": "-", "right_column": "最新受注日時", "unit": "秒", "task_name": "カート投入日時-最新受注日時", "keep_original": "残す"}},
+        {"step": 7, "operation": "絞込み", "save_as": null, "settings": {"conditions": [{"column": "MEMBER_ID", "condition": "《空文字でない》"}, {"column": "ITEM_CD", "condition": "《空文字でない》"}], "logic": "AND"}},
+        {"step": 8, "operation": "絞込み", "save_as": null, "settings": {"conditions": [{"column": "カート投入日時-最新受注日時", "condition": "《以上》", "value": "0"}, {"column": "カート投入日時-最新受注日時", "condition": "《NULL》"}], "logic": "OR"}},
+        {"step": 9, "operation": "名寄せ", "save_as": null, "settings": {"keys": ["MEMBER_ID", "ITEM_CD"], "priority_column": "PV/Click日時", "priority_order": "最も新しい日時"}},
+        {"step": 10, "operation": "参照", "save_as": null, "settings": {"pattern": "最初の値", "group_key": "MEMBER_ID", "sort_column": "PV/Click日時", "sort_order": "降順", "value_column": "PV/Click日時", "null_handling": "無視する", "task_name": "最新カート投入日時"}},
+        {"step": 11, "operation": "時刻演算", "save_as": null, "settings": {"left_column": "本日の日時", "operator": "-", "right_column": "最新カート投入日時", "unit": "日", "task_name": "かご落ちからの経過日数（日）", "keep_original": "残す", "use_today": true}},
+        {"step": 12, "operation": "時刻演算", "save_as": null, "settings": {"left_column": "本日の日時", "operator": "-", "right_column": "最新カート投入日時", "unit": "時間", "task_name": "かご落ちからの経過日数（時間）", "keep_original": "残す", "use_today": true}},
+        {"step": 13, "operation": "削除", "save_as": "かご落ちデータリマインド_パーツ①", "settings": {"columns": ["PV/Click日時", "かご落ちからの経過日数（日）", "かご落ちからの経過日数（時間）", "MEMBER_ID", "ITEM_CD以外を削除"]}}
+      ]
+    },
+    {
+      "group": "B",
+      "name": "かご落ちデータリマインド_パーツ②",
+      "input_data": "かご落ちデータリマインド_パーツ①, Items_1, Stocks_1",
+      "steps": [
+        {"step": 1, "operation": "横統合", "save_as": "かご落ちデータリマインド_パーツ②-①", "settings": {"method": "共通のデータのみを統合する", "left_file": "かご落ちデータリマインド_パーツ①", "right_file": "Items_1", "key_left": "ITEM_CD", "key_right": "ITEM_CD", "left_columns": ["MEMBER_ID", "PV/Click日時", "かご落ちからの経過日数（日）", "かご落ちからの経過日数（時間）"], "right_columns": ["ITEM_ID", "ITEM_CD", "ITEM_NAME", "ITEM_IMAGE1_URL", "REGIST_KBN"], "duplicate_handling": "統合処理をエラーにする", "update_setting": "更新しない"}},
+        {"step": 2, "operation": "横統合", "save_as": "かご落ちデータリマインド_パーツ②", "settings": {"method": "共通のデータのみを統合する", "left_file": "かご落ちデータリマインド_パーツ②-①", "right_file": "【daX作成】Stocks_1_ITEM_IDユニーク単位加工済み", "key_left": "ITEM_ID", "key_right": "ITEM_ID", "left_columns": ["MEMBER_ID", "PV/Click日時", "かご落ちからの経過日数（日）", "かご落ちからの経過日数（時間）", "ITEM_ID", "ITEM_CD", "ITEM_NAME", "ITEM_IMAGE1_URL", "REGIST_KBN"], "right_columns": ["ZAIKO"], "duplicate_handling": "統合処理をエラーにする", "update_setting": "更新する"}}
+      ]
+    },
+    {
+      "group": "C",
+      "name": "かご落ちデータリマインド_パーツ③",
+      "input_data": "かご落ちデータリマインド_パーツ②",
+      "steps": [
+        {"step": 1, "operation": "絞込み", "save_as": null, "settings": {"conditions": [{"column": "REGIST_KBN", "condition": "《次に完全一致しない》", "value": "1"}, {"column": "ITEM_NAME", "condition": "《次を含まない(カンマ区切りで複数指定)》", "value": "■,包装紙,ラッピング,紙袋"}, {"column": "ZAIKO", "condition": "《次に完全一致しない》", "value": "0"}], "logic": "AND"}},
+        {"step": 2, "operation": "テキスト挿入", "save_as": null, "settings": {"column": "ITEM_CD", "text_head": "https://www.cibone.com/item/", "text_tail": ".html", "save_method": "名前を付けて保存", "task_name": "商品詳細URL"}},
+        {"step": 3, "operation": "カラム名の変更", "save_as": null, "settings": {"renames": [{"from": "ITEM_ID", "to": "商品ID"}, {"from": "ITEM_NAME", "to": "商品名"}, {"from": "ITEM_IMAGE1_URL", "to": "商品画像URL"}]}},
+        {"step": 4, "operation": "テンプレート 縦持ちを横持ちに変換", "save_as": null, "settings": {"aggregation_keys": ["MEMBER_ID", "かご落ちからの経過日数（時間）", "かご落ちからの経過日数（日）"], "horizontal_columns": ["商品ID", "商品名", "商品画像URL", "商品詳細URL"], "sort_column": "PV/Click日時", "sort_order": "降順", "top_n": 8}},
+        {"step": 5, "operation": "カラム名の変更", "save_as": "かご落ちデータリマインド_パーツ③", "settings": {"renames": [{"from": "商品ID", "to": "商品ID_1"}, {"from": "商品名", "to": "商品名_1"}, {"from": "商品画像URL", "to": "商品画像URL_1"}, {"from": "商品詳細URL", "to": "商品詳細URL_1"}, {"from": "商品ID(1)", "to": "商品ID_2"}, {"from": "商品名(1)", "to": "商品名_2"}, {"from": "商品画像URL(1)", "to": "商品画像URL_2"}, {"from": "商品詳細URL(1)", "to": "商品詳細URL_2"}, {"from": "商品ID(2)", "to": "商品ID_3"}, {"from": "商品名(2)", "to": "商品名_3"}, {"from": "商品画像URL(2)", "to": "商品画像URL_3"}, {"from": "商品詳細URL(2)", "to": "商品詳細URL_3"}]}}
+      ]
+    },
+    {
+      "group": "D",
+      "name": "かご落ちデータリマインド",
+      "input_data": "Members_1, かご落ちデータリマインド_パーツ③",
+      "steps": [
+        {"step": 1, "operation": "横統合", "save_as": "かご落ちデータリマインド", "settings": {"method": "共通のデータのみを統合する", "left_file": "Members_1", "right_file": "かご落ちデータリマインド_パーツ③", "key_left": "MEMBER_ID", "key_right": "MEMBER_ID", "left_columns": ["全てのカラム"], "right_columns": ["かご落ちからの経過日数（時間）", "かご落ちからの経過日数（日）", "商品ID_1", "商品名_1", "商品画像URL_1", "商品詳細URL_1", "商品ID_2", "商品名_2", "商品画像URL_2", "商品詳細URL_2", "商品ID_3", "商品名_3", "商品画像URL_3", "商品詳細URL_3"], "duplicate_handling": "統合処理をエラーにする", "update_setting": "更新する"}}
+      ]
+    }
+  ]
+}
