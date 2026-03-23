@@ -444,6 +444,8 @@ RENDERERS = {
     "テンプレート 日付型カラムから曜日を算出": render_テンプレート_曜日算出,
     "書式変換": render_書式変換,
     "複製": render_複製,
+    "テンプレート 3カラム連結": render_テンプレート_3カラム連結,
+    "テンプレート 3つ以上のカラム連結": render_テンプレート_3カラム連結,
 }
 
 
@@ -463,6 +465,25 @@ def render_複製(settings: dict) -> str:
     new_col = settings.get("new_column", f"{col}(複製)")
 
     return f"『複製』\n「{col}」を複製\n→カラム名を「{new_col}」に変更"
+
+
+def render_テンプレート_3カラム連結(settings: dict) -> str:
+    """3カラム以上連結テンプレートの手順テキストを生成"""
+    columns = settings.get("columns", [])
+    separator = settings.get("separator", ",")
+    task = settings.get("task_name", "")
+    keep = settings.get("keep_original", "残す")
+
+    cols_str = "、".join(f"「{c}」" for c in columns) if isinstance(columns, list) else columns
+    lines = [
+        "『テンプレート、3つ以上のカラムやテキストを連結した値を追加』",
+        f"{cols_str}を選択する",
+        f"[テキスト挿入]を押下し、カラムとカラムの間に\"\"{separator}\"\"を挿入し、[適用]を押下する",
+    ]
+    if task:
+        lines.append(f"クレンジングタスクの保存名を\"\"{task}\"\"にする")
+    lines.append(f"表示方法《{keep}》を選択")
+    return "\n".join(lines)
 
 
 def render_step(step: dict) -> str:
