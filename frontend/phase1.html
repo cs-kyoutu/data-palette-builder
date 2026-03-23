@@ -720,50 +720,90 @@
       return;
     }
 
-    const tables = [];
-    let currentTable = null;
-    const lines = text.split("\n");
+    const lines = text.split("\n").filter(l => l.trim());
+    if (!lines.length) { inputTables = []; renderInputPreview(); updateGenerateBtn(); return; }
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
+    // --- b→dashメタデータ形式の自動検出 ---
+    const firstLine = lines[0].toLowerCase();
+    const isBdashMeta = firstLine.includes("データファイル名") && firstLine.includes("カラム論理名");
 
-      // テーブル名検出: 【テーブル名】 or [テーブル名]
-      const tableMatch = trimmed.match(/^[【\[](.+?)[】\]]/);
-      if (tableMatch) {
-        if (currentTable && currentTable.columns.length > 0) {
-          tables.push(currentTable);
+    let tables = [];
+
+    if (isBdashMeta) {
+      // ヘッダー行からカラムインデックスを特定
+      const headers = lines[0].split(/\t/);
+      const tblIdx = headers.findIndex(h => h.trim() === "データファイル名");
+      const nameIdx = headers.findIndex(h => h.trim() === "カラム論理名");
+      const typeIdx = headers.findIndex(h => h.trim() === "データ型");
+      const cidIdx = headers.findIndex(h => h.trim() === "顧客IDフラグ");
+
+      if (tblIdx >= 0 && nameIdx >= 0) {
+        const tablesDict = {};
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(/\t/);
+          const tblName = parts[tblIdx] ? parts[tblIdx].trim() : "";
+          const colName = parts[nameIdx] ? parts[nameIdx].trim() : "";
+          if (!tblName || !colName) continue;
+
+          const colType = typeIdx >= 0 && parts[typeIdx] ? parts[typeIdx].trim() : "";
+          const isCid = cidIdx >= 0 && parts[cidIdx] ? /true|★true|1|○|yes/i.test(parts[cidIdx].trim()) : false;
+
+          if (!tablesDict[tblName]) tablesDict[tblName] = [];
+          tablesDict[tblName].push({
+            name: colName,
+            type: colType,
+            description: isCid ? "顧客ID（結合キー）" : "",
+          });
         }
-        currentTable = { table_name: tableMatch[1].trim(), columns: [] };
-        continue;
+        tables = Object.entries(tablesDict).map(([name, cols]) => ({ table_name: name, columns: cols }));
       }
+    } else {
+      // --- 【テーブル名】形式 ---
+      let currentTable = null;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
 
-      // カラム行: タブ or 2つ以上のスペースで区切り
-      if (currentTable) {
-        const parts = trimmed.split(/\t+|\s{2,}/);
-        if (parts.length >= 1) {
-          const name = parts[0].trim();
-          const type = parts.length >= 2 ? parts[1].trim() : "";
-          const desc = parts.length >= 3 ? parts[2].trim() : "";
-          if (name) {
-            currentTable.columns.push({ name, type, description: desc });
+        const tableMatch = trimmed.match(/^[【\[](.+?)[】\]]/);
+        if (tableMatch) {
+          if (currentTable && currentTable.columns.length > 0) {
+            tables.push(currentTable);
+          }
+          currentTable = { table_name: tableMatch[1].trim(), columns: [] };
+          continue;
+        }
+
+        if (currentTable) {
+          const parts = trimmed.split(/\t+|\s{2,}/);
+          if (parts.length >= 1) {
+            const name = parts[0].trim();
+            const type = parts.length >= 2 ? parts[1].trim() : "";
+            const desc = parts.length >= 3 ? parts[2].trim() : "";
+            if (name) {
+              currentTable.columns.push({ name, type, description: desc });
+            }
           }
         }
       }
-    }
-    if (currentTable && currentTable.columns.length > 0) {
-      tables.push(currentTable);
+      if (currentTable && currentTable.columns.length > 0) {
+        tables.push(currentTable);
+      }
     }
 
     inputTables = tables;
+    const textarea = document.getElementById("inputTextInput");
+    const btn = document.querySelector("#inputText .text-ok-btn");
     if (tables.length > 0) {
-      // OKフィードバック: テキストエリアを読み取り専用にして確認済み表示
-      const textarea = document.getElementById("inputTextInput");
+      const totalCols = tables.reduce((s, t) => s + t.columns.length, 0);
       textarea.style.opacity = "0.6";
       textarea.style.borderColor = "var(--accent-green)";
-      const btn = document.querySelector("#inputText .text-ok-btn");
-      btn.textContent = `✓ ${tables.length}テーブル読み込み済み（編集して再度OKで更新）`;
+      btn.textContent = `✓ ${tables.length}テーブル / ${totalCols}カラム 読み込み済み`;
       btn.style.background = "var(--accent-green)";
+    } else {
+      textarea.style.opacity = "1";
+      textarea.style.borderColor = "";
+      btn.textContent = "OK";
+      btn.style.background = "";
     }
     renderInputPreview();
     updateGenerateBtn();
