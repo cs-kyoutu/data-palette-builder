@@ -442,7 +442,27 @@ RENDERERS = {
     "テンプレート 金額カンマ区切り": render_テンプレート_金額カンマ,
     "テンプレート 曜日算出": render_テンプレート_曜日算出,
     "テンプレート 日付型カラムから曜日を算出": render_テンプレート_曜日算出,
+    "書式変換": render_書式変換,
+    "複製": render_複製,
 }
+
+
+def render_書式変換(settings: dict) -> str:
+    """書式変換の手順テキストを生成"""
+    col = settings.get("column", "")
+    conversion = settings.get("conversion", "")
+    save = settings.get("save_method", "上書き保存")
+    task = settings.get("task_name", col)
+
+    return f"『書式変換』\n「{col}」を選択、[オプション(歯車アイコン)]を押下し、《{conversion}》に変換\n《{save}》にて保存\nクレンジングタスクの保存名を\"\"{task}\"\"にする"
+
+
+def render_複製(settings: dict) -> str:
+    """複製の手順テキストを生成"""
+    col = settings.get("column", "")
+    new_col = settings.get("new_column", f"{col}(複製)")
+
+    return f"『複製』\n「{col}」を複製\n→カラム名を「{new_col}」に変更"
 
 
 def render_step(step: dict) -> str:
