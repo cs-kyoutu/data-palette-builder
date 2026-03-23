@@ -56,10 +56,171 @@ def _format_file_list(files) -> str:
 
 # --- メインレンダラー ---
 
+# --- エイリアス変換テーブル ---
+ALIASES = {
+    # 名寄せ
+    "key_columns": "keys",
+    "key_column": "keys",
+    # ランキング
+    "group_by": "group_key",
+    "rank_method": "tie_handling",
+    "sort": "sort_order",
+    # テンプレート縦→横
+    "aggregate_keys": "aggregation_keys",
+    "pivot_columns": "horizontal_columns",
+    "max_columns": "top_n",
+    # カラム名変更
+    "rename_rules": "renames",
+    # 連結
+    "left_column": "column_1",
+    "right_column": "column_2",
+    "new_column_name": "task_name",
+    # 横統合: keep_columnsをleft_columns/right_columnsに分離
+    "keep_columns": "_keep_columns",
+    # 集約
+    "group_keys": "group_keys",
+    # IF文
+    "else": "else_value",
+    # 時刻演算
+    "result_unit": "unit",
+    # ランキングの値変換
+    "降順": "大きい順",
+    "昇順": "小さい順",
+}
+
+# ランキングのtie_handling値変換
+TIE_ALIASES = {
+    "同率なし": "同率なし",
+    "no_ties": "同率なし",
+    "同率あり": "同率あり(順位飛ばしあり)",
+}
+
+# 名寄せのpriority_order値変換
+PRIORITY_ALIASES = {
+    "降順": "最も新しい日時",
+    "昇順": "最も古い日時",
+    "desc": "最も新しい日時",
+    "asc": "最も古い日時",
+    "最新": "最も新しい日時",
+    "最古": "最も古い日時",
+}
+
+
+def _apply_aliases(fmt_vars: dict, operation: str):
+    """Phase1出力のキー名ブレをYAMLパーツの変数名に変換"""
+    # キー名のエイリアス変換
+    keys_to_add = {}
+    for old_key, new_key in ALIASES.items():
+        if old_key in fmt_vars and new_key not in fmt_vars and new_key != "_keep_columns":
+            keys_to_add[new_key] = fmt_vars[old_key]
+    fmt_vars.update(keys_to_add)
+
+    # group_byがリストの場合、先頭要素をgroup_keyに
+    if "group_by" in fmt_vars:
+        gb = fmt_vars["group_by"]
+        if isinstance(gb, list):
+            fmt_vars["group_key"] = gb[0] if gb else ""
+        elif isinstance(gb, str):
+            fmt_vars["group_key"] = gb
+
+    # rename_rulesのキー名修正（rename_rules[].from/to → renames[].from/to）
+    if "rename_rules" in fmt_vars and "renames" not in fmt_vars:
+        fmt_vars["renames"] = fmt_vars["rename_rules"]
+
+    # keep_original: bool → テキスト
+    if "keep_original" in fmt_vars:
+        v = fmt_vars["keep_original"]
+        if v is False:
+            fmt_vars["keep_original"] = "残さない"
+        elif v is True:
+            fmt_vars["keep_original"] = "残す"
+
+    # tie_handling値変換
+    if "tie_handling" in fmt_vars:
+        fmt_vars["tie_handling"] = TIE_ALIASES.get(fmt_vars["tie_handling"], fmt_vars["tie_handling"])
+
+    # priority_order値変換（名寄せ）
+    if "priority_order" in fmt_vars:
+        fmt_vars["priority_order"] = PRIORITY_ALIASES.get(fmt_vars["priority_order"], fmt_vars["priority_order"])
+
+    # sort_order値変換（ランキング）
+    if "sort_order" in fmt_vars:
+        so = fmt_vars["sort_order"]
+        if so == "降順":
+            fmt_vars["sort_order"] = "大きい順"
+        elif so == "昇順":
+            fmt_vars["sort_order"] = "小さい順"
+        # テンプレートでは昇順/降順のままでOKなのでoperationで判定
+        if operation in ("ランキング",):
+            if so == "降順":
+                fmt_vars["sort_order"] = "大きい順"
+            elif so == "昇順":
+                fmt_vars["sort_order"] = "小さい順"
+
+    # 横統合: keep_columnsリスト → left_columns/right_columnsに分離（ヒューリスティック）
+    if "keep_columns" in fmt_vars and operation in ("横統合",):
+        kc = fmt_vars["keep_columns"]
+        if isinstance(kc, list) and "left_columns" not in fmt_vars:
+            fmt_vars["left_columns"] = kc
+            fmt_vars["right_columns"] = []
+
+    # 横統合: left/right_columnsがない場合の補完
+    if operation in ("横統合",):
+        if "left_columns" not in fmt_vars:
+            fmt_vars["left_columns"] = []
+        if "right_columns" not in fmt_vars:
+            fmt_vars["right_columns"] = []
+        # duplicate_handling/update_settingのデフォルト
+        fmt_vars.setdefault("duplicate_handling", "統合処理をエラーにする")
+        fmt_vars.setdefault("update_setting", "更新しない")
+
+    # 名寄せ: key_columnsがリスト→keysに
+    if operation in ("名寄せ",) and "key_columns" in fmt_vars and "keys" not in fmt_vars:
+        fmt_vars["keys"] = fmt_vars["key_columns"]
+
+    # 連結: separator補完
+    if operation in ("連結",):
+        fmt_vars.setdefault("separator", " ")
+        fmt_vars.setdefault("keep_original", "残さない")
+
+    # テンプレート: pivot_columns → horizontal_columns
+    if "pivot_columns" in fmt_vars and "horizontal_columns" not in fmt_vars:
+        fmt_vars["horizontal_columns"] = fmt_vars["pivot_columns"]
+    if "aggregate_keys" in fmt_vars and "aggregation_keys" not in fmt_vars:
+        fmt_vars["aggregation_keys"] = fmt_vars["aggregate_keys"]
+    if "max_columns" in fmt_vars and "top_n" not in fmt_vars:
+        fmt_vars["top_n"] = fmt_vars["max_columns"]
+
+    # カラム名変更: rename_rules → renames、単一の場合old_name/new_name展開
+    if "renames" in fmt_vars and isinstance(fmt_vars["renames"], list) and len(fmt_vars["renames"]) == 1:
+        fmt_vars["old_name"] = fmt_vars["renames"][0].get("from", "")
+        fmt_vars["new_name"] = fmt_vars["renames"][0].get("to", "")
+
+    # テンプレート操作名の正規化
+    if "template_name" in fmt_vars:
+        tn = fmt_vars["template_name"]
+        if "縦" in tn and "横" in tn:
+            pass  # operationがすでにテンプレート系
+
+
 def render_step(step: dict) -> str:
     """1つのstepを手順書テキストにレンダリング"""
     operation = step.get("operation", "")
     settings = step.get("settings", {})
+
+    # operation名の正規化（template_nameフィールド対応）
+    tn = settings.get("template_name", "") or step.get("template_name", "")
+    if operation == "テンプレート" and tn:
+        if "縦" in tn and "横" in tn:
+            operation = "テンプレート 縦持ちを横持ちに変換"
+        elif "横" in tn and "縦" in tn:
+            operation = "テンプレート 横持ちを縦持ちに変換"
+        elif "金額" in tn or "カンマ" in tn:
+            operation = "テンプレート 金額をカンマ区切り"
+        elif "曜日" in tn:
+            operation = "テンプレート 曜日算出"
+    if operation == "カラム名変更":
+        operation = "カラム名の変更"
 
     # save_asをsettingsに含める
     if step.get("save_as") and "save_as" not in settings:
@@ -71,6 +232,9 @@ def render_step(step: dict) -> str:
 
     # --- settingsから変数を準備 ---
     fmt_vars = dict(settings)
+
+    # --- エイリアス変換（Phase1出力のキー名ブレを吸収） ---
+    _apply_aliases(fmt_vars, operation)
 
     # column_listの自動変換
     text_additions = {}
@@ -116,13 +280,13 @@ def render_step(step: dict) -> str:
         fmt_vars["conditions_text"] = _render_if_conditions(part, settings)
 
     # カラム名変更: renames をテキストに変換
-    if operation in ("カラム名変更", "カラム名の変更") and "renames" in settings:
+    renames_data = fmt_vars.get("renames", settings.get("renames", settings.get("rename_rules", [])))
+    if operation in ("カラム名変更", "カラム名の変更") and renames_data:
         rename_lines = []
-        for r in settings["renames"]:
+        for r in renames_data:
             rename_lines.append(f"「{r['from']}」を\"\"{r['to']}\"\"に変更する")
         fmt_vars["renames_text"] = "\n".join(rename_lines)
-        # 単一の場合はold_name/new_nameも展開
-        if len(settings["renames"]) == 1:
+        if len(renames_data) == 1:
             fmt_vars["old_name"] = settings["renames"][0]["from"]
             fmt_vars["new_name"] = settings["renames"][0]["to"]
 
@@ -189,7 +353,7 @@ def _select_format(part: dict, settings: dict) -> str:
         return "format_column"
 
     if operation in ("カラム名の変更", "カラム名変更"):
-        renames = settings.get("renames", [])
+        renames = settings.get("renames", settings.get("rename_rules", []))
         if len(renames) <= 1:
             return "format_single"
         return "format_multi"
