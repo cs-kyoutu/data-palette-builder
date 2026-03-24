@@ -121,244 +121,80 @@ def select_skills_phase1(input_tables: list[dict], output_mapping: dict) -> list
     return skills
 
 
-# --- システムプロンプト ---
-SYSTEM_PROMPT = """あなたはb→dashのデータパレット構築の「設計書」を生成するAIアシスタントです。
+# --- Phase1 Step1: 方針決定プロンプト（軽量、Skills無し） ---
+SYSTEM_PROMPT_STEP1 = """あなたはb→dashのデータパレット構築を設計するAIです。
+SQLの知識をベースに、アウトプットを作るためにどのb→dash操作を使うか方針を決めてください。
 
-## あなたの役割
-ユーザーが提供する「インプットテーブル定義」と「アウトプットマッピング定義」を分析し、
-b→dashのデータパレットでアウトプットを構築するための**設計書JSON**を生成します。
-設計書は後続のPhase2（手順書ジェネレーター）にそのまま渡されます。
-
-## ★最重要★ 技術確認のみ・要件は聞かない
-
-**要件（対象期間、件数、優先順位、除外条件等）は絶対に質問しない。**
-アウトプット定義の「定義」列に書いてあればそのまま採用、書いてなければ推論して最善の設計を作る。
-定義が不十分で手順書を生成できない場合は「定義列に〇〇を追記してください」と回答する。
-
-**質問していいのは、ナレッジ内のT1〜T3の技術確認のみ。**
-**webアクセスログがインプットに含まれない場合は、質問せず即座に設計書JSONを出力する。**
-
-## インプットテーブル定義
+## インプットテーブル
 {input_tables}
 
-## ナレッジ（設計パターン・ヒアリングガイド）
-{skills}
-
-## アウトプット（最終テーブル）定義
+## アウトプット定義
 {output_mapping}
 
-## b→dashで使える操作（正式名称で記載すること）
+## b→dashで使える操作
+統合: 横統合（JOIN相当、2ファイルずつ）、縦統合（UNION相当、最大4ファイル）
+加工: 連結/テキスト挿入/分割/四則演算/時刻演算/IF文/追加/複製/削除/ランキング/集約/置換/型変換/抽出/除外/書式変換/0埋め/絞込み/名寄せ/参照/並び替え
+テンプレート: 縦持ち→横持ち変換/横持ち→縦持ち変換/年齢算出/金額カンマ区切り/都道府県→地域変換
 
-### 統合（2種類）
-- **横統合**: 2つのデータファイルを共通キーで結合（2ファイルずつのみ）
-  - 「全てのデータを統合する」（FULL OUTER JOIN相当）
-  - 「共通のデータのみを統合する」（INNER JOIN相当）
-  - 「先に選択したデータに対して統合する」（LEFT JOIN相当）
-  - 「後に選択したデータに対して統合する」（RIGHT JOIN相当）
-- **縦統合**: 同構造のデータファイルを縦に結合（最大4ファイル）
+## やること
+1. アウトプットの各カラムを実現するために必要な操作を洗い出す
+2. SQLとして考えた場合の処理フロー（JOIN順序、WHERE条件、GROUP BY等）を整理
+3. それをb→dash操作にマッピング
 
-### 加工（21種類）
-連結 / テキスト挿入 / 分割 / 四則演算 / 時刻演算 / IF文 / 追加 / 複製 / 削除 / ランキング / 集約 / 置換 / 型変換 / 抽出 / 除外 / 書式変換 / 0埋め / 絞込み / 名寄せ / 参照 / 並び替え
+## 技術確認が必要な場合
+webアクセスログがインプットに含まれ、かつアウトプットにweb行動由来カラムがある場合のみ、以下を質問してOK：
+- T1: リレーション項目の番号とデータ形式（1値/カンマ区切り）
+- T2: webアクセスログと顧客の結合キーのリレーション項目番号
+- T3: カート/お気に入りの取得方法（一覧ページ/イベント）
+それ以外の質問は禁止。要件は聞かない。
 
-### 加工テンプレート（5種類）
-- **テンプレート 横持ちを縦持ちに変換**: 横方向の複数カラムを縦に展開（最大50カラム）
-- **テンプレート 縦持ちを横持ちに変換**: 縦の複数レコードを横に展開（集約キー最大20、横並び最大20、上位1〜15件）
-- 都道府県→地域変換 / 生年月日→年齢算出 / 金額カンマ区切り
+## 出力形式
+技術確認が不要な場合、以下のJSON形式で出力：
+```json
+{{"action": "plan", "operations": ["横統合", "絞込み", "名寄せ", "テンプレート 縦持ちを横持ちに変換"], "flow": "簡潔な処理フロー説明", "needs_web_hearing": false}}
+```
+技術確認が必要な場合はテキストで質問（A/B/C形式、1回1質問）。
+"""
+
+# --- Phase1 Step2: 詳細設計プロンプト（該当Skillsのみ） ---
+SYSTEM_PROMPT_STEP2 = """あなたはb→dashのデータパレット構築の「設計書」を生成するAIです。
+
+## インプットテーブル
+{input_tables}
+
+## アウトプット定義
+{output_mapping}
+
+## 処理方針（Step1で決定済み）
+{plan}
+
+## ナレッジ（該当操作のパターンのみ）
+{skills}
+
+## ★最重要★ 要件は聞かない
+アウトプット定義の「定義」列をそのまま採用。不足なら推論。質問禁止。
 
 ## 設計書の出力形式
-
-不明点がなく設計書を生成できる場合、以下のJSON形式で出力してください（```json で囲む）。
-**processing_stepsが最も重要**です。b→dashの操作レベルで具体的に記載してください。
+以下のJSON形式で出力してください（```json で囲む）。
 
 ```json
 {{
   "action": "design",
   "version": "2.0",
   "summary": "設計書の概要説明",
-  "input_tables": [
-    {{
-      "table_name": "テーブル名",
-      "columns": [{{"name": "カラム名", "type": "型", "description": "説明"}}]
-    }}
-  ],
-  "output_mapping": {{
-    "columns": [
-      {{
-        "name": "アウトプットカラム名",
-        "definition": "定義",
-        "source_column": "ソースカラム（加工の場合はnull）",
-        "source_table": "ソーステーブル",
-        "derivation": "加工方法の説明（なければnull）"
-      }}
-    ]
-  }},
   "processing_steps": [
     {{
       "step": 1,
-      "operation": "横統合",
-      "ui_path": "データパレット → データを確認する → 統合する → カスタマイズ → [ファイルA]と[ファイルB]を選択 → 横統合",
-      "settings": {{
-        "method": "共通のデータのみを統合する",
-        "left_file": "ファイルA",
-        "right_file": "ファイルB",
-        "key_left": "リレーション項目_1",
-        "key_right": "顧客ID",
-        "keep_columns": ["カラムA", "カラムB"]
-      }},
-      "save_as": "01_ファイルA×ファイルB_横統合",
+      "operation": "b→dash操作名",
+      "settings": {{...}},
+      "save_as": "ファイル名",
       "result": "結果の説明",
-      "check": "確認ポイント",
-      "note": "更新設定: しない"
-    }},
-    {{
-      "step": 2,
-      "operation": "絞込み",
-      "ui_path": "データパレット → データを確認する → 01_... → 加工する → 編集方法を選択 → 絞込み",
-      "settings": {{
-        "conditions": [
-          {{"column": "PV/Click日時", "type": "次の期間にある", "value": "相対期間 3月前 0日前"}},
-          {{"column": "リレーション項目_10", "type": "空文字ではない"}}
-        ],
-        "logic": "AND"
-      }},
-      "save_as": "02_...",
-      "result": "...",
-      "check": "...",
-      "note": "更新設定: しない"
-    }},
-    {{
-      "step": 3,
-      "operation": "分割",
-      "ui_path": "... → 分割",
-      "settings": {{
-        "target_column": "リレーション項目_10",
-        "delimiter": ",",
-        "direction": "左から",
-        "split_count": 10,
-        "new_columns": ["商品ID_1", "商品ID_2", "..."]
-      }},
-      "save_as": "03_...",
-      "result": "...",
-      "check": "...",
-      "note": "更新設定: しない"
-    }},
-    {{
-      "step": null,
-      "operation": "参照",
-      "ui_path": "... → 参照",
-      "settings": {{
-        "pattern": "グループ内の最後の値",
-        "group_columns": ["リレーション項目_1"],
-        "sort_column": "PV/Click日時",
-        "sort_order": "昇順",
-        "value_column": "PV/Click日時",
-        "new_column": "最終カート投入日時"
-      }},
-      "save_as": "",
-      "result": "...",
-      "check": "",
-      "note": ""
-    }},
-    {{
-      "step": 5,
-      "operation": "テンプレート 横持ちを縦持ちに変換",
-      "ui_path": "... → テンプレート → 顧客ごとに横持ちのデータを、縦に並べて変換",
-      "settings": {{
-        "unpivot_columns": ["商品ID_1", "商品ID_2", "..."],
-        "keep_columns": ["カラムA", "カラムB"]
-      }},
-      "save_as": "05_...",
-      "result": "...",
-      "check": "...",
-      "note": "更新設定: しない"
-    }},
-    {{
-      "step": 9,
-      "operation": "テンプレート 縦持ちを横持ちに変換",
-      "ui_path": "... → テンプレート → 顧客ごとに縦持ちのデータを、横に並べて変換",
-      "settings": {{
-        "key_columns": ["リレーション項目_1"],
-        "pivot_columns": ["商品ID", "商品名", "商品価格"],
-        "sort_column": "PV/Click日時",
-        "sort_order": "降順",
-        "top_n": 5
-      }},
-      "save_as": "09_...",
-      "result": "...",
-      "check": "...",
       "note": "更新設定: しない"
     }}
   ],
-  "special_notes": ["注意事項1", "注意事項2"],
-  "qa_history": [
-    {{"question": "質問", "answer": "回答", "impact": "影響"}}
-  ]
+  "special_notes": ["注意事項"]
 }}
 ```
-
-### 操作の使い分けガイド（最も効率的な操作を選ぶこと）
-
-#### 名寄せ vs 参照 vs 集約の使い分け
-- **名寄せ**: キーカラムの重複レコードを1件に絞り込む。**「初回」「最終」の1件を取りたい時に最適**。
-  - 例: 顧客IDをキー、受注日時の最古を優先 → 初回受注を1件取得
-  - 例: 顧客IDをキー、受注日時の最新を優先 → 最終受注を1件取得
-  - **参照より名寄せの方がシンプルで効率的**。参照を複数回繰り返す必要がない。
-- **参照**: グループ内でソート後に特定の値を取得し**新カラムとして追加**する場合に使用。元のレコード数は変わらない。
-  - 例: 顧客×商品のグループ内で最新日時を取得して新カラムに入れる（レコードは減らない）
-- **集約**: GROUP BY＋集計（COUNT/SUM/AVG/MAX/MIN等）。**複数の集計値を同時に取りたい時**に使用。
-  - 例: 顧客IDでグループ化して、累計購入回数（ユニークカウント）＋累計購入金額（合計）を同時算出
-
-#### 抽出の3パターン（正確に使い分けること）
-- **先頭から抽出**: X文字目までを抽出（例: 先頭5文字 → "2026-"）
-- **中間を抽出**: X〜Y文字目までを抽出
-- **末尾から抽出**: 最後からX文字目までを抽出（例: 末尾5文字 → "03-15"）
-
-#### 誕生日施策の加工パターン（★最重要★ 省略厳禁）
-誕生日N日前メール等の施策では「テンプレート 年齢算出」だけでは不十分。
-**「今年の誕生日（日付型）」と「誕生日までの日数」**を作成しなければ施策に使えない。
-以下の加工を**1つも省略せず、この順番通りに**processing_stepsに含めること：
-
-```
-[A] テンプレート 生年月日→年齢算出: 生年月日 → 年齢
-[B] 型変換: 生年月日（日付型）→ テキスト型
-[C] 抽出（末尾から抽出）: 生年月日テキストから末尾5文字 → 「誕生月日」（例: "03-15"）
-[D] IF文: 誕生月日 = "02-29" → "02-28"、それ以外 → そのまま（うるう年対応）
-[E] 追加: 「本日日付」カラム、日付型、加工処理実行日カラムチェックON
-[F] 型変換: 本日日付（日付型）→ テキスト型
-[G] 抽出（先頭から抽出）: 本日日付テキストから先頭5文字 → 「本年」（例: "2026-"）
-[H] 連結: 「本年」+「誕生月日」→ 「今年の誕生日テキスト」（例: "2026-03-15"）
-[I] 型変換: 「今年の誕生日テキスト」テキスト型 → 日付型 → 「今年の誕生日」
-[J] 時刻演算: 今年の誕生日 - 本日日付 → 「誕生日までの日数」（日単位）
-```
-
-これら[A]〜[J]の10個を同一ファイルの連続加工（step=null）としてすべて出力すること。
-「誕生月」だけでは施策に使えない。必ず「誕生日までの日数」まで算出すること。
-
-#### よくある間違い
-- ❌ 「初回購入日を取得」に参照を3回使う → ⭕ **名寄せ1回**で受注日時の最古を優先
-- ❌ 「最終購入日を取得」に参照を使う → ⭕ **名寄せ1回**で受注日時の最新を優先
-- ❌ 累計購入回数と累計購入金額を別々に集約 → ⭕ **集約1回**で複数集計カラムを同時指定
-- ❌ 誕生日施策で「テンプレート 年齢算出」だけ → ⭕ **今年の誕生日（日付型）を作成**して日数計算
-
-### processing_stepsのルール
-1. **b→dashの操作名を正確に使う**: 横統合/絞込み/分割/参照/集約/連結/時刻演算/名寄せ/テンプレート 横持ちを縦持ちに変換 等
-2. **ステップ数は最小限に**: 9〜12ステップ程度。冗長な繰り返しは避ける
-3. **同一ファイルの連続加工**: step番号をnull、save_asを空文字にする
-4. **中間ファイル名**: 連番＋内容（例: 01_アクセスログ×顧客_横統合）
-5. **横統合の統合方法**: 必ずb→dash名称（「共通のデータのみを統合する」等）
-6. **残すカラムを明示**: 横統合時はkeep_columnsに具体カラム名をリスト
-7. **参照は1回でまとめる**: 複合キーを指定し繰り返さない
-8. **更新設定**: 最終ステップのみ「する」、途中は「しない」
-9. **名寄せを積極的に使う**: 初回/最終の1件取得は参照ではなく名寄せで
-
-## 質問する場合
-不明点がある場合は、JSONではなくテキストで質問してください。
-質問は必ず以下のフォーマットで、3つの選択肢を提示：
-
-質問の前に簡単な説明を入れて、その後に選択肢を出してください。
-A) 選択肢1の内容
-B) 選択肢2の内容
-C) 選択肢3の内容
 """
 
 
@@ -388,16 +224,60 @@ def format_output_mapping(mapping: dict) -> str:
     return "\n".join(lines)
 
 
-def get_system_prompt(input_tables: list[dict], output_mapping: dict) -> str:
-    # Phase1用Skillsを選択的に読み込み
-    skill_names = select_skills_phase1(input_tables, output_mapping)
+def get_system_prompt_step1(input_tables: list[dict], output_mapping: dict) -> str:
+    """Phase1 Step1: 方針決定（軽量、Skills無し）"""
+    # テーブル名サマリーだけ（カラム詳細は省略して軽量化）
+    table_summary = "\n".join(
+        f"- **{t['table_name']}**: {len(t.get('columns', []))}カラム"
+        for t in input_tables
+    )
+    return SYSTEM_PROMPT_STEP1.format(
+        input_tables=table_summary,
+        output_mapping=format_output_mapping(output_mapping),
+    )
+
+
+def get_system_prompt_step2(input_tables: list[dict], output_mapping: dict, plan: str) -> str:
+    """Phase1 Step2: 詳細設計（該当Skillsのみ）"""
+    # planから操作リストを抽出してSkills選択
+    skill_names = select_skills_from_plan(plan, input_tables, output_mapping)
     skills_text = "\n\n---\n\n".join(load_skill(name) for name in skill_names if load_skill(name))
 
-    return SYSTEM_PROMPT.format(
+    return SYSTEM_PROMPT_STEP2.format(
         input_tables=format_input_tables(input_tables),
         output_mapping=format_output_mapping(output_mapping),
+        plan=plan,
         skills=skills_text,
     )
+
+
+def select_skills_from_plan(plan: str, input_tables: list[dict], output_mapping: dict) -> list[str]:
+    """planの操作リストに基づいて必要なSkillsだけ選択"""
+    skills = []
+
+    # hearing_defaultsはwebデータ関連の場合のみ
+    input_text = " ".join(t.get("table_name", "") for t in input_tables)
+    if "webアクセスログ" in input_text or "web" in plan.lower():
+        skills.append("hearing_defaults")
+        skills.append("web_data")
+
+    # カート・お気に入り
+    if any(kw in plan for kw in ["カート", "かご", "お気に入り", "購入除外"]):
+        skills.append("purchase_exclusion")
+
+    # 誕生日
+    if any(kw in plan for kw in ["誕生日", "生年月日", "年齢"]):
+        skills.append("birthday_pattern")
+
+    # design_patternsは常に（操作パターンの参照用）
+    skills.append("design_patterns")
+
+    return skills
+
+
+# 後方互換用
+def get_system_prompt(input_tables: list[dict], output_mapping: dict) -> str:
+    return get_system_prompt_step1(input_tables, output_mapping)
 
 
 def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
@@ -516,43 +396,74 @@ async def upload_file(
 
 @app.post("/api/generate", response_model=ChatResponse)
 async def generate(req: GenerateRequest):
-    """手順書を生成する"""
+    """設計書を生成する（2段階API）"""
     session_id = req.session_id or str(uuid.uuid4())
 
     if session_id not in sessions:
         sessions[session_id] = {
             "messages": [],
+            "messages_step2": [],
             "input_tables": req.input_tables,
             "output_mapping": req.output_mapping,
+            "step": "step1",  # step1 or step2
+            "plan": None,
         }
 
     session = sessions[session_id]
 
-    # 初回メッセージを構築
-    user_message = "以下のインプットテーブルとアウトプット定義に基づいて、データパレット構築手順書を生成してください。"
+    # === Step1: 方針決定（軽量、Skills無し） ===
+    user_message = "アウトプットを実現するための処理方針を決めてください。"
     if req.additional_context:
         user_message += f"\n\n追加情報: {req.additional_context}"
 
     session["messages"].append({"role": "user", "content": user_message})
 
-    # Claude API呼び出し
     try:
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=8192,
-            system=get_system_prompt(req.input_tables, req.output_mapping),
+            max_tokens=2000,
+            system=get_system_prompt_step1(req.input_tables, req.output_mapping),
             messages=session["messages"],
         )
-        assistant_text = response.content[0].text
-    except anthropic.APIError as e:
+        step1_text = response.content[0].text
+    except Exception as e:
         session["messages"].pop()
-        return ChatResponse(
-            session_id=session_id,
-            reply=f"API呼び出しエラー: {e}",
-            status="asking",
-        )
+        return ChatResponse(session_id=session_id, reply=f"API呼び出しエラー: {e}", status="asking")
 
-    session["messages"].append({"role": "assistant", "content": assistant_text})
+    session["messages"].append({"role": "assistant", "content": step1_text})
+
+    # Step1の結果を解析
+    if "```json" in step1_text:
+        try:
+            plan_json = json.loads(step1_text.split("```json")[1].split("```")[0].strip())
+            if plan_json.get("action") == "plan":
+                # Step1成功 → Step2へ自動遷移
+                session["plan"] = json.dumps(plan_json, ensure_ascii=False)
+                session["step"] = "step2"
+
+                # === Step2: 詳細設計（該当Skillsのみ） ===
+                step2_prompt = get_system_prompt_step2(
+                    req.input_tables, req.output_mapping, session["plan"]
+                )
+                session["messages_step2"] = [
+                    {"role": "user", "content": "処理方針に基づいて設計書JSONを出力してください。"}
+                ]
+                try:
+                    response2 = client.messages.create(
+                        model="claude-sonnet-4-20250514",
+                        max_tokens=4000,
+                        system=step2_prompt,
+                        messages=session["messages_step2"],
+                    )
+                    assistant_text = response2.content[0].text
+                    session["messages_step2"].append({"role": "assistant", "content": assistant_text})
+                except Exception as e:
+                    return ChatResponse(session_id=session_id, reply=f"Step2エラー: {e}", status="asking")
+        except (json.JSONDecodeError, IndexError):
+            assistant_text = step1_text
+    else:
+        # 技術確認の質問を返している
+        assistant_text = step1_text
 
     # JSON生成チェック
     if "```json" in assistant_text:
@@ -588,30 +499,57 @@ async def generate(req: GenerateRequest):
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    """追加質問への回答"""
+    """追加質問への回答（技術確認の回答 → Step1再実行 → Step2）"""
     session = sessions.get(req.session_id)
     if not session:
         raise HTTPException(404, "セッションが見つかりません")
 
     session["messages"].append({"role": "user", "content": req.message})
 
+    # Step1の会話を続行（技術確認の回答を受けて方針決定）
     try:
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=8192,
-            system=get_system_prompt(session["input_tables"], session["output_mapping"]),
+            max_tokens=2000,
+            system=get_system_prompt_step1(session["input_tables"], session["output_mapping"]),
             messages=session["messages"],
         )
-        assistant_text = response.content[0].text
-    except anthropic.APIError as e:
+        step1_text = response.content[0].text
+    except Exception as e:
         session["messages"].pop()
-        return ChatResponse(
-            session_id=req.session_id,
-            reply=f"API呼び出しエラー: {e}",
-            status="asking",
-        )
+        return ChatResponse(session_id=req.session_id, reply=f"APIエラー: {e}", status="asking")
 
-    session["messages"].append({"role": "assistant", "content": assistant_text})
+    session["messages"].append({"role": "assistant", "content": step1_text})
+
+    # Step1でplan JSONが出たら → Step2自動遷移
+    if "```json" in step1_text:
+        try:
+            plan_json = json.loads(step1_text.split("```json")[1].split("```")[0].strip())
+            if plan_json.get("action") == "plan":
+                session["plan"] = json.dumps(plan_json, ensure_ascii=False)
+                session["step"] = "step2"
+
+                step2_prompt = get_system_prompt_step2(
+                    session["input_tables"], session["output_mapping"], session["plan"]
+                )
+                session["messages_step2"] = [
+                    {"role": "user", "content": "処理方針に基づいて設計書JSONを出力してください。"}
+                ]
+                try:
+                    response2 = client.messages.create(
+                        model="claude-sonnet-4-20250514",
+                        max_tokens=4000,
+                        system=step2_prompt,
+                        messages=session["messages_step2"],
+                    )
+                    assistant_text = response2.content[0].text
+                    session["messages_step2"].append({"role": "assistant", "content": assistant_text})
+                except Exception as e:
+                    return ChatResponse(session_id=req.session_id, reply=f"Step2エラー: {e}", status="asking")
+        except (json.JSONDecodeError, IndexError):
+            assistant_text = step1_text
+    else:
+        assistant_text = step1_text
 
     # JSON生成チェック
     if "```json" in assistant_text:
