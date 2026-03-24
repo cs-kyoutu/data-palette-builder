@@ -399,7 +399,7 @@ async def generate(req: GenerateRequest):
     try:
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=8192,
+            max_tokens=4000,
             system=get_system_prompt(req.input_tables, req.output_mapping),
             messages=session["messages"],
         )
@@ -458,7 +458,7 @@ async def chat(req: ChatRequest):
     try:
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=8192,
+            max_tokens=4000,
             system=get_system_prompt(session["input_tables"], session["output_mapping"]),
             messages=session["messages"],
         )
@@ -521,10 +521,29 @@ FRONTEND_PATH = BASE_DIR / "frontend"
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    html_path = FRONTEND_PATH / "index.html"
+    html_path = FRONTEND_PATH / "combined.html"
+    if not html_path.exists():
+        html_path = FRONTEND_PATH / "index.html"
     return html_path.read_text(encoding="utf-8")
 
 
 @app.get("/doala.png")
 async def doala_image():
     return FileResponse(FRONTEND_PATH / "doala.png", media_type="image/png")
+
+@app.get("/bdash_hakase.png")
+async def bdash_hakase():
+    img_path = FRONTEND_PATH / "bdash_hakase.png"
+    if img_path.exists():
+        return FileResponse(img_path, media_type="image/png")
+    return FileResponse(FRONTEND_PATH / "doala.png", media_type="image/png")
+
+@app.get("/favicon.ico")
+async def favicon():
+    img_path = FRONTEND_PATH / "favicon.ico"
+    if img_path.exists():
+        return FileResponse(img_path, media_type="image/x-icon")
+    img_path = FRONTEND_PATH / "bdash_hakase.png"
+    if img_path.exists():
+        return FileResponse(img_path, media_type="image/png")
+    raise HTTPException(404)
