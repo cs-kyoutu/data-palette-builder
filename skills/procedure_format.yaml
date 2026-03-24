@@ -1,0 +1,1234 @@
+# b→dash データパレット 手順書フォーマット定義
+# Phase2テンプレートエンジンが参照する全操作のフォーマット
+# ○○ = 変数（実際の値に置換される）
+
+---
+# ============================================================
+# 加工操作
+# ============================================================
+
+連結:
+  patterns:
+    - name: 基本連結
+      format: |
+        『連結』
+        「{column1}」と「{column2}」を選択
+        クレンジングタスクの保存名を"{save_name}"にする
+        表示方法《{display}》を選択
+      variables:
+        display: [残す, 残さない]
+
+    - name: テキスト挿入付き連結
+      format: |
+        『連結』
+        「{column1}」と「{column2}」を選択
+        [テキスト挿入]を押下し、カラムとカラムの間に"{separator}"を挿入し、[適用]を押下する
+        クレンジングタスクの保存名を"{save_name}"にする
+        表示方法《{display}》を選択
+      variables:
+        display: [残す, 残さない]
+
+テキスト挿入:
+  patterns:
+    - name: 基本テキスト挿入
+      format: |
+        『テキスト挿入』
+        「{column}」の《{position}》に"{text}"を挿入
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        position: [文頭, 文末]
+        save_method: [名前を付けて保存, 上書き保存]
+
+分割:
+  patterns:
+    - name: 基本分割
+      format: |
+        『分割』
+        「{column}」を[区切り文字]"{delimiter}"で、[開始位置]《{direction}》から《{count}》列に分割する
+      variables:
+        direction: [左, 右]
+        count: [2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+四則演算:
+  patterns:
+    - name: カラム×固定値
+      format: |
+        『四則演算』
+        「{column}」《{operator}》"{value}"、[端数処理]は小数第《{decimal}》位を、《{rounding}》する
+        クレンジングタスクの保存名を"{save_name}"にする
+        表示方法《{display}》を選択
+      variables:
+        operator: [+, -, ×, ÷]
+        decimal: [1, 2, 3, 4]
+        rounding: [四捨五入, 切り上げ, 切り捨て]
+        display: [残す, 残さない]
+
+    - name: カラム×カラム
+      format: |
+        『四則演算』
+        「{column1}」《{operator}》「{column2}」、[端数処理]は小数第《{decimal}》位を、《{rounding}》する
+        クレンジングタスクの保存名を"{save_name}"にする
+        表示方法《{display}》を選択
+      variables:
+        operator: [+, -, ×, ÷]
+        decimal: [1, 2, 3, 4]
+        rounding: [四捨五入, 切り上げ, 切り捨て]
+        display: [残す, 残さない]
+
+時刻演算:
+  patterns:
+    - name: 固定値とカラムの演算（日付型）
+      format: |
+        『時刻演算』
+        《{fixed_value}》《{operator}》「{column}」　[計算結果]を《{unit}》で算出
+        クレンジングタスクの保存名を"{save_name}"にする
+        表示方法《{display}》を選択
+      variables:
+        fixed_value: ['本日の日付', '特定の日付："{date}"', 'カスタム："{custom}"']
+        operator: [+, -]
+        unit: [年, ヶ月, 日]
+        display: [残す, 残さない]
+
+    - name: カラムと固定値の演算（日付型）
+      format: |
+        『時刻演算』
+        「{column}」《{operator}》《{fixed_value}》　[計算結果]を《{unit}》で算出
+        クレンジングタスクの保存名を"{save_name}"にする
+        表示方法《{display}》を選択
+      variables:
+        fixed_value: ['本日の日付', '特定の日付："{date}"', 'カスタム："{custom}"']
+        operator: [+, -]
+        unit: [年, ヶ月, 日]
+        display: [残す, 残さない]
+
+    - name: 固定値とカラムの演算（日時型）
+      format: |
+        『時刻演算』
+        《{fixed_value}》《{operator}》「{column}」　[計算結果]を《{unit}》で算出
+        クレンジングタスクの保存名を"{save_name}"にする
+        表示方法《{display}》を選択
+      variables:
+        fixed_value: ['本日の日時', '特定の日時："{datetime}"']
+        operator: [+, -]
+        unit: [年, ヶ月, 日, 時間, 分, 秒]
+        display: [残す, 残さない]
+
+    - name: カラムと固定値の演算（日時型）
+      format: |
+        『時刻演算』
+        「{column}」《{operator}》《{fixed_value}》　[計算結果]を《{unit}》で算出
+        クレンジングタスクの保存名を"{save_name}"にする
+        表示方法《{display}》を選択
+      variables:
+        fixed_value: ['本日の日時', '特定の日時："{datetime}"', 'カスタム："{custom}"']
+        operator: [+, -]
+        unit: [年, ヶ月, 日, 時間, 分, 秒]
+        display: [残す, 残さない]
+
+    - name: カラム同士の演算
+      format: |
+        『時刻演算』
+        「{column1}」《-》「{column2}」、[計算結果]を《{unit}》で算出
+        クレンジングタスクの保存名を"{save_name}"にする
+        表示方法《{display}》を選択
+      variables:
+        unit: [年, ヶ月, 日, 時間, 分, 秒]
+        display: [残す, 残さない]
+
+# ============================================================
+# IF文（全44パターン）
+# ============================================================
+IF文:
+  patterns:
+    # --- 文字列比較（固定値） ---
+    - name: 次を含む
+      format: |
+        『IF文』
+        「{column}」が"{value}"《次を含む》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次を含む(カンマ区切り)
+      format: |
+        『IF文』
+        「{column}」が"{values}"《次を含む(カンマ区切りで複数指定)》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次を含まない
+      format: |
+        『IF文』
+        「{column}」が"{value}"《次を含まない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次を含まない(カンマ区切り)
+      format: |
+        『IF文』
+        「{column}」が"{values}"《次を含まない(カンマ区切りで複数指定)》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次で始まる
+      format: |
+        『IF文』
+        「{column}」が"{value}"《次で始まる》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次で終わる
+      format: |
+        『IF文』
+        「{column}」が"{value}"《次で終わる》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次に完全一致
+      format: |
+        『IF文』
+        「{column}」が"{value}"《次に完全一致》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次に完全一致(カンマ区切り)
+      format: |
+        『IF文』
+        「{column}」が"{values}"《次に完全一致(カンマ区切りで複数指定)》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次に完全一致しない
+      format: |
+        『IF文』
+        「{column}」が"{value}"《次に完全一致しない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次に完全一致しない(カンマ区切り)
+      format: |
+        『IF文』
+        「{column}」が"{values}"《次に完全一致しない(カンマ区切りで複数指定)》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    # --- カラム値比較 ---
+    - name: 次のカラムの値を含む
+      format: |
+        『IF文』
+        「{column}」が「{ref_column}」《次のカラムの値を含む》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次のカラムの値を含まない
+      format: |
+        『IF文』
+        「{column}」が「{ref_column}」《次のカラムの値を含まない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次のカラムの値で始まる
+      format: |
+        『IF文』
+        「{column}」が「{ref_column}」《次のカラムの値で始まる》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次のカラムの値で終わる
+      format: |
+        『IF文』
+        「{column}」が「{ref_column}」《次のカラムの値で終わる》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次のカラムの値に完全一致
+      format: |
+        『IF文』
+        「{column}」が「{ref_column}」《次のカラムの値に完全一致》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次のカラムの値に完全一致しない
+      format: |
+        『IF文』
+        「{column}」が「{ref_column}」《次のカラムの値に完全一致しない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    # --- 空文字・NULL ---
+    - name: 空文字
+      format: |
+        『IF文』
+        「{column}」が《空文字》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 空文字ではない
+      format: |
+        『IF文』
+        「{column}」が《空文字ではない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: NULL
+      format: |
+        『IF文』
+        「{column}」が《NULL》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: NULLではない
+      format: |
+        『IF文』
+        「{column}」が《NULLではない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    # --- 数値比較（固定値） ---
+    - name: 次より大きい
+      format: |
+        『IF文』
+        「{column}」が"{value}"《次より大きい》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次より小さい
+      format: |
+        『IF文』
+        「{column}」が"{value}"《次より小さい》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 以上
+      format: |
+        『IF文』
+        「{column}」が"{value}"《以上》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 以下
+      format: |
+        『IF文』
+        「{column}」が"{value}"《以下》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次の値の間
+      format: |
+        『IF文』
+        「{column}」が"{value1}"～"{value2}"《次の値の間》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次の値の間にない
+      format: |
+        『IF文』
+        「{column}」が"{value1}"～"{value2}"《次の値の間にない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次と等しい
+      format: |
+        『IF文』
+        「{column}」が"{value}"《次と等しい》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次と等しくない
+      format: |
+        『IF文』
+        「{column}」が"{value}"《次と等しくない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    # --- 数値比較（カラム値） ---
+    - name: 次のカラムの値より大きい
+      format: |
+        『IF文』
+        「{column}」が「{ref_column}」《次のカラムの値より大きい》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次のカラムの値より小さい
+      format: |
+        『IF文』
+        「{column}」が「{ref_column}」《次のカラムの値より小さい》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次のカラムの値以上
+      format: |
+        『IF文』
+        「{column}」が「{ref_column}」《次のカラムの値以上》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次のカラムの値以下
+      format: |
+        『IF文』
+        「{column}」が「{ref_column}」《次のカラムの値以下》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次のカラムの値の間
+      format: |
+        『IF文』
+        「{column}」が「{ref_column1}」～「{ref_column2}」《次のカラムの値の間》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次のカラムの値の間にない
+      format: |
+        『IF文』
+        「{column}」が「{ref_column1}」～「{ref_column2}」《次のカラムの値の間にない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次のカラムの値と等しい
+      format: |
+        『IF文』
+        「{column}」が「{ref_column}」《次のカラムの値と等しい》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: 次のカラムの値と等しくない
+      format: |
+        『IF文』
+        「{column}」が「{ref_column}」《次のカラムの値と等しくない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    # --- 真偽値 ---
+    - name: true
+      format: |
+        『IF文』
+        「{column}」が《true》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    - name: false
+      format: |
+        『IF文』
+        「{column}」が《false》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+
+    # --- 期間（日付型・絶対期間） ---
+    - name: 絶対期間_日付_一致
+      format: |
+        『IF文』
+        《絶対期間》を選択
+        「{column}」が[開始日]{start}と[終了日]{end}《指定の期間に一致する》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+        [開始日/終了日を含めない]にチェックを{include_check}
+        [期間指定にカラムを使用する]にチェックを{column_check}
+
+    - name: 絶対期間_日付_不一致
+      format: |
+        『IF文』
+        《絶対期間》を選択
+        「{column}」が[開始日]{start}と[終了日]{end}《指定の期間に一致しない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+        [開始日/終了日を含めない]にチェックを{include_check}
+        [期間指定にカラムを使用する]にチェックを{column_check}
+
+    # --- 期間（日付型・相対期間） ---
+    - name: 相対期間_日付_一致
+      format: |
+        『IF文』
+        《相対期間》を選択
+        「{column}」が[開始日]《{start_n}》《{start_unit}》《{start_dir}》～[終了日]《{end_n}》《{end_unit}》《{end_dir}》《指定の期間に一致する》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+        [開始日/終了日を含めない]にチェックを{include_check}
+
+    - name: 相対期間_日付_不一致
+      format: |
+        『IF文』
+        《相対期間》を選択
+        「{column}」が[開始日]《{start_n}》《{start_unit}》《{start_dir}》～[終了日]《{end_n}》《{end_unit}》《{end_dir}》《指定の期間に一致しない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+        [開始日/終了日を含めない]にチェックを{include_check}
+
+    # --- 期間（日時型・絶対期間） ---
+    - name: 絶対期間_日時_一致
+      format: |
+        『IF文』
+        《絶対期間》を選択
+        「{column}」が[開始日]{start}と[終了日]{end}《指定の期間に一致する》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+        [開始日時/終了日時を含めない]にチェックを{include_check}
+        [期間指定にカラムを使用する]にチェックを{column_check}
+
+    - name: 絶対期間_日時_不一致
+      format: |
+        『IF文』
+        《絶対期間》を選択
+        「{column}」が[開始日]{start}と[終了日]{end}《指定の期間に一致しない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+        [開始日時/終了日時を含めない]にチェックを{include_check}
+        [期間指定にカラムを使用する]にチェックを{column_check}
+
+    # --- 期間（日時型・相対期間） ---
+    - name: 相対期間_日時_一致
+      format: |
+        『IF文』
+        《相対期間》を選択
+        「{column}」が[開始日]《{start_n}》《{start_unit}》《{start_dir}》～[終了日]《{end_n}》《{end_unit}》《{end_dir}》《指定の期間に一致する》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+        [開始日時/終了日時を含めない]にチェックを{include_check}
+
+    - name: 相対期間_日時_不一致
+      format: |
+        『IF文』
+        《相対期間》を選択
+        「{column}」が[開始日]《{start_n}》《{start_unit}》《{start_dir}》～[終了日]《{end_n}》《{end_unit}》《{end_dir}》《指定の期間に一致しない》の場合、{result}に変換
+        いずれの条件分岐にも該当しない場合、{else_result}に変換
+        [開始日時/終了日時を含めない]にチェックを{include_check}
+
+  # result/else_resultの値パターン
+  result_types:
+    - '"{fixed_value}"'      # 固定値
+    - '「{column_ref}」'      # カラム参照
+    - '《空白》'              # 空白
+
+# ============================================================
+# 追加
+# ============================================================
+追加:
+  patterns:
+    - name: テキスト・整数・小数型
+      format: |
+        『追加』
+        「{adjacent_column}」の《{position}》を選択
+        《{data_type}》の"{value}"を追加
+      variables:
+        position: [左に追加, 右に追加]
+        data_type: [テキスト型, 整数型, 小数型]
+
+    - name: 日付・日時型（固定値）
+      format: |
+        『追加』
+        「{adjacent_column}」の《{position}》を選択
+        《{data_type}》の"{value}"を追加
+        [加工処理実行日のカラムを追加する]にチェックを入れない
+      variables:
+        position: [左に追加, 右に追加]
+        data_type: [日付型, 日時型]
+
+    - name: 日付・日時型（加工処理実行日）
+      format: |
+        『追加』
+        「{adjacent_column}」の《{position}》を選択
+        《{data_type}》を選択し、[加工処理実行日のカラムを追加する]にチェックを入れる
+      variables:
+        position: [左に追加, 右に追加]
+        data_type: [日付型, 日時型]
+
+    - name: 真偽値型
+      format: |
+        『追加』
+        「{adjacent_column}」の《{position}》を選択
+        《真偽値型》の《{value}》を追加
+      variables:
+        position: [左に追加, 右に追加]
+        value: [True, False]
+
+# ============================================================
+# 複製・削除・カラム名変更
+# ============================================================
+複製:
+  patterns:
+    - name: 基本複製
+      format: |
+        『複製』
+        「{column}」を複製
+
+削除:
+  patterns:
+    - name: 基本削除
+      format: |
+        『削除』
+        {columns}を削除
+
+カラム名の変更:
+  patterns:
+    - name: 基本変更
+      format: |
+        『カラム名の変更』
+        「{old_name}」を"{new_name}"に変更する
+
+# ============================================================
+# ランキング
+# ============================================================
+ランキング:
+  patterns:
+    - name: 全体ランキング
+      format: |
+        『ランキング』
+        「{sort_column}」を《{order}》に《{tie_handling}》で順位付けする
+      variables:
+        order: [大きい順, 小さい順]
+        tie_handling: [同率あり(順位飛ばしあり), 同率あり(順位飛ばしなし), 同率なし]
+
+    - name: グループ内ランキング
+      format: |
+        『ランキング』
+        「{group_column}」をグループ化する単位として、「{sort_column}」を《{order}》に《{tie_handling}》で順位付けする
+      variables:
+        order: [大きい順, 小さい順]
+        tie_handling: [同率あり(順位飛ばしあり), 同率あり(順位飛ばしなし), 同率なし]
+
+# ============================================================
+# 集約
+# ============================================================
+集約:
+  patterns:
+    - name: カウント・ユニークカウント
+      format: |
+        『集約』
+        「{group_columns}」を集約のキーとして、「{count_column}」を《{method}》で集約
+      variables:
+        method: [カウント, ユニークカウント]
+
+    - name: 数値集計
+      format: |
+        『集約』
+        「{group_columns}」を集約のキーとして、「{agg_column}」を《{method}》で集約
+      variables:
+        method: [合計, 平均, 最大, 最小, カウント, ユニークカウント]
+
+    - name: 日時集計
+      format: |
+        『集約』
+        「{group_columns}」を集約のキーとして、「{agg_column}」を《{method}》で集約
+      variables:
+        method: [最新, 最古, カウント, ユニークカウント]
+
+    - name: 行結合（定型区切り）
+      format: |
+        『集約』
+        「{group_columns}」を集約のキーとして、「{agg_column}」を《行結合》で集約
+        「{sort_column}」の《{order}》
+        区切り文字は《{delimiter}》で設定
+      variables:
+        order: [昇順, 降順]
+        delimiter: [',(カンマ)', '(スペース)', '/(スラッシュ)', '-(ハイフン)', '_(アンダーバー)', 'なし']
+
+    - name: 行結合（自由入力）
+      format: |
+        『集約』
+        「{group_columns}」を集約のキーとして、「{agg_column}」を《行結合》で集約
+        「{sort_column}」の《{order}》
+        区切り文字は[区切り文字を自由入力する]にチェックを入れ"{custom_delimiter}"で設定
+      variables:
+        order: [昇順, 降順]
+
+# ============================================================
+# 置換
+# ============================================================
+置換:
+  patterns:
+    - name: 値置換
+      format: |
+        『置換』
+        「{column}」の《{match_type}》"{old_value}"を"{new_value}"に置換
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        match_type: [次の値, 正規表現]
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 空白・NULL置換
+      format: |
+        『置換』
+        「{column}」の《{match_type}》を"{new_value}"に置換
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        match_type: [空白, NULL]
+        save_method: [上書き保存, 名前を付けて保存]
+
+# ============================================================
+# 型変換
+# ============================================================
+型変換:
+  patterns:
+    - name: テキスト型
+      format: |
+        『型変換』
+        「{column}」を《テキスト型》に変換
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 他型（エラー時Null/中止）
+      format: |
+        『型変換』
+        「{column}」を《{target_type}》に変換
+        型変換エラーの処理は、《{error_handling}》を選択
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        target_type: [整数型, 小数型, 日付型, 日時型, 真偽値型]
+        error_handling: [クレンジングを中止する, Nullに変換する]
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 他型（エラー時指定値）
+      format: |
+        『型変換』
+        「{column}」を《{target_type}》に変換
+        型変換エラーの処理は、《指定した値に変換する》を選択し、値は"{error_value}"にする
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        target_type: [整数型, 小数型, 日付型, 日時型, 真偽値型]
+        save_method: [上書き保存, 名前を付けて保存]
+
+# ============================================================
+# 抽出
+# ============================================================
+抽出:
+  patterns:
+    - name: 先頭・末尾（テキスト型）
+      format: |
+        『抽出』
+        「{column}」の《{direction}》から"{count}"文字目までを《テキスト型》で抽出
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        direction: [先頭, 末尾]
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 先頭・末尾（他型・エラー時Null/中止）
+      format: |
+        『抽出』
+        「{column}」の《{direction}》から"{count}"文字目までを《{target_type}》で抽出
+        型変換エラーの処理は、《{error_handling}》を選択
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        direction: [先頭, 末尾]
+        target_type: [整数型, 小数型, 日付型, 日時型, 真偽値型]
+        error_handling: [Nullに変換する, クレンジングを中止する]
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 先頭・末尾（他型・エラー時指定値）
+      format: |
+        『抽出』
+        「{column}」の《{direction}》から"{count}"文字目までを《{target_type}》で抽出
+        型変換エラーの処理は、《指定した値に変換する》を選択し、値は"{error_value}"にする
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        direction: [先頭, 末尾]
+        target_type: [整数型, 小数型, 日付型, 日時型, 真偽値型]
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 中間（テキスト型）
+      format: |
+        『抽出』
+        「{column}」の《中間》の"{start}"文字目〜"{end}"文字目を《テキスト型》で抽出
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 中間（他型・エラー時Null/中止）
+      format: |
+        『抽出』
+        「{column}」の《中間》の"{start}"文字目〜"{end}"文字目を《{target_type}》で抽出
+        型変換エラーの処理は、《{error_handling}》を選択
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        target_type: [整数型, 小数型, 日付型, 日時型, 真偽値型]
+        error_handling: [Nullに変換する, クレンジングを中止する]
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 中間（他型・エラー時指定値）
+      format: |
+        『抽出』
+        「{column}」の《中間》の"{start}"文字目〜"{end}"文字目を《{target_type}》で抽出
+        型変換エラーの処理は、《指定した値に変換する》を選択し、値は"{error_value}"
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        target_type: [整数型, 小数型, 日付型, 日時型, 真偽値型]
+        save_method: [上書き保存, 名前を付けて保存]
+
+# ============================================================
+# 除外
+# ============================================================
+除外:
+  patterns:
+    - name: 文字列除外
+      format: |
+        『除外』
+        「{column}」の《{direction}》"{text}"を除外
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        direction: [全ての, 右から, 左から]
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 文字数除外
+      format: |
+        『除外』
+        「{column}」の《{direction}》"{count}"文字を除外
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        direction: [右から, 左から]
+        save_method: [上書き保存, 名前を付けて保存]
+
+# ============================================================
+# 書式変換
+# ============================================================
+書式変換:
+  patterns:
+    - name: 基本書式変換
+      format: |
+        『書式変換』
+        「{column}」を選択、[オプション(歯車アイコン)]を押下し、《{format_type}》に変換
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        format_type:
+          - 半角英小文字
+          - 半角英大文字
+          - 全角英小文字
+          - 全角英大文字
+          - 半角数字
+          - 全角数字
+          - 半角カタカナ
+          - 全角カタカナ
+          - 全角ひらがな
+          - 半角記号
+          - 全角記号
+          - 半角スペース
+          - 全角スペース
+        save_method: [上書き保存, 名前を付けて保存]
+
+# ============================================================
+# 0埋め
+# ============================================================
+0埋め:
+  patterns:
+    - name: 基本0埋め
+      format: |
+        『0埋め』
+        「{column}」を0埋めして《{digits}》桁にする
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        digits: [1-50]
+        save_method: [上書き保存, 名前を付けて保存]
+
+# ============================================================
+# 絞り込み
+# ============================================================
+絞込み:
+  patterns:
+    # --- 文字列 ---
+    - name: 文字列条件（単一）
+      format: |
+        『絞り込み』
+        「{column}」が"{value}"《{condition}》に絞り込む
+      variables:
+        condition: [次を含む, 次を含まない, 次で始まる, 次で終わる, 次に完全一致, 次に完全一致しない]
+
+    - name: 文字列条件（カンマ区切り）
+      format: |
+        『絞り込み』
+        「{column}」が"{values}"《{condition}》に絞り込む
+      variables:
+        condition: [次を含む(カンマ区切りで複数指定), 次を含まない(カンマ区切りで複数指定), 次に完全一致(カンマ区切りで複数指定), 次に完全一致しない(カンマ区切りで複数指定)]
+
+    # --- 空文字・真偽・NULL ---
+    - name: 空文字
+      format: |
+        『絞り込み』
+        「{column}」が《{condition}》に絞り込む
+      variables:
+        condition: [空文字, 空文字ではない, true, false, NULL, NULLではない]
+
+    # --- 数値 ---
+    - name: 数値条件
+      format: |
+        『絞り込み』
+        「{column}」が"{value}"《{condition}》に絞り込む
+      variables:
+        condition: [次より大きい, 以上, 次より小さい, 以下, 次と等しい, 次と等しくない]
+
+    - name: 数値範囲
+      format: |
+        『絞り込み』
+        「{column}」が"{value1}"～"{value2}"《{condition}》に絞り込む
+      variables:
+        condition: [次の値の間, 次の値の間にない]
+
+    # --- 日付（絶対期間） ---
+    - name: 絶対期間_日付_単一
+      format: |
+        『絞り込み』
+        《絶対期間》を選択
+        「{column}」が"{date}"《{condition}》に絞り込む
+      variables:
+        condition: [次より前の日付, 次より後の日付, 次の日付]
+
+    - name: 絶対期間_日付_範囲
+      format: |
+        『絞り込み』
+        《絶対期間》を選択
+        「{column}」が[開始日]"{start}"と[終了日]"{end}"《{condition}》に絞り込む
+        [開始日/終了日を含めない]にチェックを{include_check}
+      variables:
+        condition: [次の期間にある, 次の期間にない]
+
+    # --- 日付（相対期間） ---
+    - name: 相対期間_日付_単一
+      format: |
+        『絞り込み』
+        《相対期間》を選択
+        「{column}」が《{n}》《{unit}》《{direction}》《{condition}》に絞り込む
+      variables:
+        unit: [年, 月, 日]
+        direction: [前, 後]
+        condition: [次より前の日付, 次より後の日付, 次の日付]
+
+    - name: 相対期間_日付_範囲
+      format: |
+        『絞り込み』
+        《相対期間》を選択
+        「{column}」が[開始日]《{start_n}》《{start_unit}》《{start_dir}》と[終了日]《{end_n}》《{end_unit}》《{end_dir}》《{condition}》に絞り込む
+        [開始日/終了日を含めない]にチェックを{include_check}
+      variables:
+        condition: [次の期間にある, 次の期間にない]
+
+    # --- 日時（絶対期間） ---
+    - name: 絶対期間_日時_単一
+      format: |
+        『絞り込み』
+        《絶対期間》を選択
+        「{column}」が"{datetime}"《{condition}》に絞り込む
+      variables:
+        condition: [次より前の日時, 次より後の日時, 次の日時]
+
+    - name: 絶対期間_日時_範囲
+      format: |
+        『絞り込み』
+        《絶対期間》を選択
+        「{column}」が[開始日]"{start}"と[終了日]"{end}"《{condition}》に絞り込む
+        [開始日時/終了日時を含めない]にチェックを{include_check}
+      variables:
+        condition: [次の期間にある, 次の期間にない]
+
+    # --- 日時（相対期間） ---
+    - name: 相対期間_日時_単一
+      format: |
+        『絞り込み』
+        《相対期間》を選択
+        「{column}」が《{n}》《{unit}》《{direction}》《{condition}》に絞り込む
+      variables:
+        condition: [次より前の日時, 次より後の日時, 次の日時]
+
+    - name: 相対期間_日時_範囲
+      format: |
+        『絞り込み』
+        《相対期間》を選択
+        「{column}」が[開始日]《{start_n}》《{start_unit}》《{start_dir}》と[終了日]《{end_n}》《{end_unit}》《{end_dir}》《{condition}》に絞り込む
+        [開始日時/終了日時を含めない]にチェックを{include_check}
+      variables:
+        condition: [次の期間にある, 次の期間にない]
+
+    # --- 複合条件 ---
+    - name: OR条件
+      format: |
+        『絞り込み』
+        {condition1}
+        OR
+        {condition2}
+
+    - name: AND条件
+      format: |
+        『絞り込み』
+        {condition1}
+        AND
+        {condition2}
+
+# ============================================================
+# 名寄せ
+# ============================================================
+名寄せ:
+  patterns:
+    - name: 50音順
+      format: |
+        『名寄せ』
+        「{key_column}」を名寄せするキーとして、「{sort_column}」を《{order}》で名寄せする
+      variables:
+        order: [50音順, 逆50音順]
+
+    - name: 指定値一致（テキスト）
+      format: |
+        『名寄せ』
+        「{key_column}」を名寄せするキーとして、「{sort_column}」を《指定の値と一致する》"{value}"を優先として名寄せする
+
+    - name: 数値
+      format: |
+        『名寄せ』
+        「{key_column}」を名寄せするキーとして、「{sort_column}」を《{method}》に名寄せする
+      variables:
+        method: [最も大きい値, 最も小さい値]
+
+    - name: 日付
+      format: |
+        『名寄せ』
+        「{key_column}」を名寄せするキーとして、「{sort_column}」を《{method}》に名寄せする
+      variables:
+        method: [最も新しい日付, 最も古い日付]
+
+    - name: 指定日付一致
+      format: |
+        『名寄せ』
+        「{key_column}」を名寄せするキーとして、「{sort_column}」を《指定の日付と一致する》"{date}"を優先として名寄せする
+
+    - name: 日時
+      format: |
+        『名寄せ』
+        「{key_column}」を名寄せするキーとして、「{sort_column}」を《{method}》に名寄せする
+      variables:
+        method: [最も新しい日時, 最も古い日時]
+
+# ============================================================
+# 参照
+# ============================================================
+参照:
+  patterns:
+    - name: 最初・最後・前・後ろの値
+      format: |
+        『参照』
+        《{pattern}》を選択し、[適用]を押下する
+        「{group_column}」でグループ化、「{sort_column}」の《{order}》でソートを行い
+        「{ref_column}」を参照する
+        空文字/Nullの値を《{null_handling}》を選択し[適用]を押下する
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        pattern: [最初の値, 最後の値, 前の行の値, 後ろの行の値]
+        order: [昇順, 降順]
+        null_handling: [無視する, 無視しない]
+
+    - name: 特定順番の値
+      format: |
+        『参照』
+        《特定の順番の値》を選択し、[適用]を押下する
+        「{group_column}」でグループ化、「{sort_column}」の《{order}》でソートを行い
+        「{ref_column}」の上から《{n}》番目の値を参照する
+        [空文字/Nullの値を無視する]にチェックを{null_check}
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        order: [昇順, 降順]
+
+    - name: 累計の値
+      format: |
+        『参照』
+        《累計の値》を選択し、[適用]を押下する
+        「{group_column}」でグループ化、「{sort_column}」の《{order}》でソートを行い
+        「{ref_column}」の累計の値を参照する
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        order: [昇順, 降順]
+
+# ============================================================
+# 並び替え
+# ============================================================
+並び替え:
+  patterns:
+    - name: 基本並び替え
+      format: |
+        『並び替え』
+        並び替えたいカラムを以下の並び順にドラッグ&ドロップし[適用]をクリックする
+        並び順：{column_order}
+
+# ============================================================
+# テンプレート
+# ============================================================
+テンプレート:
+  patterns:
+    - name: 3つ以上のカラム連結
+      format: |
+        『テンプレート
+        『3つ以上のカラムやテキストを連結した値を追加』』
+        {columns}を選択する
+        [適用]を押下する
+        クレンジングタスクの保存名を"{save_name}"にする
+        表示方法《{display}》を選択
+      variables:
+        display: [残す, 残さない]
+
+    - name: 3つ以上のカラム連結（テキスト挿入付き）
+      format: |
+        『テンプレート
+        『3つ以上のカラムやテキストを連結した値を追加』』
+        {columns}を選択する
+        [テキスト挿入]を押下し、カラムとカラムの間に"{separator}"を挿入し、[適用]を押下する
+        クレンジングタスクの保存名を"{save_name}"にする
+        表示方法《{display}》を選択
+      variables:
+        display: [残す, 残さない]
+
+    - name: 当月誕生日フラグ
+      format: |
+        『テンプレート
+        『「生年月日」から「当月誕生日フラグ」を追加』』
+        「{column}」を選択し、[適用]を押下する
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 年代算出
+      format: |
+        『テンプレート
+        『「生年月日」から「年代」を算出』』
+        「{column}」を選択し、[適用]を押下する
+        [刻み値]を《{step}》に設定する
+        [最大値]を《{max_age}》歳以上の場合、"{max_label}"に変換
+        [最小値]を《{min_age}》歳以下の場合、"{min_label}"に変換
+        [カラムに値がない場合]、"{empty_label}"に変換し、[適用]を押下する
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        step: ['10歳刻み(10代,20代)', '5歳刻み(10代前半,10代後半)']
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 年齢算出
+      format: |
+        『テンプレート
+        『「生年月日」から「年齢」を算出』』
+        「{column}」を選択し、[適用]を押下する
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 値ありフラグ
+      format: |
+        『テンプレート
+        『値が入っているかどうかを判定する真偽値型の「値ありフラグ」を追加』』
+        「{column}」を選択し、[適用]を押下する
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 累計購入回数・金額算出
+      format: |
+        『テンプレート
+        『顧客ごとに「累計購入回数」や「累計購入金額」などを算出』』
+        [顧客IDに該当するカラム]に「{customer_id}」を選択し、[適用]を押下する
+        [受注IDに該当するカラム]に「{order_id}」を選択し、[適用]を押下する
+        [受注金額に該当するカラム]に「{order_amount}」を選択し、[適用]を押下する
+        [受注日に該当するカラム]に「{order_date}」を選択し、[適用]を押下する
+
+    - name: ページ閲覧時間算出
+      format: |
+        『テンプレート
+        『「ページ閲覧時間」を算出』』
+        [セッションIDに該当するカラム]に「{session_id}」を選択し、[適用]を押下する
+        [PV/Clickに該当するカラム]に「{pv_click}」を選択し、[適用]を押下する
+        [閲覧日時に該当するカラム]に「{view_datetime}」を選択し、[適用]を押下する
+
+    - name: 過去購入商品カンマ区切り
+      format: |
+        『テンプレート
+        『過去の購入商品をカンマ区切りでまとめたカラムを算出』』
+        [顧客IDに該当するカラム]に「{customer_id}」を選択し、[適用]を押下する
+        [受注日または受注日時に該当するカラム]に「{order_date}」を選択し、[適用]を押下する
+        [商品ID/商品名に該当するカラム]に「{product_column}」を選択し、[適用]を押下する
+
+    - name: 連番追加
+      format: |
+        『テンプレート
+        『連番(昇順)を追加』』
+        「{column}」を選択し、[適用]を押下する
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 縦持ちを横持ちに変換
+      format: |
+        『テンプレート
+        『顧客ごとに縦持ちのデータを横に並べて変換』』
+        「{group_key}」を集約のキーとして選択し、[適用]を押下する
+        [横並びにしたいカラム]に{horizontal_columns}の順で選択し、[適用]を押下する
+        [並び順カラム]に「{sort_column}」《{order}》を選択し、[適用]を押下する
+        ※[並び順カラム]を設定した数繰り返す
+        [横並びにしたいカラムの数]を、カラムの並び順で設定した順番をもとに、上位《{top_n}》位まで横に並べるとし、[適用]を押下する
+      variables:
+        order: [昇順, 降順]
+
+    - name: 横持ちを縦持ちに変換
+      format: |
+        『テンプレート
+        『顧客ごとに横持ちのデータを縦に並べて変換』』
+        [縦持ちにしたいカラム]に{vertical_columns}を選択し、[適用]を押下する
+        [縦持ちにしたいカラム以外に残したいカラム]に{keep_columns}を選択し、[適用]を押下する
+
+    - name: 都道府県→地域変換
+      format: |
+        『テンプレート
+        『「都道府県」を「地域」に変換』』
+        [都道府県に該当するカラム]に「{column}」を選択し、[適用]を押下する
+        《{save_method}》にて保存
+        クレンジングタスクの保存名を"{save_name}"にする
+      variables:
+        save_method: [上書き保存, 名前を付けて保存]
+
+    - name: 金額カンマ区切り
+      format: |
+        『テンプレート
+        『金額をカンマ区切りにした値へ変換』』
+        「{column}」が金額に該当するカラムに選択され、「{column}」に上書き保存されました
+
+    - name: 日付型から曜日算出
+      format: |
+        『テンプレート
+        『日付型カラムから「曜日」を算出』』
+        「{column}」が日付型カラムに選択され、「{save_name}」が追加されました
+
+# ============================================================
+# 統合操作
+# ============================================================
+横統合:
+  patterns:
+    - name: 基本横統合
+      format: |
+        『横統合』
+        【{left_file}】と【{right_file}】を「{key_left}」と「{key_right}」を統合キーとして、《{method}》
+        残すカラムは、
+        【{left_file}】：{left_columns}
+        【{right_file}】：{right_columns}
+        データファイルの保存名を"{save_name}"にする
+        レコードが重複した際の処理方法は
+        《{duplicate_handling}》を選択し、[適用]を押下する
+        統合データの更新設定は《{update_setting}》を選択し、[適用]を押下する
+      variables:
+        method:
+          - 全てのデータを統合する
+          - 共通のデータのみを統合する
+          - 先に選択したデータに対して統合する
+          - 後に選択したデータに対して統合する
+        duplicate_handling:
+          - 統合処理をエラーにする
+          - 統合処理をエラーにせず実行する
+        update_setting:
+          - 更新する
+          - 更新しない
+
+縦統合:
+  patterns:
+    - name: 基本縦統合
+      format: |
+        『縦統合』
+        【{file1}】と【{file2}】を縦統合
+        重複データの設定は
+        [{duplicate_setting}]を選択し、[適用]を押下する
+        データファイルの保存名を"{save_name}"にする
+        統合データの更新設定は《{update_setting}》を選択し、[適用]を押下する
+      variables:
+        duplicate_setting:
+          - 重複データを除外する
+          - 重複データを除外しない
+        update_setting:
+          - 更新する
+          - 更新しない
+
+# ============================================================
+# その他共通操作
+# ============================================================
+加工不要:
+  format: |
+    『加工不要』
+    加工せずにそのまま残す
+
+保存:
+  patterns:
+    - name: 新規保存
+      format: |
+        データファイルの保存名を"{save_name}"にする
+
+    - name: 定期更新設定
+      format: |
+        保存ボタンを押下する
+        《定期更新設定する》を選択し、"{save_name}"と名前を付けて保存する
+
+    - name: データファイル更新時
+      format: |
+        [保存]
+        [定期更新設定する]
+        [□データファイル更新時にクレンジングを行う]をチェックする
+        "{save_name}"で保存する
