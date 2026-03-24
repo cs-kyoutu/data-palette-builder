@@ -917,6 +917,68 @@
     updateGenerateBtn();
   }
 
+  function parseOutputText(text) {
+    const lines = text.split("\n").filter(l => l.trim());
+    if (!lines.length) return { columns: [] };
+
+    // ヘッダー行を検出
+    const headerKeywords = ["カラム名", "データ型", "定義", "素材"];
+    let headerIdx = -1;
+    let headerParts = [];
+    for (let i = 0; i < Math.min(lines.length, 5); i++) {
+      if (headerKeywords.some(kw => lines[i].includes(kw))) {
+        headerIdx = i;
+        headerParts = lines[i].split(/\t/);
+        if (headerParts.length < 3) headerParts = lines[i].split(/\s{2,}/);
+        break;
+      }
+    }
+
+    const findCol = (keywords) => {
+      for (let i = 0; i < headerParts.length; i++) {
+        const h = headerParts[i].trim();
+        if (keywords.some(kw => h.includes(kw))) return i;
+      }
+      return -1;
+    };
+
+    const nameIdx = findCol(["カラム名"]);
+    const typeIdx = findCol(["データ型", "型"]);
+    const srcTableIdx = findCol(["素材になるID", "素材になる", "ID/データファイル", "インプットデータ", "ソーステーブル"]);
+    const srcColIdx = findCol(["素材になるカラム", "素材カラム", "インプットカラム", "ソースカラム"]);
+    const defIdx = findCol(["定義"]);
+
+    const columns = [];
+    const startIdx = headerIdx >= 0 ? headerIdx + 1 : 0;
+
+    for (let i = startIdx; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      let parts = line.split(/\t/);
+      if (parts.length < 3) parts = line.split(/\s{2,}/);
+      if (parts.length < 2) continue;
+
+      let offset = 0;
+      if (/^\d+\.?\s*$/.test(parts[0].trim())) offset = 1;
+
+      const name = (nameIdx >= 0 ? parts[nameIdx] : parts[offset]) || "";
+      const type = (typeIdx >= 0 ? parts[typeIdx] : parts[offset + 1]) || "";
+      const srcTable = srcTableIdx >= 0 && parts[srcTableIdx] ? parts[srcTableIdx].trim() : "";
+      const srcCol = srcColIdx >= 0 && parts[srcColIdx] ? parts[srcColIdx].trim() : "";
+      const def = defIdx >= 0 && parts[defIdx] ? parts[defIdx].trim() : "";
+
+      if (name.trim()) {
+        columns.push({
+          name: name.trim(),
+          definition: def || "加工なし",
+          source_column: srcCol,
+          source_table: srcTable,
+        });
+      }
+    }
+    return { columns };
+  }
+
   function switchOutputMethod(method, btn) {
     outputTextMode = (method === "text");
     const panel = btn.closest(".panel");
@@ -1068,18 +1130,7 @@
     let finalOutputMapping = outputMapping;
     if (outputTextMode) {
       const text = document.getElementById("outputTextInput").value.trim();
-      const lines = text.split("\n").filter(l => l.trim());
-      finalOutputMapping = {
-        columns: lines.map(line => {
-          const parts = line.split(/[-\u2013\u2014\u2015\u30fc]/).map(s => s.trim());
-          return {
-            name: parts[0] || line.trim(),
-            definition: parts[1] || "",
-            source_column: "",
-            source_table: "",
-          };
-        })
-      };
+      finalOutputMapping = parseOutputText(text);
     }
 
     // Show AI area
