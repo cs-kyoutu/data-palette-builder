@@ -222,6 +222,9 @@ C) 選択肢3の内容
 def format_input_tables(tables: list[dict]) -> str:
     """インプットテーブル定義を整形テキストにする"""
     lines = []
+    # サマリー（AIが見落とさないように）
+    table_names = [t['table_name'] for t in tables]
+    lines.append(f"**インプットテーブル一覧（{len(tables)}テーブル）: {', '.join(table_names)}**\n")
     for table in tables:
         lines.append(f"### {table['table_name']}テーブル")
         lines.append("| カラム名 | 型 | 説明 |")
