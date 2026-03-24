@@ -1037,7 +1037,7 @@
     }
     let html = "";
     for (const table of inputTables) {
-      html += `<details class="input-preview-section" open>`;
+      html += `<details class="input-preview-section">`;
       html += `<summary>${table.table_name}（${table.columns.length}カラム）</summary>`;
       html += `<table class="input-preview-table"><tr><th>カラム名</th><th>データ型</th></tr>`;
       for (const col of table.columns) {
@@ -1184,8 +1184,6 @@
       img.src = "/bdash_hakase.png";
       img.alt = "AI";
       avatar.appendChild(img);
-    } else {
-      avatar.textContent = "You";
     }
 
     const bubble = document.createElement("div");
