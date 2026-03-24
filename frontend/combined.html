@@ -1428,7 +1428,8 @@
       }
     } catch(e) {
       removeLoadingSpinner();
-      renderMessage("ai", "エラーが発生しました。");
+      renderMessage("ai", "エラーが発生しました: " + e.message);
+      console.error("Procedure generation error:", e);
     }
   }
 

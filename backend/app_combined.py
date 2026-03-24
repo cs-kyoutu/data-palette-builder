@@ -523,13 +523,12 @@ async def generate_procedure(req: ProcedureRequest):
             messages=[{"role": "user", "content": ai_review_prompt}],
         )
         p2_text = response_p2.content[0].text
-    except anthropic.APIError as e:
-        return ChatResponse(
-            session_id=req.session_id,
-            reply=f"手順書生成でエラー: {e}",
-            status="error",
-            design_download_url=f"/api/download/{req.session_id}/design",
-        )
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Phase2 AI review failed: {e}")
+        traceback.print_exc()
+        # AI精査に失敗しても元の設計書でテンプレートエンジンを使って続行
+        p2_text = ""
 
     # --- AIの精査結果からprocessing_groupsを取得 ---
     reviewed_groups = None
@@ -577,10 +576,13 @@ async def generate_procedure(req: ProcedureRequest):
             procedure_text=procedure_text,
         )
     except Exception as e:
+        import traceback
+        print(f"[ERROR] Excel generation failed: {e}")
+        traceback.print_exc()
         # Excel生成に失敗してもテキストは返す
         return ChatResponse(
             session_id=req.session_id,
-            reply=f"Excel生成でエラーが発生しましたが、テキスト版は生成できました。",
+            reply=f"Excel生成でエラーが発生しましたが、テキスト版は生成できました。\nエラー詳細: {str(e)}",
             status="done",
             procedure_text=procedure_text,
             design_download_url=f"/api/download/{req.session_id}/design",
