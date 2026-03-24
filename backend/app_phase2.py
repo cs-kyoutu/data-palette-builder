@@ -545,9 +545,13 @@ def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
                 step_counter += 1
 
             # C列: サブ番号
-            sub_num = p_row[0] if len(p_row) > 0 and p_row[0] else ""
+            sub_num = str(p_row[0]).strip() if len(p_row) > 0 and p_row[0] else ""
             if sub_num:
-                ws.cell(row=cur_row, column=3, value=float(sub_num) if sub_num else "").font = font9
+                # 数値なら数値で、それ以外はテキストで
+                try:
+                    ws.cell(row=cur_row, column=3, value=float(sub_num)).font = font9
+                except (ValueError, TypeError):
+                    ws.cell(row=cur_row, column=3, value=sub_num).font = font9
 
             # D列: 操作種別
             ws.cell(row=cur_row, column=4, value=op_type).font = font9
