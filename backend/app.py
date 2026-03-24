@@ -486,6 +486,62 @@ async def generate(req: GenerateRequest):
                     status="done",
                     download_url=f"/api/download/{session_id}",
                 )
+
+            elif generation_data.get("action") == "design":
+                # 設計書JSON → Phase2で手順書生成
+                session["design_doc"] = generation_data
+                try:
+                    from backend.app_phase2 import format_design_document, SYSTEM_PROMPT_PHASE2, build_spreadsheet as build_procedure
+
+                    # procedure_format.yamlを読み込み
+                    proc_fmt = load_skill("procedure_format")
+
+                    design_text = format_design_document(generation_data)
+                    phase2_system = SYSTEM_PROMPT_PHASE2.format(design_document=design_text)
+                    if proc_fmt:
+                        phase2_system += f"\n\n## 手順書フォーマットリファレンス\n{proc_fmt}"
+
+                    phase2_response = client.messages.create(
+                        model="claude-sonnet-4-20250514",
+                        max_tokens=8000,
+                        system=phase2_system,
+                        messages=[{"role": "user", "content": "設計書に基づいて手順書を生成してください。"}],
+                    )
+                    phase2_text = phase2_response.content[0].text
+
+                    if "```json" in phase2_text:
+                        p2_json = json.loads(phase2_text.split("```json")[1].split("```")[0].strip())
+                        if p2_json.get("action") == "generate":
+                            filepath, filename = build_procedure(p2_json)
+                            session["last_file"] = filepath
+                            session["last_filename"] = filename
+
+                            # 手順書テキストも保存
+                            procedure_text = ""
+                            for sec in p2_json.get("sections", []):
+                                if sec.get("sheet_name") == "結合・加工":
+                                    for row in sec.get("rows", []):
+                                        procedure_text += " | ".join(str(c) for c in row) + "\n"
+
+                            return ChatResponse(
+                                session_id=session_id,
+                                reply=f"設計書を作成し、手順書を生成しました！\n\n{procedure_text[:2000]}",
+                                status="done",
+                                download_url=f"/api/download/{session_id}",
+                            )
+                    # Phase2がJSONを返さなかった場合、テキストで返す
+                    return ChatResponse(
+                        session_id=session_id,
+                        reply=f"設計書は作成できましたが、手順書の生成でエラーが発生しました。\n\n設計書:\n{json.dumps(generation_data, ensure_ascii=False, indent=2)[:3000]}",
+                        status="asking",
+                    )
+                except Exception as e:
+                    return ChatResponse(
+                        session_id=session_id,
+                        reply=f"Phase2（手順書生成）でエラー: {e}\n\n設計書は作成済みです。",
+                        status="asking",
+                    )
+
         except (json.JSONDecodeError, IndexError):
             pass
 
@@ -551,7 +607,7 @@ async def chat(req: ChatRequest):
     else:
         assistant_text = step1_text
 
-    # JSON生成チェック
+    # JSON生成チェック（design → Phase2自動実行）
     if "```json" in assistant_text:
         try:
             json_str = assistant_text.split("```json")[1].split("```")[0].strip()
@@ -561,17 +617,34 @@ async def chat(req: ChatRequest):
                 filepath, filename = build_spreadsheet(generation_data)
                 session["last_file"] = filepath
                 session["last_filename"] = filename
+                display_text = assistant_text.split("```json")[0].strip() or "手順書を生成しました！"
+                return ChatResponse(session_id=req.session_id, reply=display_text, status="done", download_url=f"/api/download/{req.session_id}")
 
-                display_text = assistant_text.split("```json")[0].strip()
-                if not display_text:
-                    display_text = "手順書を生成しました！以下からダウンロードできます。"
-
-                return ChatResponse(
-                    session_id=req.session_id,
-                    reply=display_text,
-                    status="done",
-                    download_url=f"/api/download/{req.session_id}",
-                )
+            elif generation_data.get("action") == "design":
+                # Phase2へ自動遷移
+                session["design_doc"] = generation_data
+                try:
+                    from backend.app_phase2 import format_design_document, SYSTEM_PROMPT_PHASE2, build_spreadsheet as build_procedure
+                    proc_fmt = load_skill("procedure_format")
+                    design_text = format_design_document(generation_data)
+                    phase2_system = SYSTEM_PROMPT_PHASE2.format(design_document=design_text)
+                    if proc_fmt:
+                        phase2_system += f"\n\n## 手順書フォーマットリファレンス\n{proc_fmt}"
+                    phase2_resp = client.messages.create(
+                        model="claude-sonnet-4-20250514", max_tokens=8000, system=phase2_system,
+                        messages=[{"role": "user", "content": "設計書に基づいて手順書を生成してください。"}],
+                    )
+                    p2_text = phase2_resp.content[0].text
+                    if "```json" in p2_text:
+                        p2_json = json.loads(p2_text.split("```json")[1].split("```")[0].strip())
+                        if p2_json.get("action") == "generate":
+                            filepath, filename = build_procedure(p2_json)
+                            session["last_file"] = filepath
+                            session["last_filename"] = filename
+                            return ChatResponse(session_id=req.session_id, reply="設計書→手順書を生成しました！", status="done", download_url=f"/api/download/{req.session_id}")
+                    return ChatResponse(session_id=req.session_id, reply=f"設計書は完成。手順書生成中にエラー。", status="asking")
+                except Exception as e:
+                    return ChatResponse(session_id=req.session_id, reply=f"Phase2エラー: {e}", status="asking")
         except (json.JSONDecodeError, IndexError):
             pass
 
