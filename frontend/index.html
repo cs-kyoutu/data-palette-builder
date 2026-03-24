@@ -1118,89 +1118,54 @@
   }
 
   // --- アウトプットテーブル定義テキストパーサー ---
+  // パースはベストエフォート。失敗してもraw_textでPhase1に渡すので問題ない
   function parseOutputDefinition(text) {
     const lines = text.split("\n").filter(l => l.trim());
-    if (lines.length === 0) return { columns: [] };
+    if (lines.length === 0) return { columns: [], raw_text: text };
 
-    // ヘッダー行を検出（カラム名、データ型等のキーワードを含む行）
-    const headerKeywords = ["カラム名", "データ型", "定義", "素材", "ソース", "主キー"];
-    let headerIdx = -1;
-    let headers = [];
-    for (let i = 0; i < Math.min(lines.length, 5); i++) {
-      if (headerKeywords.some(k => lines[i].includes(k))) {
-        headerIdx = i;
-        headers = lines[i].split(/\t+|\s{2,}/).map(h => h.trim()).filter(Boolean);
-        break;
-      }
-    }
-
-    // ヘッダーが見つからなければ全行をそのままAIに渡す
-    if (headerIdx === -1) {
-      return {
-        columns: lines.map(line => ({
-          name: line.trim(),
-          definition: "",
-          source_column: "",
-          source_table: "",
-        })),
-        raw_text: text
-      };
-    }
-
-    // カラムインデックスを特定
-    const colIdx = {
-      name: headers.findIndex(h => /カラム名|項目名|列名/.test(h)),
-      type: headers.findIndex(h => /データ型|型/.test(h)),
-      source_table: headers.findIndex(h => /素材.*データ|素材.*ID|ソーステーブル|インプットデータ/.test(h)),
-      source_column: headers.findIndex(h => /素材.*カラム|ソースカラム|インプットカラム/.test(h)),
-      definition: headers.findIndex(h => /定義|説明|算出/.test(h)),
-    };
-
-    // データ行をパース
     const columns = [];
-    for (let i = headerIdx + 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line || line.startsWith("---") || line.startsWith("===")) continue;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      // ヘッダー行・区切り行はスキップ
+      if (/^[#＃]|^---|^===|カラム名.*データ型/.test(trimmed)) continue;
+      if (/^\s*$/.test(trimmed)) continue;
 
-      // タブ区切り or 2スペース以上で区切り
-      const parts = line.split(/\t+|\s{2,}/).map(s => s.trim()).filter(Boolean);
+      // タブ区切りを優先、なければ2スペース以上で分割
+      let parts;
+      if (trimmed.includes("\t")) {
+        parts = trimmed.split(/\t+/).map(s => s.trim());
+      } else {
+        parts = trimmed.split(/\s{2,}/).map(s => s.trim());
+      }
+      parts = parts.filter(Boolean);
 
-      // 行番号を除去（先頭が数字のみの場合）
+      // 行番号を除去
       let offset = 0;
-      if (parts.length > 0 && /^\d+\.?$/.test(parts[0])) offset = 1;
+      if (parts.length > 1 && /^\d+\.?$/.test(parts[0])) offset = 1;
 
-      // 主キーマーク（●、○、★TRUE等）を除去
-      if (parts[offset] && /^[●○◎★☆]|^TRUE$/i.test(parts[offset])) offset++;
+      const name = parts[offset] || "";
+      if (!name) continue;
 
-      const getName = () => parts[colIdx.name >= 0 ? colIdx.name + (offset > 0 && colIdx.name === 0 ? 0 : 0) : offset] || "";
+      // 残りのフィールドをベストエフォートで取得
+      const rest = parts.slice(offset + 1);
+      let type = "", source_table = "", source_column = "", definition = "";
 
-      // シンプルに位置ベースでパース
-      const col = {
-        name: parts[offset] || "",
-        definition: "",
-        source_column: "",
-        source_table: "",
-      };
-
-      // 各フィールドをヘッダー位置に基づいて取得
-      if (parts.length > offset + 1) {
-        // データ型位置（名前の次）
-        const typePos = offset + 1;
-        if (parts[typePos] && /型$|テキスト|整数|日付|日時|真偽|小数/.test(parts[typePos])) {
-          col.type = parts[typePos];
-          // 素材データ
-          if (parts[typePos + 1]) col.source_table = parts[typePos + 1];
-          // 素材カラム
-          if (parts[typePos + 2]) col.source_column = parts[typePos + 2];
-          // 定義（残り全部）
-          if (parts[typePos + 3]) col.definition = parts.slice(typePos + 3).join(" ");
+      for (let i = 0; i < rest.length; i++) {
+        if (/型$|テキスト|整数|日付|日時|真偽|小数/.test(rest[i]) && !type) {
+          type = rest[i];
+        } else if (!source_table && !type) {
+          // 型の前なら主キーマーク等、スキップ
+          continue;
+        } else if (type && !source_table && !/加工/.test(rest[i])) {
+          source_table = rest[i];
+        } else if (source_table && !source_column && !/加工|#\d|参照/.test(rest[i])) {
+          source_column = rest[i];
         } else {
-          // データ型がない場合、残りを定義として扱う
-          col.definition = parts.slice(offset + 1).join(" ");
+          definition += (definition ? " " : "") + rest[i];
         }
       }
 
-      if (col.name) columns.push(col);
+      columns.push({ name, type, source_table, source_column, definition });
     }
 
     return { columns, raw_text: text };
