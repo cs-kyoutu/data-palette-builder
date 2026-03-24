@@ -1410,7 +1410,7 @@
       var res = await fetch("/api/generate-procedure", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: currentSessionId }),
+        body: JSON.stringify({ session_id: sessionId }),
       });
       var data = await res.json();
       removeLoadingSpinner();
@@ -1443,7 +1443,7 @@
       var res = await fetch("/api/design-feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: currentSessionId, message: fb }),
+        body: JSON.stringify({ session_id: sessionId, message: fb }),
       });
       var data = await res.json();
       removeTyping();
