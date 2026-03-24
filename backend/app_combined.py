@@ -261,7 +261,7 @@ async def generate(req: GenerateRequest):
     try:
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=12000,
+            max_tokens=4000,
             system=get_system_prompt(req.input_tables, req.output_mapping),
             messages=session["messages"],
         )
@@ -302,7 +302,7 @@ async def chat(req: ChatRequest):
     try:
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=12000,
+            max_tokens=4000,
             system=get_system_prompt(session["input_tables"], session["output_mapping"]),
             messages=session["messages"],
         )
@@ -450,7 +450,7 @@ async def design_feedback(req: ChatRequest):
     try:
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=12000,
+            max_tokens=4000,
             system=get_system_prompt(session["input_tables"], session["output_mapping"]),
             messages=session["messages"],
         )
@@ -519,7 +519,7 @@ async def generate_procedure(req: ProcedureRequest):
 """
         response_p2 = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=12000,
+            max_tokens=8000,
             messages=[{"role": "user", "content": ai_review_prompt}],
         )
         p2_text = response_p2.content[0].text
