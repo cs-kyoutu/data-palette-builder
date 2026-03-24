@@ -525,6 +525,14 @@
       <div class="input-method-toggle">
         <button class="toggle-btn active" onclick="switchInputMethod('preset')">プリセット</button>
         <button class="toggle-btn" onclick="switchInputMethod('upload')">ファイルアップロード</button>
+        <button class="toggle-btn" onclick="switchInputMethod('text')">テキスト入力</button>
+      </div>
+
+      <!-- テキスト入力 -->
+      <div id="inputTextArea" class="hidden">
+        <textarea class="text-input-area" id="inputTextInput"
+          rows="12" placeholder="テーブル定義をペースト（タブ区切り、スペース区切り、b→dashメタデータ形式対応）"></textarea>
+        <button class="upload-btn" onclick="parseAndSetInputText()">テーブル定義を読み込む</button>
       </div>
 
       <!-- プリセット -->
@@ -654,10 +662,98 @@
     event.target.classList.add("active");
     document.getElementById("inputPreset").classList.toggle("hidden", method !== "preset");
     document.getElementById("inputUpload").classList.toggle("hidden", method !== "upload");
+    document.getElementById("inputTextArea").classList.toggle("hidden", method !== "text");
 
     if (method === "preset" && selectedPresetKey) {
       togglePreset(selectedPresetKey);
     }
+  }
+
+  // インプットテキスト入力パーサー
+  function parseAndSetInputText() {
+    const text = document.getElementById("inputTextInput").value.trim();
+    if (!text) return;
+
+    const lines = text.split("\n").filter(l => l.trim());
+    if (lines.length === 0) return;
+
+    // b→dashメタデータ形式の検出（データファイル名、カラム論理名）
+    const isBdashMeta = lines[0].includes("データファイル名") || lines[0].includes("カラム論理名");
+
+    // ヘッダー検出
+    const headerKeywords = ["カラム名", "カラム論理名", "データ型", "データファイル名"];
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(lines.length, 3); i++) {
+      if (headerKeywords.some(k => lines[i].includes(k))) {
+        headerIdx = i;
+        break;
+      }
+    }
+
+    // 【テーブル名】形式の検出
+    const bracketFormat = lines.some(l => /【.+】/.test(l));
+
+    const tables = {};
+
+    if (isBdashMeta && headerIdx >= 0) {
+      // b→dashメタデータ形式
+      for (let i = headerIdx + 1; i < lines.length; i++) {
+        const parts = lines[i].split(/\t+/).map(s => s.trim());
+        if (parts.length < 3) continue;
+        // データファイル名、カラム論理名、データ型、顧客IDフラグを探す
+        const tableName = parts[1] || parts[0];
+        const colName = (parts[6] || parts[2] || "").replace(/【.+】/g, "").trim();
+        const dataType = (parts[10] || parts[3] || "").replace("型", "");
+        const custIdFlag = parts[3] === "★TRUE" || parts[3] === "TRUE";
+
+        if (!tableName || !colName) continue;
+        if (!tables[tableName]) tables[tableName] = [];
+        tables[tableName].push({ name: colName, type: dataType, description: custIdFlag ? "顧客IDフラグ" : "" });
+      }
+    } else if (bracketFormat) {
+      // 【テーブル名】カラム名 データ型 形式
+      let currentTable = "";
+      for (const line of lines) {
+        const tableMatch = line.match(/【(.+?)】/);
+        if (tableMatch) {
+          const parts = line.split(/\t+|\s{2,}/).map(s => s.trim()).filter(Boolean);
+          currentTable = tableMatch[1];
+          const colName = parts[0].replace(/【.+】/g, "").trim();
+          const dataType = parts[1] || "";
+          if (!tables[currentTable]) tables[currentTable] = [];
+          if (colName) tables[currentTable].push({ name: colName, type: dataType, description: "" });
+        }
+      }
+    } else {
+      // タブ/スペース区切り汎用パース
+      let currentTable = "テーブル1";
+      const startIdx = headerIdx >= 0 ? headerIdx + 1 : 0;
+      for (let i = startIdx; i < lines.length; i++) {
+        const parts = lines[i].split(/\t+|\s{2,}/).map(s => s.trim()).filter(Boolean);
+        if (parts.length === 0) continue;
+        // テーブル名行の検出（カラム数が少なく、型キーワードを含まない）
+        if (parts.length <= 2 && !/型|テキスト|整数|日付|真偽/.test(parts.join(""))) {
+          currentTable = parts[0];
+          continue;
+        }
+        let offset = 0;
+        if (/^\d+\.?$/.test(parts[0])) offset = 1;
+        const colName = parts[offset] || "";
+        const colType = parts[offset + 1] || "";
+        if (!tables[currentTable]) tables[currentTable] = [];
+        if (colName) tables[currentTable].push({ name: colName, type: colType, description: "" });
+      }
+    }
+
+    // inputTablesに変換
+    inputTables = Object.entries(tables).map(([name, cols]) => ({
+      table_name: name,
+      columns: cols,
+    }));
+
+    renderInputPreview();
+    updateGenerateBtn();
+    document.getElementById("inputCount").textContent = `${inputTables.length} テーブル`;
   }
 
   function switchOutputMethod(method) {
@@ -841,19 +937,13 @@
     let finalOutputMapping = outputMapping;
     if (outputTextMode) {
       const text = document.getElementById("outputTextInput").value.trim();
-      // テキストを簡易パース
-      const lines = text.split("\n").filter(l => l.trim());
-      finalOutputMapping = {
-        columns: lines.map(line => {
-          const parts = line.split(/[-\u2013\u2014\u2015\u30fc]/).map(s => s.trim());
-          return {
-            name: parts[0] || line.trim(),
-            definition: parts[1] || "",
-            source_column: "",
-            source_table: "",
-          };
-        })
-      };
+      finalOutputMapping = parseOutputDefinition(text);
+    }
+
+    // インプットもテキストモードの場合はパース結果を使う
+    let finalInputTables = inputTables;
+    if (!finalInputTables || finalInputTables.length === 0) {
+      finalInputTables = inputTables;
     }
 
     // AIエリア表示
@@ -868,8 +958,9 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_id: sessionId,
-          input_tables: inputTables,
+          input_tables: finalInputTables,
           output_mapping: finalOutputMapping,
+          additional_context: finalOutputMapping.raw_text || "",
         }),
       });
       const data = await res.json();
@@ -1026,7 +1117,96 @@
     container.scrollTop = container.scrollHeight;
   }
 
-  function parseAiQuestions(text) {
+  // --- アウトプットテーブル定義テキストパーサー ---
+  function parseOutputDefinition(text) {
+    const lines = text.split("\n").filter(l => l.trim());
+    if (lines.length === 0) return { columns: [] };
+
+    // ヘッダー行を検出（カラム名、データ型等のキーワードを含む行）
+    const headerKeywords = ["カラム名", "データ型", "定義", "素材", "ソース", "主キー"];
+    let headerIdx = -1;
+    let headers = [];
+    for (let i = 0; i < Math.min(lines.length, 5); i++) {
+      if (headerKeywords.some(k => lines[i].includes(k))) {
+        headerIdx = i;
+        headers = lines[i].split(/\t+|\s{2,}/).map(h => h.trim()).filter(Boolean);
+        break;
+      }
+    }
+
+    // ヘッダーが見つからなければ全行をそのままAIに渡す
+    if (headerIdx === -1) {
+      return {
+        columns: lines.map(line => ({
+          name: line.trim(),
+          definition: "",
+          source_column: "",
+          source_table: "",
+        })),
+        raw_text: text
+      };
+    }
+
+    // カラムインデックスを特定
+    const colIdx = {
+      name: headers.findIndex(h => /カラム名|項目名|列名/.test(h)),
+      type: headers.findIndex(h => /データ型|型/.test(h)),
+      source_table: headers.findIndex(h => /素材.*データ|素材.*ID|ソーステーブル|インプットデータ/.test(h)),
+      source_column: headers.findIndex(h => /素材.*カラム|ソースカラム|インプットカラム/.test(h)),
+      definition: headers.findIndex(h => /定義|説明|算出/.test(h)),
+    };
+
+    // データ行をパース
+    const columns = [];
+    for (let i = headerIdx + 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line || line.startsWith("---") || line.startsWith("===")) continue;
+
+      // タブ区切り or 2スペース以上で区切り
+      const parts = line.split(/\t+|\s{2,}/).map(s => s.trim()).filter(Boolean);
+
+      // 行番号を除去（先頭が数字のみの場合）
+      let offset = 0;
+      if (parts.length > 0 && /^\d+\.?$/.test(parts[0])) offset = 1;
+
+      // 主キーマーク（●、○、★TRUE等）を除去
+      if (parts[offset] && /^[●○◎★☆]|^TRUE$/i.test(parts[offset])) offset++;
+
+      const getName = () => parts[colIdx.name >= 0 ? colIdx.name + (offset > 0 && colIdx.name === 0 ? 0 : 0) : offset] || "";
+
+      // シンプルに位置ベースでパース
+      const col = {
+        name: parts[offset] || "",
+        definition: "",
+        source_column: "",
+        source_table: "",
+      };
+
+      // 各フィールドをヘッダー位置に基づいて取得
+      if (parts.length > offset + 1) {
+        // データ型位置（名前の次）
+        const typePos = offset + 1;
+        if (parts[typePos] && /型$|テキスト|整数|日付|日時|真偽|小数/.test(parts[typePos])) {
+          col.type = parts[typePos];
+          // 素材データ
+          if (parts[typePos + 1]) col.source_table = parts[typePos + 1];
+          // 素材カラム
+          if (parts[typePos + 2]) col.source_column = parts[typePos + 2];
+          // 定義（残り全部）
+          if (parts[typePos + 3]) col.definition = parts.slice(typePos + 3).join(" ");
+        } else {
+          // データ型がない場合、残りを定義として扱う
+          col.definition = parts.slice(offset + 1).join(" ");
+        }
+      }
+
+      if (col.name) columns.push(col);
+    }
+
+    return { columns, raw_text: text };
+  }
+
+
     // A) B) C) or 1) 2) 3) or ① ② ③ 形式の選択肢を検出
     const lines = text.split("\n");
     const optionPattern = /^\s*(?:[A-C]\)|[①②③]|[1-3]\))\s*(.+)/;

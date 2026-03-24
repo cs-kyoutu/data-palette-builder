@@ -414,7 +414,7 @@ async def generate(req: GenerateRequest):
     # === Step1: 方針決定（軽量、Skills無し） ===
     user_message = "アウトプットを実現するための処理方針を決めてください。"
     if req.additional_context:
-        user_message += f"\n\n追加情報: {req.additional_context}"
+        user_message += f"\n\nアウトプット定義の原文:\n{req.additional_context[:3000]}"
 
     session["messages"].append({"role": "user", "content": user_message})
 
