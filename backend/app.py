@@ -490,57 +490,62 @@ async def generate(req: GenerateRequest):
                 )
 
             elif generation_data.get("action") == "design":
-                # 設計書JSON → Phase2で手順書生成
+                # === Phase3: テンプレートエンジンで手順書生成（AI不要） ===
                 session["design_doc"] = generation_data
                 try:
-                    from backend.app_phase2 import format_design_document, SYSTEM_PROMPT_PHASE2, build_spreadsheet as build_procedure
+                    from backend.template_engine import generate_procedure_text
 
-                    # procedure_format.yamlを読み込み
-                    proc_fmt = load_skill("procedure_format")
+                    # テンプレートエンジンで手順書テキスト生成
+                    procedure_text = generate_procedure_text(generation_data)
+                    session["procedure_text"] = procedure_text
 
-                    design_text = format_design_document(generation_data)
-                    phase2_system = SYSTEM_PROMPT_PHASE2.format(design_document=design_text)
-                    if proc_fmt:
-                        phase2_system += f"\n\n## 手順書フォーマットリファレンス\n{proc_fmt}"
+                    # Excel出力用データ構築
+                    steps = generation_data.get("processing_steps", [])
+                    groups = generation_data.get("processing_groups", [])
 
-                    phase2_response = client.messages.create(
-                        model="claude-sonnet-4-20250514",
-                        max_tokens=8000,
-                        system=phase2_system,
-                        messages=[{"role": "user", "content": "設計書に基づいて手順書を生成してください。"}],
-                    )
-                    phase2_text = phase2_response.content[0].text
+                    # 結合・加工シートのrows構築
+                    proc_rows = []
+                    step_num = 1
+                    for s in steps:
+                        sn = str(step_num) if s.get("step") else ""
+                        if s.get("step"):
+                            step_num += 1
+                        op = s.get("operation", "")
+                        use_data = s.get("settings", {}).get("左ファイル", "") or s.get("settings", {}).get("対象カラム", "")
+                        save_as = s.get("save_as", "")
+                        result = s.get("result", "")
+                        # テンプレートエンジンで手順テキスト生成
+                        from backend.template_engine import render_step
+                        step_text = render_step(s)
+                        proc_rows.append([sn, op, use_data, step_text, save_as, result, "", ""])
 
-                    if "```json" in phase2_text:
-                        p2_json = json.loads(phase2_text.split("```json")[1].split("```")[0].strip())
-                        if p2_json.get("action") == "generate":
-                            filepath, filename = build_procedure(p2_json)
-                            session["last_file"] = filepath
-                            session["last_filename"] = filename
+                    excel_data = {
+                        "action": "generate",
+                        "title": generation_data.get("summary", "データパレット構築手順書"),
+                        "sections": [
+                            {
+                                "sheet_name": "結合・加工",
+                                "title": "手順書",
+                                "columns": ["Step", "操作種別", "使用データ", "操作内容・設定値", "保存ファイル名", "結果の状態", "確認ポイント", "備考"],
+                                "rows": proc_rows,
+                            }
+                        ],
+                    }
 
-                            # 手順書テキストも保存
-                            procedure_text = ""
-                            for sec in p2_json.get("sections", []):
-                                if sec.get("sheet_name") == "結合・加工":
-                                    for row in sec.get("rows", []):
-                                        procedure_text += " | ".join(str(c) for c in row) + "\n"
+                    filepath, filename = build_spreadsheet(excel_data)
+                    session["last_file"] = filepath
+                    session["last_filename"] = filename
 
-                            return ChatResponse(
-                                session_id=session_id,
-                                reply=f"設計書を作成し、手順書を生成しました！\n\n{procedure_text[:2000]}",
-                                status="done",
-                                download_url=f"/api/download/{session_id}",
-                            )
-                    # Phase2がJSONを返さなかった場合、テキストで返す
                     return ChatResponse(
                         session_id=session_id,
-                        reply=f"設計書は作成できましたが、手順書の生成でエラーが発生しました。\n\n設計書:\n{json.dumps(generation_data, ensure_ascii=False, indent=2)[:3000]}",
-                        status="asking",
+                        reply=f"設計書を作成し、手順書を生成しました！\n\n{procedure_text[:3000]}",
+                        status="done",
+                        download_url=f"/api/download/{session_id}",
                     )
                 except Exception as e:
                     return ChatResponse(
                         session_id=session_id,
-                        reply=f"Phase2（手順書生成）でエラー: {e}\n\n設計書は作成済みです。",
+                        reply=f"Phase3（手順書生成）でエラー: {e}\n\n設計書JSON:\n{json.dumps(generation_data, ensure_ascii=False, indent=2)[:2000]}",
                         status="asking",
                     )
 
@@ -623,30 +628,40 @@ async def chat(req: ChatRequest):
                 return ChatResponse(session_id=req.session_id, reply=display_text, status="done", download_url=f"/api/download/{req.session_id}")
 
             elif generation_data.get("action") == "design":
-                # Phase2へ自動遷移
+                # === Phase3: テンプレートエンジンで手順書生成（AI不要） ===
                 session["design_doc"] = generation_data
                 try:
-                    from backend.app_phase2 import format_design_document, SYSTEM_PROMPT_PHASE2, build_spreadsheet as build_procedure
-                    proc_fmt = load_skill("procedure_format")
-                    design_text = format_design_document(generation_data)
-                    phase2_system = SYSTEM_PROMPT_PHASE2.format(design_document=design_text)
-                    if proc_fmt:
-                        phase2_system += f"\n\n## 手順書フォーマットリファレンス\n{proc_fmt}"
-                    phase2_resp = client.messages.create(
-                        model="claude-sonnet-4-20250514", max_tokens=8000, system=phase2_system,
-                        messages=[{"role": "user", "content": "設計書に基づいて手順書を生成してください。"}],
-                    )
-                    p2_text = phase2_resp.content[0].text
-                    if "```json" in p2_text:
-                        p2_json = json.loads(p2_text.split("```json")[1].split("```")[0].strip())
-                        if p2_json.get("action") == "generate":
-                            filepath, filename = build_procedure(p2_json)
-                            session["last_file"] = filepath
-                            session["last_filename"] = filename
-                            return ChatResponse(session_id=req.session_id, reply="設計書→手順書を生成しました！", status="done", download_url=f"/api/download/{req.session_id}")
-                    return ChatResponse(session_id=req.session_id, reply=f"設計書は完成。手順書生成中にエラー。", status="asking")
+                    from backend.template_engine import generate_procedure_text, render_step
+                    procedure_text = generate_procedure_text(generation_data)
+                    session["procedure_text"] = procedure_text
+
+                    steps = generation_data.get("processing_steps", [])
+                    proc_rows = []
+                    step_num = 1
+                    for s in steps:
+                        sn = str(step_num) if s.get("step") else ""
+                        if s.get("step"):
+                            step_num += 1
+                        op = s.get("operation", "")
+                        use_data = s.get("settings", {}).get("左ファイル", "") or ""
+                        save_as = s.get("save_as", "")
+                        result = s.get("result", "")
+                        step_text = render_step(s)
+                        proc_rows.append([sn, op, use_data, step_text, save_as, result, "", ""])
+
+                    excel_data = {
+                        "action": "generate",
+                        "title": generation_data.get("summary", "データパレット構築手順書"),
+                        "sections": [{"sheet_name": "結合・加工", "title": "手順書",
+                            "columns": ["Step", "操作種別", "使用データ", "操作内容・設定値", "保存ファイル名", "結果の状態", "確認ポイント", "備考"],
+                            "rows": proc_rows}],
+                    }
+                    filepath, filename = build_spreadsheet(excel_data)
+                    session["last_file"] = filepath
+                    session["last_filename"] = filename
+                    return ChatResponse(session_id=req.session_id, reply=f"手順書を生成しました！\n\n{procedure_text[:3000]}", status="done", download_url=f"/api/download/{req.session_id}")
                 except Exception as e:
-                    return ChatResponse(session_id=req.session_id, reply=f"Phase2エラー: {e}", status="asking")
+                    return ChatResponse(session_id=req.session_id, reply=f"Phase3エラー: {e}", status="asking")
         except (json.JSONDecodeError, IndexError):
             pass
 

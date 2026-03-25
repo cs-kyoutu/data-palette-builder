@@ -1,6 +1,0 @@
-operation: 削除
-format: |
-  『削除』
-  {columns_text}を削除する
-variables:
-  columns: { type: column_list }

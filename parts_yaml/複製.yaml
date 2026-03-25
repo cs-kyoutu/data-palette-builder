@@ -1,8 +1,0 @@
-operation: 複製
-format: |
-  『複製』
-  「{column}」を複製
-  →カラム名を「{new_column}」に変更
-variables:
-  column: { type: text }
-  new_column: { type: text }
