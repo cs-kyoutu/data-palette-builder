@@ -24,14 +24,14 @@ import anthropic
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from pydantic import BaseModel
 
 from .parser import (
     parse_input_excel, parse_input_csv,
     parse_output_excel, parse_output_csv,
 )
+from .excel_builder import build_spreadsheet
+from .template_engine import generate_procedure_text
 
 app = FastAPI(title="データパレット構築手順書ジェネレータ")
 app.add_middleware(
@@ -45,6 +45,7 @@ app.add_middleware(
 BASE_DIR = Path(__file__).parent.parent
 UPLOAD_DIR = Path(__file__).parent / "uploads"
 OUTPUT_DIR = Path(__file__).parent / "output"
+KNOWLEDGE_PATH = BASE_DIR / "skills" / "knowledge_base.json"
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -73,8 +74,67 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     session_id: str
     reply: str
-    status: str  # "asking" | "done"
+    status: str  # "asking" | "done" | "review"
     download_url: str | None = None
+
+class FeedbackRequest(BaseModel):
+    session_id: str
+    result: str  # "ok" | "fix"
+    fix_description: str = ""
+
+
+# --- ナレッジベース管理 ---
+def _load_knowledge_base() -> list[dict]:
+    if KNOWLEDGE_PATH.exists():
+        with open(KNOWLEDGE_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+def _save_knowledge(entry: dict):
+    kb = _load_knowledge_base()
+    entry["created_at"] = datetime.now().isoformat()
+    entry["id"] = str(uuid.uuid4())[:8]
+    kb.append(entry)
+    # 最新100件のみ保持
+    if len(kb) > 100:
+        kb = kb[-100:]
+    with open(KNOWLEDGE_PATH, "w", encoding="utf-8") as f:
+        json.dump(kb, f, ensure_ascii=False, indent=2)
+
+def get_similar_knowledge(output_mapping: dict, limit: int = 3) -> str:
+    """アウトプット定義から類似ナレッジを検索"""
+    kb = _load_knowledge_base()
+    if not kb:
+        return ""
+    # 簡易的なキーワードマッチで類似ケースを取得
+    output_keywords = set()
+    for col in output_mapping.get("columns", []):
+        for val in [col.get("name", ""), col.get("definition", "")]:
+            for word in val.split():
+                if len(word) > 1:
+                    output_keywords.add(word)
+    scored = []
+    for entry in kb:
+        score = 0
+        entry_text = json.dumps(entry, ensure_ascii=False)
+        for kw in output_keywords:
+            if kw in entry_text:
+                score += 1
+        if score > 0:
+            scored.append((score, entry))
+    scored.sort(key=lambda x: -x[0])
+    if not scored:
+        return ""
+    lines = ["## 類似ケースのナレッジ（過去の成功事例）"]
+    for _, entry in scored[:limit]:
+        lines.append(f"\n### {entry.get('summary', '不明')}")
+        steps = entry.get("processing_steps", [])
+        for s in steps[:5]:
+            op = s.get("operation", "")
+            lines.append(f"- {op}: {json.dumps(s.get('settings', {}), ensure_ascii=False)[:100]}")
+        if entry.get("fix_description"):
+            lines.append(f"- ※修正あり: {entry['fix_description']}")
+    return "\n".join(lines)
 
 
 # --- スキルローダー ---
@@ -282,64 +342,8 @@ def get_system_prompt(input_tables: list[dict], output_mapping: dict) -> str:
     return get_system_prompt_step1(input_tables, output_mapping)
 
 
-def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
-    """生成データからExcelファイルを作成"""
-    wb = Workbook()
-    wb.remove(wb.active)
-
-    # スタイル定義
-    header_font = Font(name="Yu Gothic", bold=True, size=11, color="FFFFFF")
-    header_fill = PatternFill(start_color="2B579A", end_color="2B579A", fill_type="solid")
-    title_font = Font(name="Yu Gothic", bold=True, size=14, color="2B579A")
-    cell_font = Font(name="Yu Gothic", size=10)
-    thin_border = Border(
-        left=Side(style="thin"), right=Side(style="thin"),
-        top=Side(style="thin"), bottom=Side(style="thin"),
-    )
-    wrap_alignment = Alignment(wrap_text=True, vertical="top")
-
-    for i, section in enumerate(generation_data.get("sections", [])):
-        sheet_name = section.get("sheet_name", f"Sheet{i+1}")[:31]
-        ws = wb.create_sheet(sheet_name)
-
-        title = section.get("title", sheet_name)
-        columns = section.get("columns", [])
-
-        ws.cell(row=1, column=1, value=title).font = title_font
-        if columns:
-            ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(columns))
-
-        # ヘッダー行
-        for j, col_name in enumerate(columns):
-            cell = ws.cell(row=3, column=j + 1, value=col_name)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.border = thin_border
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-
-        # データ行
-        for r_idx, row_data in enumerate(section.get("rows", [])):
-            for c_idx, value in enumerate(row_data):
-                cell = ws.cell(row=4 + r_idx, column=c_idx + 1, value=str(value))
-                cell.font = cell_font
-                cell.border = thin_border
-                cell.alignment = wrap_alignment
-
-        # 列幅調整
-        num_cols = len(columns) if columns else 1
-        for col_idx in range(1, num_cols + 1):
-            max_len = 12
-            for row_idx in range(3, ws.max_row + 1):
-                val = ws.cell(row=row_idx, column=col_idx).value
-                if val:
-                    max_len = max(max_len, len(str(val)) * 1.5)
-            ws.column_dimensions[ws.cell(row=3, column=col_idx).column_letter].width = min(max_len, 50)
-
-    title = generation_data.get("title", "データパレット構築手順書")
-    filename = f"{title}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-    filepath = OUTPUT_DIR / filename
-    wb.save(filepath)
-    return str(filepath), filename
+# build_spreadsheet は excel_builder.py からインポート済み
+# generate_procedure_text は template_engine.py からインポート済み
 
 
 # --- APIエンドポイント ---
@@ -493,9 +497,7 @@ async def generate(req: GenerateRequest):
                 # === Phase3: テンプレートエンジンで手順書生成（AI不要） ===
                 session["design_doc"] = generation_data
                 try:
-                    from backend.template_engine import generate_procedure_text
-
-                    # テンプレートエンジンで手順書テキスト生成
+                    # テンプレートエンジンで手順書テキスト生成（Phase3）
                     procedure_text = generate_procedure_text(generation_data)
                     session["procedure_text"] = procedure_text
 
@@ -515,7 +517,7 @@ async def generate(req: GenerateRequest):
                         save_as = s.get("save_as", "")
                         result = s.get("result", "")
                         # テンプレートエンジンで手順テキスト生成
-                        from backend.template_engine import render_step
+                        from .template_engine import render_step
                         step_text = render_step(s)
                         proc_rows.append([sn, op, use_data, step_text, save_as, result, "", ""])
 
@@ -631,7 +633,6 @@ async def chat(req: ChatRequest):
                 # === Phase3: テンプレートエンジンで手順書生成（AI不要） ===
                 session["design_doc"] = generation_data
                 try:
-                    from backend.template_engine import generate_procedure_text, render_step
                     procedure_text = generate_procedure_text(generation_data)
                     session["procedure_text"] = procedure_text
 
@@ -646,7 +647,8 @@ async def chat(req: ChatRequest):
                         use_data = s.get("settings", {}).get("左ファイル", "") or ""
                         save_as = s.get("save_as", "")
                         result = s.get("result", "")
-                        step_text = render_step(s)
+                        from .template_engine import render_step as _render_step
+                        step_text = _render_step(s)
                         proc_rows.append([sn, op, use_data, step_text, save_as, result, "", ""])
 
                     excel_data = {
@@ -684,6 +686,43 @@ async def download(session_id: str):
     )
 
 
+# --- ナレッジPDCA ---
+class FeedbackRequest(BaseModel):
+    session_id: str
+    is_correct: bool
+    correction: str | None = None
+
+@app.post("/api/feedback")
+async def feedback(req: FeedbackRequest):
+    """手順書生成後のフィードバック → ナレッジに自動蓄積"""
+    session = sessions.get(req.session_id)
+    if not session:
+        raise HTTPException(404, "セッションが見つかりません")
+
+    design_doc = session.get("design_doc")
+    if not design_doc:
+        return {"status": "no_design_doc"}
+
+    if req.is_correct:
+        # 正しかった → ナレッジに保存
+        _save_knowledge({
+            "type": "successful_design",
+            "summary": design_doc.get("summary", ""),
+            "processing_steps": design_doc.get("processing_steps", []),
+            "processing_groups": design_doc.get("processing_groups", []),
+        })
+        return {"status": "saved", "message": "ナレッジに保存しました"}
+    else:
+        # 間違ってた → 修正内容を保存
+        _save_knowledge({
+            "type": "correction",
+            "summary": design_doc.get("summary", ""),
+            "correction": req.correction,
+            "original_steps": design_doc.get("processing_steps", []),
+        })
+        return {"status": "saved", "message": "修正内容をナレッジに保存しました"}
+
+
 # --- フロントエンド配信 ---
 FRONTEND_PATH = BASE_DIR / "frontend"
 
@@ -693,6 +732,10 @@ async def index():
     return html_path.read_text(encoding="utf-8")
 
 
-@app.get("/doala.png")
-async def doala_image():
-    return FileResponse(FRONTEND_PATH / "doala.png", media_type="image/png")
+@app.get("/bdash_hakase.png")
+async def avatar_image():
+    return FileResponse(FRONTEND_PATH / "bdash_hakase.png", media_type="image/png")
+
+@app.get("/favicon.png")
+async def favicon():
+    return FileResponse(FRONTEND_PATH / "favicon.png", media_type="image/png")
