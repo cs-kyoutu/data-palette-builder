@@ -938,19 +938,13 @@
     if (outputTextMode) {
       const text = document.getElementById("outputTextInput").value.trim();
       finalOutputMapping = parseOutputDefinition(text);
-      console.log("[DEBUG] parsed output columns:", finalOutputMapping.columns.length);
-    }
-    // パース結果が空でもraw_textがあればadditional_contextに含めて送る
-    if (!finalOutputMapping || !finalOutputMapping.columns || finalOutputMapping.columns.length === 0) {
-      const rawText = outputTextMode ? document.getElementById("outputTextInput").value.trim() : "";
-      if (rawText) {
-        finalOutputMapping = { columns: [], raw_text: rawText };
-        console.log("[DEBUG] fallback: sending raw_text", rawText.length, "chars");
-      }
     }
 
-    // インプット
+    // インプットもテキストモードの場合はパース結果を使う
     let finalInputTables = inputTables;
+    if (!finalInputTables || finalInputTables.length === 0) {
+      finalInputTables = inputTables;
+    }
 
     // AIエリア表示
     const aiArea = document.getElementById("aiArea");
