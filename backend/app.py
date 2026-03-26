@@ -489,7 +489,7 @@ async def generate(req: GenerateRequest):
                 generation_data = json.loads(json_str)
             except json.JSONDecodeError:
                 # 閉じ括弧が足りない場合、補完を試みる
-                for fix in ["}", "]}", "]}}", "]}]}}"]:
+                for fix in ['"}', '"]}', '"]}}', '"]}}}', "}", "]}", "]}}", "]}]}}"]:
                     try:
                         generation_data = json.loads(json_str + fix)
                         print(f"[DEBUG] JSON fixed with: {fix}")
@@ -648,7 +648,7 @@ async def chat(req: ChatRequest):
             try:
                 generation_data = json.loads(json_str)
             except json.JSONDecodeError:
-                for fix in ["}", "]}", "]}}", "]}]}}"]:
+                for fix in ['"}', '"]}', '"]}}', '"]}}}', "}", "]}", "]}}", "]}]}}"]:
                     try:
                         generation_data = json.loads(json_str + fix)
                         break
