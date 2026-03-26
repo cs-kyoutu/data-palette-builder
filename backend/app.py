@@ -466,7 +466,7 @@ async def generate(req: GenerateRequest):
                 try:
                     response2 = client.messages.create(
                         model="claude-sonnet-4-20250514",
-                        max_tokens=8000,
+                        max_tokens=16000,
                         system=step2_prompt,
                         messages=session["messages_step2"],
                     )
@@ -628,7 +628,7 @@ async def chat(req: ChatRequest):
                 try:
                     response2 = client.messages.create(
                         model="claude-sonnet-4-20250514",
-                        max_tokens=8000,
+                        max_tokens=16000,
                         system=step2_prompt,
                         messages=session["messages_step2"],
                     )
