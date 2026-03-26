@@ -1172,6 +1172,7 @@
   }
 
 
+  function parseAiQuestions(text) {
     // A) B) C) or 1) 2) 3) or ① ② ③ 形式の選択肢を検出
     const lines = text.split("\n");
     const optionPattern = /^\s*(?:[A-C]\)|[①②③]|[1-3]\))\s*(.+)/;
