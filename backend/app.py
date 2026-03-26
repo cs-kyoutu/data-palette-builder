@@ -346,6 +346,42 @@ def get_system_prompt(input_tables: list[dict], output_mapping: dict) -> str:
 # generate_procedure_text は template_engine.py からインポート済み
 
 
+def _parse_json_with_repair(json_str: str) -> dict:
+    """JSONパース。途中で切れてる場合は閉じ括弧を補完して修復を試みる"""
+    # まず普通にパース
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        pass
+
+    # 修復パターンを試す（短い→長い順）
+    repair_suffixes = [
+        '"}', '"]}', '"]}}', '"]}}}', '"]}}}}',
+        '}', ']}', ']}}'  , ']}}}', ']}}}}'  ,
+        '"}]}', '"]}]}', '"]}}]}',
+        '"}]}}', '"]}]}}',
+    ]
+    for fix in repair_suffixes:
+        try:
+            data = json.loads(json_str + fix)
+            print(f"[DEBUG] JSON repaired with suffix: {repr(fix)}")
+            return data
+        except json.JSONDecodeError:
+            continue
+
+    # 最後の手段：最後の完全なオブジェクト/配列までで切る
+    for i in range(len(json_str) - 1, 0, -1):
+        if json_str[i] in ('}', ']'):
+            try:
+                data = json.loads(json_str[:i+1])
+                print(f"[DEBUG] JSON repaired by truncating at position {i}")
+                return data
+            except json.JSONDecodeError:
+                continue
+
+    raise json.JSONDecodeError("Cannot repair truncated JSON", json_str, 0)
+
+
 # --- APIエンドポイント ---
 
 @app.get("/api/industries")
@@ -485,20 +521,8 @@ async def generate(req: GenerateRequest):
         try:
             json_str = assistant_text.split("```json")[1].split("```")[0].strip()
             # JSONが途中で切れてる場合の修復を試みる
-            try:
-                generation_data = json.loads(json_str)
-            except json.JSONDecodeError:
-                # 閉じ括弧が足りない場合、補完を試みる
-                for fix in ['"}', '"]}', '"]}}', '"]}}}', "}", "]}", "]}}", "]}]}}"]:
-                    try:
-                        generation_data = json.loads(json_str + fix)
-                        print(f"[DEBUG] JSON fixed with: {fix}")
-                        break
-                    except json.JSONDecodeError:
-                        continue
-                else:
-                    raise json.JSONDecodeError("Cannot fix truncated JSON", json_str, 0)
-
+            # JSONパース（切れてたら修復を試みる）
+            generation_data = _parse_json_with_repair(json_str)
             print(f"[DEBUG] action={generation_data.get('action')}, steps={len(generation_data.get('processing_steps', []))}")
 
             if generation_data.get("action") == "generate":
@@ -645,17 +669,7 @@ async def chat(req: ChatRequest):
     if "```json" in assistant_text:
         try:
             json_str = assistant_text.split("```json")[1].split("```")[0].strip()
-            try:
-                generation_data = json.loads(json_str)
-            except json.JSONDecodeError:
-                for fix in ['"}', '"]}', '"]}}', '"]}}}', "}", "]}", "]}}", "]}]}}"]:
-                    try:
-                        generation_data = json.loads(json_str + fix)
-                        break
-                    except json.JSONDecodeError:
-                        continue
-                else:
-                    raise json.JSONDecodeError("Cannot fix truncated JSON", json_str, 0)
+            generation_data = _parse_json_with_repair(json_str)
 
             if generation_data.get("action") == "generate":
                 filepath, filename = build_spreadsheet(generation_data)
