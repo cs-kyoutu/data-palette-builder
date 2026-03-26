@@ -464,8 +464,10 @@ async def generate(req: GenerateRequest):
 
     # === Step1: 方針決定（軽量、Skills無し） ===
     user_message = "アウトプットを実現するための処理方針を決めてください。"
-    if req.additional_context:
-        user_message += f"\n\nアウトプット定義の原文:\n{req.additional_context[:3000]}"
+    # additional_contextまたはraw_textからアウトプット原文を取得
+    raw_text = req.additional_context or req.output_mapping.get("raw_text", "")
+    if raw_text:
+        user_message += f"\n\nアウトプット定義の原文:\n{raw_text[:3000]}"
 
     session["messages"].append({"role": "user", "content": user_message})
 
