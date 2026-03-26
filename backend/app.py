@@ -484,7 +484,22 @@ async def generate(req: GenerateRequest):
     if "```json" in assistant_text:
         try:
             json_str = assistant_text.split("```json")[1].split("```")[0].strip()
-            generation_data = json.loads(json_str)
+            # JSONが途中で切れてる場合の修復を試みる
+            try:
+                generation_data = json.loads(json_str)
+            except json.JSONDecodeError:
+                # 閉じ括弧が足りない場合、補完を試みる
+                for fix in ["}", "]}", "]}}", "]}]}}"]:
+                    try:
+                        generation_data = json.loads(json_str + fix)
+                        print(f"[DEBUG] JSON fixed with: {fix}")
+                        break
+                    except json.JSONDecodeError:
+                        continue
+                else:
+                    raise json.JSONDecodeError("Cannot fix truncated JSON", json_str, 0)
+
+            print(f"[DEBUG] action={generation_data.get('action')}, steps={len(generation_data.get('processing_steps', []))}")
 
             if generation_data.get("action") == "generate":
                 filepath, filename = build_spreadsheet(generation_data)
@@ -560,8 +575,9 @@ async def generate(req: GenerateRequest):
                         status="asking",
                     )
 
-        except (json.JSONDecodeError, IndexError):
-            pass
+        except (json.JSONDecodeError, IndexError) as e:
+            print(f"[DEBUG] JSON parse error in generate: {e}")
+            print(f"[DEBUG] assistant_text[:200]: {assistant_text[:200]}")
 
     # 質問を返している場合
     return ChatResponse(
@@ -625,11 +641,21 @@ async def chat(req: ChatRequest):
     else:
         assistant_text = step1_text
 
-    # JSON生成チェック（design → Phase2自動実行）
+    # JSON生成チェック（design → Phase3自動実行）
     if "```json" in assistant_text:
         try:
             json_str = assistant_text.split("```json")[1].split("```")[0].strip()
-            generation_data = json.loads(json_str)
+            try:
+                generation_data = json.loads(json_str)
+            except json.JSONDecodeError:
+                for fix in ["}", "]}", "]}}", "]}]}}"]:
+                    try:
+                        generation_data = json.loads(json_str + fix)
+                        break
+                    except json.JSONDecodeError:
+                        continue
+                else:
+                    raise json.JSONDecodeError("Cannot fix truncated JSON", json_str, 0)
 
             if generation_data.get("action") == "generate":
                 filepath, filename = build_spreadsheet(generation_data)
