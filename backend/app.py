@@ -417,6 +417,15 @@ async def generate(req: GenerateRequest):
 
     session = sessions[session_id]
 
+    # デバッグログ
+    print(f"[DEBUG] input_tables: {len(req.input_tables)} tables")
+    for t in req.input_tables[:3]:
+        print(f"  - {t.get('table_name', '???')}: {len(t.get('columns', []))} cols")
+    print(f"[DEBUG] output_mapping columns: {len(req.output_mapping.get('columns', []))}")
+    if req.output_mapping.get('columns'):
+        print(f"  - first: {req.output_mapping['columns'][0].get('name', '???')}")
+    print(f"[DEBUG] additional_context: {len(req.additional_context)} chars")
+
     # === Step1: 方針決定（軽量、Skills無し） ===
     user_message = "アウトプットを実現するための処理方針を決めてください。"
     if req.additional_context:
