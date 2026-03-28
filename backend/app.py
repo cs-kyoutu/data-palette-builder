@@ -31,7 +31,7 @@ from .parser import (
     parse_output_excel, parse_output_csv,
 )
 from .excel_builder import build_spreadsheet
-from .template_engine import generate_procedure_text
+from .template_engine import generate_procedure_text, render_step
 
 app = FastAPI(title="データパレット構築手順書ジェネレータ")
 app.add_middleware(
