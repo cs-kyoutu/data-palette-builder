@@ -618,7 +618,7 @@ async def generate(req: GenerateRequest):
                     steps = generation_data.get("processing_steps", [])
                     groups = generation_data.get("processing_groups", [])
 
-                    # 結合・加工シートのrows構築
+                    # 結合・加工シートのrows構築（シート2フォーマット: 12列）
                     proc_rows = []
                     step_num = 1
                     for s in steps:
@@ -632,14 +632,32 @@ async def generate(req: GenerateRequest):
                         settings = s.get("settings", {})
                         if not isinstance(settings, dict):
                             settings = {}
-                        use_data = settings.get("左ファイル", "") or settings.get("left_data", "") or settings.get("left_file", "") or settings.get("対象カラム", "") or ""
                         save_as = s.get("save_as", "")
-                        result = s.get("result", "")
+
+                        # テンプレートテキスト生成（E列用）
                         try:
-                            step_text = render_step(s)
-                        except Exception as te:
-                            step_text = f"『{op}』\n（テンプレート変換エラー: {te}）"
-                        proc_rows.append([sn, op, use_data, step_text, save_as, result, "", ""])
+                            template_text = render_step(s)
+                        except Exception:
+                            template_text = f"『{op}』"
+
+                        # パラメータ値を抽出（G〜K列用、最大5個）
+                        param_values = []
+                        for v in list(settings.values())[:5]:
+                            if isinstance(v, list):
+                                parts = [json.dumps(item, ensure_ascii=False) if isinstance(item, dict) else str(item) for item in v]
+                                param_values.append(", ".join(parts))
+                            elif isinstance(v, dict):
+                                param_values.append(json.dumps(v, ensure_ascii=False))
+                            else:
+                                param_values.append(str(v))
+                        while len(param_values) < 5:
+                            param_values.append("")
+
+                        # 完成形テキスト（L列用）
+                        complete_text = template_text
+
+                        # [sn, op, unused, template_text, save_as, unused, p1, p2, p3, p4, p5, complete]
+                        proc_rows.append([sn, op, "", template_text, save_as, "", *param_values, complete_text])
 
                     excel_data = {
                         "action": "generate",
@@ -648,7 +666,7 @@ async def generate(req: GenerateRequest):
                             {
                                 "sheet_name": "結合・加工",
                                 "title": "手順書",
-                                "columns": ["Step", "操作種別", "使用データ", "操作内容・設定値", "保存ファイル名", "結果の状態", "確認ポイント", "備考"],
+                                "columns": ["対象作業No", "アイコン", "", "アイコン利用方法", "作成後項目名", "", "対象1", "対象2", "対象3", "対象4", "対象5", "完成形テキスト"],
                                 "rows": proc_rows,
                             }
                         ],
@@ -787,20 +805,22 @@ async def chat(req: ChatRequest):
                         settings = s.get("settings", {})
                         if not isinstance(settings, dict):
                             settings = {}
-                        use_data = settings.get("左ファイル", "") or settings.get("left_data", "") or settings.get("left_file", "") or ""
                         save_as = s.get("save_as", "")
-                        result = s.get("result", "")
                         try:
-                            step_text = render_step(s)
+                            template_text = render_step(s)
                         except Exception:
-                            step_text = f"『{op}』"
-                        proc_rows.append([sn, op, use_data, step_text, save_as, result, "", ""])
+                            template_text = f"『{op}』"
+                        param_values = list(settings.values())[:5]
+                        param_values = [", ".join(v) if isinstance(v, list) else str(v) if not isinstance(v, str) else v for v in param_values]
+                        while len(param_values) < 5:
+                            param_values.append("")
+                        proc_rows.append([sn, op, "", template_text, save_as, "", *param_values, template_text])
 
                     excel_data = {
                         "action": "generate",
                         "title": generation_data.get("summary", "データパレット構築手順書"),
                         "sections": [{"sheet_name": "結合・加工", "title": "手順書",
-                            "columns": ["Step", "操作種別", "使用データ", "操作内容・設定値", "保存ファイル名", "結果の状態", "確認ポイント", "備考"],
+                            "columns": ["対象作業No", "アイコン", "", "アイコン利用方法", "作成後項目名", "", "対象1", "対象2", "対象3", "対象4", "対象5", "完成形テキスト"],
                             "rows": proc_rows}],
                     }
                     filepath, filename = build_spreadsheet(excel_data)

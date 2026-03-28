@@ -25,16 +25,20 @@ def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
     STEP_MARKS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩",
                   "⑪", "⑫", "⑬", "⑭", "⑮", "⑯", "⑰", "⑱", "⑲", "⑳"]
 
-    # --- 列幅設定 ---
+    # --- 列幅設定（シート2フォーマット準拠） ---
     ws.column_dimensions["A"].width = 4
-    ws.column_dimensions["B"].width = 5   # ①②③
-    ws.column_dimensions["C"].width = 5   # サブ番号
-    ws.column_dimensions["D"].width = 14  # 操作種別
-    ws.column_dimensions["E"].width = 18  # 使用データ
-    ws.column_dimensions["F"].width = 60  # 操作内容・設定値（メイン）
-    ws.column_dimensions["G"].width = 25  # 保存ファイル名
-    ws.column_dimensions["H"].width = 25  # 結果の状態
-    for c in "IJKLMNOPQRSTU":
+    ws.column_dimensions["B"].width = 8    # 対象作業No（①②③）
+    ws.column_dimensions["C"].width = 8    # 作業詳細No.
+    ws.column_dimensions["D"].width = 12   # アイコン（操作名）
+    ws.column_dimensions["E"].width = 45   # アイコン利用方法（テンプレートテキスト）
+    ws.column_dimensions["F"].width = 20   # 作成後項目名
+    ws.column_dimensions["G"].width = 18   # 対象1（パラメータ1）
+    ws.column_dimensions["H"].width = 18   # 対象2
+    ws.column_dimensions["I"].width = 18   # 対象3
+    ws.column_dimensions["J"].width = 18   # 対象4
+    ws.column_dimensions["K"].width = 18   # 対象5
+    ws.column_dimensions["L"].width = 50   # 完成形テキスト
+    for c in "MNOPQRSTU":
         ws.column_dimensions[c].width = 13
 
     # --- セクション帯を書く関数 ---
@@ -90,55 +94,76 @@ def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
     write_section_header(cur_row, "■ 手順書")
     cur_row += 1
 
+    # ヘッダー行
+    headers_left = ["", "対象\n作業No", "作業\n詳細No.", "アイコン", "アイコン利用方法", "作成後\n項目名"]
+    headers_right = ["手順書作成用項目1", "手順書作成用項目2", "手順書作成用項目3", "手順書作成用項目4", "手順書作成用項目5", "完成形テキスト"]
+    for j, h in enumerate(headers_left):
+        cell = ws.cell(row=cur_row, column=j + 1, value=h)
+        cell.font = font9_bold
+        cell.alignment = wrap
+    for j, h in enumerate(headers_right):
+        cell = ws.cell(row=cur_row, column=7 + j, value=h)
+        cell.font = font9_bold
+        cell.alignment = wrap
+    cur_row += 1
+
     if proc_sec and proc_sec.get("rows"):
         proc_rows = proc_sec["rows"]
-        step_counter = 0  # ①②③ のカウンタ
+        step_counter = 0
 
         for p_idx, p_row in enumerate(proc_rows):
-            cur_row += 1  # 空行（各ステップ間に空行）
+            # p_row format: [step_val, op_type, use_data, template_text, save_as, result, param1, param2, param3, param4, param5, complete_text]
+            step_val = p_row[0] if len(p_row) > 0 else ""
+            op_type = p_row[1] if len(p_row) > 1 else ""
+            template_text = p_row[3] if len(p_row) > 3 else ""
+            save_as = p_row[4] if len(p_row) > 4 else ""
+            # パラメータ値（G〜K列）
+            params = []
+            for pi in range(6, min(len(p_row), 11)):
+                params.append(p_row[pi] if pi < len(p_row) else "")
+            # 完成形テキスト
+            complete_text = p_row[11] if len(p_row) > 11 else ""
 
-            step_val = p_row[0] if len(p_row) > 0 else ""  # Step番号
-            op_type = p_row[1] if len(p_row) > 1 else ""   # 操作種別
-            # 設定値は列3（操作内容・設定値）を使う
-            settings = p_row[3] if len(p_row) > 3 else ""
-
-            # B列: ステップマーク（①②③...） - Step番号がある場合のみ
+            # B列: 対象作業No（①②③）
             if step_val and str(step_val).strip():
                 mark = STEP_MARKS[step_counter] if step_counter < len(STEP_MARKS) else f"({step_counter+1})"
                 ws.cell(row=cur_row, column=2, value=mark).font = font9
                 step_counter += 1
 
-            # C列: サブ番号
-            sub_num = str(p_row[0]).strip() if len(p_row) > 0 and p_row[0] else ""
+            # C列: 作業詳細No.
+            sub_num = str(step_val).strip() if step_val else ""
             if sub_num:
-                # 数値なら数値で、それ以外はテキストで
                 try:
                     ws.cell(row=cur_row, column=3, value=float(sub_num)).font = font9
                 except (ValueError, TypeError):
                     ws.cell(row=cur_row, column=3, value=sub_num).font = font9
 
-            # D列: 操作種別
+            # D列: アイコン（操作名）
             ws.cell(row=cur_row, column=4, value=op_type).font = font9
 
-            # E列: 使用データ
-            use_data = p_row[2] if len(p_row) > 2 else ""
-            if use_data:
-                ws.cell(row=cur_row, column=5, value=use_data).font = font9
+            # E列: アイコン利用方法（テンプレートテキスト）
+            tmpl_cell = ws.cell(row=cur_row, column=5, value=template_text)
+            tmpl_cell.font = font9
+            tmpl_cell.alignment = wrap
 
-            # F列: 操作内容・設定値（改行あり、幅広）
-            settings_cell = ws.cell(row=cur_row, column=6, value=settings)
-            settings_cell.font = font9
-            settings_cell.alignment = wrap
-
-            # G列: 保存ファイル名
-            save_as = p_row[4] if len(p_row) > 4 else ""
+            # F列: 作成後項目名
             if save_as:
-                ws.cell(row=cur_row, column=7, value=save_as).font = font9
+                ws.cell(row=cur_row, column=6, value=save_as).font = font9
 
-            # H列: 結果の状態
-            result = p_row[5] if len(p_row) > 5 else ""
-            if result:
-                ws.cell(row=cur_row, column=8, value=result).font = font9
+            # G〜K列: パラメータ値（対象1〜5）
+            for pi, pval in enumerate(params):
+                if pval:
+                    cell = ws.cell(row=cur_row, column=7 + pi, value=str(pval))
+                    cell.font = font9
+                    cell.alignment = wrap
+
+            # L列: 完成形テキスト
+            if complete_text:
+                comp_cell = ws.cell(row=cur_row, column=12, value=complete_text)
+                comp_cell.font = font9
+                comp_cell.alignment = wrap
+
+            cur_row += 1
 
     cur_row += 2  # 空行
 
