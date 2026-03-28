@@ -33,6 +33,8 @@ def _normalize_settings(op: str, settings: dict) -> dict:
                 "COUNT": "カウント", "UNIQUE_COUNT": "ユニークカウント",
                 "max": "最大値", "min": "最小値", "sum": "合計", "avg": "平均",
                 "count": "カウント", "unique_count": "ユニークカウント",
+                "COUNT_DISTINCT": "ユニークカウント", "count_distinct": "ユニークカウント",
+                "DISTINCT_COUNT": "ユニークカウント", "distinct_count": "ユニークカウント",
                 "最大値": "最大値", "最小値": "最小値", "合計": "合計", "平均": "平均",
                 "カウント": "カウント", "ユニークカウント": "ユニークカウント",
                 "最新": "最新日時", "最古": "最古日時", "行結合": "行結合",
@@ -84,17 +86,27 @@ def _normalize_settings(op: str, settings: dict) -> dict:
 
     # 時刻演算
     if "時刻演算" in op:
-        if "target_column" in s:
-            s["対象カラム"] = s.pop("target_column")
-        if "unit" in s:
-            s["単位"] = s.pop("unit")
-        if "new_column" in s:
-            s["保存名"] = s.pop("new_column")
+        # キーのエイリアス変換
+        for alias, target in [("target_column", "対象カラム"), ("left", "引かれる値"),
+                              ("left_operand", "引かれる値"), ("right", "引く値"),
+                              ("right_operand", "引く値"), ("unit", "算出単位"),
+                              ("new_column", "保存名"), ("column_name", "保存名")]:
+            if alias in s and target not in s:
+                s[target] = s.pop(alias)
         if "operation" in s:
             op_val = s.pop("operation")
-            if "現在" in op_val or "本日" in op_val:
-                s["本日種別"] = "本日の日付"
-                s["演算子"] = "-"
+            if "現在" in op_val or "本日" in op_val or "差" in op_val:
+                if "引かれる値" not in s:
+                    s["引かれる値"] = "本日の日付"
+                if "引く値" not in s and "対象カラム" in s:
+                    s["引く値"] = s.pop("対象カラム")
+        if "operator" in s:
+            s.pop("operator")
+        # 対象カラム→引かれる値/引く値への変換
+        if "対象カラム" in s and "引く値" not in s:
+            s["引く値"] = s.pop("対象カラム")
+            if "引かれる値" not in s:
+                s["引かれる値"] = "本日の日付"
 
     # 削除
     if "削除" in op:
@@ -106,8 +118,20 @@ def _normalize_settings(op: str, settings: dict) -> dict:
     if "カラム名変更" in op or "カラム名の変更" in op:
         if "changes" in s:
             changes = s.pop("changes")
-            parts = [f"「{c.get('from', '')}」を\"{c.get('to', '')}\"に変更する" for c in changes]
-            s["変更内容"] = "\n".join(parts)
+            if isinstance(changes, list):
+                parts = []
+                for c in changes:
+                    if isinstance(c, dict):
+                        parts.append(f"「{c.get('from', '')}」を\"{c.get('to', '')}\"に変更する")
+                s["変更内容"] = "\n".join(parts)
+        if "renames" in s:
+            renames = s.pop("renames")
+            if isinstance(renames, list):
+                parts = []
+                for c in renames:
+                    if isinstance(c, dict):
+                        parts.append(f"「{c.get('from', '')}」を\"{c.get('to', '')}\"に変更する")
+                s["変更内容"] = "\n".join(parts)
 
     # 追加
     if "追加" in op:
