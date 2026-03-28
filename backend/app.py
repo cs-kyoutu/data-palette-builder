@@ -622,16 +622,23 @@ async def generate(req: GenerateRequest):
                     proc_rows = []
                     step_num = 1
                     for s in steps:
-                        sn = str(step_num) if s.get("step") else ""
-                        if s.get("step"):
+                        if not isinstance(s, dict):
+                            continue
+                        step_val = s.get("step", "")
+                        sn = str(step_num) if step_val else ""
+                        if step_val:
                             step_num += 1
                         op = s.get("operation", "")
-                        use_data = s.get("settings", {}).get("左ファイル", "") or s.get("settings", {}).get("対象カラム", "")
+                        settings = s.get("settings", {})
+                        if not isinstance(settings, dict):
+                            settings = {}
+                        use_data = settings.get("左ファイル", "") or settings.get("left_data", "") or settings.get("left_file", "") or settings.get("対象カラム", "") or ""
                         save_as = s.get("save_as", "")
                         result = s.get("result", "")
-                        # テンプレートエンジンで手順テキスト生成
-                        from .template_engine import render_step
-                        step_text = render_step(s)
+                        try:
+                            step_text = render_step(s)
+                        except Exception as te:
+                            step_text = f"『{op}』\n（テンプレート変換エラー: {te}）"
                         proc_rows.append([sn, op, use_data, step_text, save_as, result, "", ""])
 
                     excel_data = {
@@ -770,15 +777,23 @@ async def chat(req: ChatRequest):
                     proc_rows = []
                     step_num = 1
                     for s in steps:
-                        sn = str(step_num) if s.get("step") else ""
-                        if s.get("step"):
+                        if not isinstance(s, dict):
+                            continue
+                        step_val = s.get("step", "")
+                        sn = str(step_num) if step_val else ""
+                        if step_val:
                             step_num += 1
                         op = s.get("operation", "")
-                        use_data = s.get("settings", {}).get("左ファイル", "") or ""
+                        settings = s.get("settings", {})
+                        if not isinstance(settings, dict):
+                            settings = {}
+                        use_data = settings.get("左ファイル", "") or settings.get("left_data", "") or settings.get("left_file", "") or ""
                         save_as = s.get("save_as", "")
                         result = s.get("result", "")
-                        from .template_engine import render_step as _render_step
-                        step_text = _render_step(s)
+                        try:
+                            step_text = render_step(s)
+                        except Exception:
+                            step_text = f"『{op}』"
                         proc_rows.append([sn, op, use_data, step_text, save_as, result, "", ""])
 
                     excel_data = {
