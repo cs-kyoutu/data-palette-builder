@@ -25,9 +25,16 @@ def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
     STEP_MARKS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩",
                   "⑪", "⑫", "⑬", "⑭", "⑮", "⑯", "⑰", "⑱", "⑲", "⑳"]
 
-    # --- 列幅設定（均一グリッド） ---
+    # --- 列幅設定 ---
     ws.column_dimensions["A"].width = 4
-    for c in "BCDEFGHIJKLMNOPQRSTU":
+    ws.column_dimensions["B"].width = 5   # ①②③
+    ws.column_dimensions["C"].width = 5   # サブ番号
+    ws.column_dimensions["D"].width = 14  # 操作種別
+    ws.column_dimensions["E"].width = 18  # 使用データ
+    ws.column_dimensions["F"].width = 60  # 操作内容・設定値（メイン）
+    ws.column_dimensions["G"].width = 25  # 保存ファイル名
+    ws.column_dimensions["H"].width = 25  # 結果の状態
+    for c in "IJKLMNOPQRSTU":
         ws.column_dimensions[c].width = 13
 
     # --- セクション帯を書く関数 ---
@@ -113,10 +120,25 @@ def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
             # D列: 操作種別
             ws.cell(row=cur_row, column=4, value=op_type).font = font9
 
-            # J列: 設定値（改行あり）
-            settings_cell = ws.cell(row=cur_row, column=10, value=settings)
+            # E列: 使用データ
+            use_data = p_row[2] if len(p_row) > 2 else ""
+            if use_data:
+                ws.cell(row=cur_row, column=5, value=use_data).font = font9
+
+            # F列: 操作内容・設定値（改行あり、幅広）
+            settings_cell = ws.cell(row=cur_row, column=6, value=settings)
             settings_cell.font = font9
             settings_cell.alignment = wrap
+
+            # G列: 保存ファイル名
+            save_as = p_row[4] if len(p_row) > 4 else ""
+            if save_as:
+                ws.cell(row=cur_row, column=7, value=save_as).font = font9
+
+            # H列: 結果の状態
+            result = p_row[5] if len(p_row) > 5 else ""
+            if result:
+                ws.cell(row=cur_row, column=8, value=result).font = font9
 
     cur_row += 2  # 空行
 
