@@ -16,6 +16,8 @@ def _load_masters():
 
 def _normalize_settings(op: str, settings: dict) -> dict:
     """AIが出力するsettingsキーをoperation_masters.yamlのパラメータ名に変換"""
+    if not isinstance(settings, dict):
+        return {"raw": str(settings)}
     s = dict(settings)
 
     # 集約
@@ -379,9 +381,14 @@ def render_processing_group(group: dict) -> str:
     if name:
         lines.append(f"【{name}】")
     for step in group.get("steps", []):
-        text = render_step(step)
-        if text:
-            lines.append(text)
+        if not isinstance(step, dict):
+            continue
+        try:
+            text = render_step(step)
+            if text:
+                lines.append(text)
+        except Exception:
+            lines.append(f"『{step.get('operation', '不明')}』")
     save_as = group.get("save_as", "")
     if save_as:
         lines.append(f'データファイル名を"{save_as}"にして保存する。')
