@@ -27,10 +27,21 @@ def _normalize_settings(op: str, settings: dict) -> dict:
             s["集約キーカラム"] = "、".join(keys) if isinstance(keys, list) else keys
         if "aggregations" in s:
             aggs = s.pop("aggregations")
+            # SQL名→b→dash名の変換
+            FUNC_ALIAS = {
+                "MAX": "最大値", "MIN": "最小値", "SUM": "合計", "AVG": "平均",
+                "COUNT": "カウント", "UNIQUE_COUNT": "ユニークカウント",
+                "max": "最大値", "min": "最小値", "sum": "合計", "avg": "平均",
+                "count": "カウント", "unique_count": "ユニークカウント",
+                "最大値": "最大値", "最小値": "最小値", "合計": "合計", "平均": "平均",
+                "カウント": "カウント", "ユニークカウント": "ユニークカウント",
+                "最新": "最新日時", "最古": "最古日時", "行結合": "行結合",
+            }
             agg_parts = []
             for a in aggs:
                 col = a.get("column", "")
-                func = a.get("function", "")
+                func_raw = a.get("function", "")
+                func = FUNC_ALIAS.get(func_raw, func_raw)
                 new_col = a.get("new_column", "")
                 agg_parts.append(f"「{col}」を《{func}》で集約")
             s["集計設定"] = "\n".join(agg_parts)
@@ -38,7 +49,9 @@ def _normalize_settings(op: str, settings: dict) -> dict:
             rename_parts = []
             for a in aggs:
                 if a.get("new_column"):
-                    rename_parts.append(f"「{a['column']}({a['function']})」を\"{a['new_column']}\"に変更する")
+                    func_raw = a.get("function", "")
+                    func = FUNC_ALIAS.get(func_raw, func_raw)
+                    rename_parts.append(f"「{a['column']}({func})」を\"{a['new_column']}\"に変更する")
             if rename_parts:
                 s["カラム名変更"] = "\n".join(rename_parts)
 
