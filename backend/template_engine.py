@@ -198,6 +198,60 @@ def _normalize_settings(op: str, settings: dict) -> dict:
         if "max_items" in s:
             s["件数"] = s.pop("max_items")
 
+    # 抽出
+    if "抽出" in op:
+        for alias, target in [("column", "抽出対象項目"), ("extract_type", "抽出方法"),
+                              ("characters", "文字数"), ("data_type", "データ型"),
+                              ("new_column_name", "保存名"), ("target_column", "抽出対象項目")]:
+            if alias in s and target not in s:
+                s[target] = s.pop(alias)
+        # 抽出方法のエイリアス
+        method_alias = {"末尾から": "末尾", "先頭から": "先頭", "中間": "中間"}
+        if "抽出方法" in s:
+            s["抽出方法"] = method_alias.get(s["抽出方法"], s["抽出方法"])
+
+    # IF文
+    if "IF文" in op or "IF" in op:
+        if "column" in s and "対象項目" not in s:
+            s["対象項目"] = s.pop("column")
+        if "conditions" in s:
+            conds = s.pop("conditions")
+            if isinstance(conds, list):
+                parts = []
+                for c in conds:
+                    if isinstance(c, dict):
+                        cond = c.get("condition", "")
+                        match = c.get("match_type", "完全一致")
+                        result = c.get("result", "")
+                        parts.append(f"「{s.get('対象項目', '')}」が\"{cond}\"《{match}》の場合、\"{result}\"に変換")
+                if "else" in s:
+                    else_val = s.pop("else")
+                    parts.append(f"いずれの条件分岐にも該当しない場合、\"{else_val}\"に変換")
+                s["条件"] = "\n".join(parts)
+        if "new_column_name" in s and "保存名" not in s:
+            s["保存名"] = s.pop("new_column_name")
+
+    # 型変換
+    if "型変換" in op:
+        for alias, target in [("column", "変換対象項目"), ("convert_to", "変換後の型"),
+                              ("error_handling", "エラー処理"), ("new_column_name", "保存名"),
+                              ("target_column", "変換対象項目")]:
+            if alias in s and target not in s:
+                s[target] = s.pop(alias)
+
+    # テンプレート年齢算出
+    if "テンプレート" in op and "年齢" in op:
+        if "birth_date_column" in s and "生年月日カラム" not in s:
+            s["生年月日カラム"] = s.pop("birth_date_column")
+
+    # 置換
+    if "置換" in op:
+        for alias, target in [("column", "置換対象項目"), ("search_type", "検索種別"),
+                              ("before", "置換前"), ("after", "置換後"),
+                              ("target_column", "置換対象項目")]:
+            if alias in s and target not in s:
+                s[target] = s.pop(alias)
+
     return s
 
 
