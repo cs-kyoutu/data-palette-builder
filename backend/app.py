@@ -363,37 +363,84 @@ def get_system_prompt(input_tables: list[dict], output_mapping: dict) -> str:
 
 
 def _parse_json_with_repair(json_str: str) -> dict:
-    """JSONパース。途中で切れてる場合は閉じ括弧を補完して修復を試みる"""
+    """JSONパース。途中で切れてる場合は修復を試みる"""
     # まず普通にパース
     try:
         return json.loads(json_str)
     except json.JSONDecodeError:
         pass
 
-    # 修復パターンを試す（短い→長い順）
-    repair_suffixes = [
-        '"}', '"]}', '"]}}', '"]}}}', '"]}}}}',
-        '}', ']}', ']}}'  , ']}}}', ']}}}}'  ,
-        '"}]}', '"]}]}', '"]}}]}',
-        '"}]}}', '"]}]}}',
-    ]
-    for fix in repair_suffixes:
-        try:
-            data = json.loads(json_str + fix)
-            print(f"[DEBUG] JSON repaired with suffix: {repr(fix)}")
-            return data
-        except json.JSONDecodeError:
-            continue
-
-    # 最後の手段：最後の完全なオブジェクト/配列までで切る
+    # 戦略1: 最後の完全な閉じ括弧まで切り詰める（最も確実）
+    # processing_stepsの最後の完全なstepまでを取得
     for i in range(len(json_str) - 1, 0, -1):
         if json_str[i] in ('}', ']'):
+            # そこまでで切って、足りない括弧を補完
+            truncated = json_str[:i+1]
+            # 開き括弧と閉じ括弧の差分を計算
+            open_braces = truncated.count('{') - truncated.count('}')
+            open_brackets = truncated.count('[') - truncated.count(']')
+            suffix = ']' * open_brackets + '}' * open_braces
             try:
-                data = json.loads(json_str[:i+1])
-                print(f"[DEBUG] JSON repaired by truncating at position {i}")
+                data = json.loads(truncated + suffix)
+                print(f"[DEBUG] JSON repaired by truncating at {i} + suffix {repr(suffix)}")
                 return data
             except json.JSONDecodeError:
                 continue
+
+    # 戦略2: processing_stepsだけ抽出
+    if '"processing_steps"' in json_str:
+        try:
+            # processing_stepsの開始位置を見つける
+            steps_start = json_str.index('"processing_steps"')
+            # その前までのヘッダー部分を取得
+            header = json_str[:steps_start]
+            # processing_steps配列内の最後の完全なオブジェクトを見つける
+            rest = json_str[steps_start:]
+            bracket_start = rest.index('[')
+            steps_content = rest[bracket_start:]
+
+            # 最後の "}," または "}" を見つけて切る
+            last_complete = -1
+            for j in range(len(steps_content) - 1, 0, -1):
+                if steps_content[j] == '}':
+                    test = steps_content[:j+1]
+                    open_b = test.count('[') - test.count(']')
+                    close_suffix = ']' * open_b
+                    try:
+                        json.loads('{"test":' + test + close_suffix + '}')
+                        last_complete = j
+                        break
+                    except:
+                        continue
+
+            if last_complete > 0:
+                fixed_steps = steps_content[:last_complete+1]
+                open_brackets = fixed_steps.count('[') - fixed_steps.count(']')
+                fixed_steps += ']' * open_brackets
+                full_json = header + '"processing_steps": ' + fixed_steps + '}'
+                data = json.loads(full_json)
+                print(f"[DEBUG] JSON repaired via steps extraction")
+                return data
+        except Exception:
+            pass
+
+    # 戦略3: 文字列の途中切れを処理（未閉じのダブルクォートを閉じる）
+    # 最後のダブルクォートの位置を確認
+    cleaned = json_str.rstrip()
+    # 未閉じの文字列を閉じてから再試行
+    if cleaned.count('"') % 2 != 0:
+        cleaned += '"'
+    # 括弧バランス修復
+    open_braces = cleaned.count('{') - cleaned.count('}')
+    open_brackets = cleaned.count('[') - cleaned.count(']')
+    if open_braces > 0 or open_brackets > 0:
+        suffix = ']' * max(0, open_brackets) + '}' * max(0, open_braces)
+        try:
+            data = json.loads(cleaned + suffix)
+            print(f"[DEBUG] JSON repaired via quote+bracket fix")
+            return data
+        except json.JSONDecodeError:
+            pass
 
     raise json.JSONDecodeError("Cannot repair truncated JSON", json_str, 0)
 
@@ -604,9 +651,25 @@ async def generate(req: GenerateRequest):
                     session["last_file"] = filepath
                     session["last_filename"] = filename
 
+                    # 設計書サマリーを作成
+                    summary_lines = [f"📋 **設計書サマリー**", f"**概要**: {generation_data.get('summary', '')}"]
+                    summary_lines.append(f"**処理ステップ数**: {len(steps)}")
+                    for s in steps:
+                        if s.get("step"):
+                            summary_lines.append(f"  Step{s['step']}: {s.get('operation', '')} → {s.get('save_as', '')}")
+                    summary_lines.append("")
+                    summary_lines.append("📝 **手順書プレビュー**")
+                    design_summary = "\n".join(summary_lines)
+
+                    # 設計書JSONを保存
+                    design_path = OUTPUT_DIR / f"design_{session_id}.json"
+                    with open(design_path, "w", encoding="utf-8") as f:
+                        json.dump(generation_data, f, ensure_ascii=False, indent=2)
+                    session["design_file"] = str(design_path)
+
                     return ChatResponse(
                         session_id=session_id,
-                        reply=f"設計書を作成し、手順書を生成しました！\n\n{procedure_text[:3000]}",
+                        reply=f"{design_summary}\n\n{procedure_text[:3000]}",
                         status="done",
                         download_url=f"/api/download/{session_id}",
                     )
@@ -750,6 +813,19 @@ async def download(session_id: str):
         session["last_file"],
         filename=session["last_filename"],
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@app.get("/api/download-design/{session_id}")
+async def download_design(session_id: str):
+    """設計書JSONをダウンロード"""
+    session = sessions.get(session_id)
+    if not session or "design_file" not in session:
+        raise HTTPException(404, "設計書が見つかりません")
+    return FileResponse(
+        session["design_file"],
+        filename=f"設計書_{session_id[:8]}.json",
+        media_type="application/json",
     )
 
 
