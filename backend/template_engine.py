@@ -14,26 +14,174 @@ def _load_masters():
     return _masters
 
 
+def _normalize_settings(op: str, settings: dict) -> dict:
+    """AIが出力するsettingsキーをoperation_masters.yamlのパラメータ名に変換"""
+    s = dict(settings)
+
+    # 集約
+    if "集約" in op:
+        if "group_by" in s:
+            keys = s.pop("group_by")
+            s["集約キーカラム"] = "、".join(keys) if isinstance(keys, list) else keys
+        if "aggregations" in s:
+            aggs = s.pop("aggregations")
+            agg_parts = []
+            for a in aggs:
+                col = a.get("column", "")
+                func = a.get("function", "")
+                new_col = a.get("new_column", "")
+                agg_parts.append(f"「{col}」を《{func}》で集約")
+            s["集計設定"] = "\n".join(agg_parts)
+            # カラム名変更用
+            rename_parts = []
+            for a in aggs:
+                if a.get("new_column"):
+                    rename_parts.append(f"「{a['column']}({a['function']})」を\"{a['new_column']}\"に変更する")
+            if rename_parts:
+                s["カラム名変更"] = "\n".join(rename_parts)
+
+    # 横統合
+    if "横統合" in op or "統合" in op:
+        for alias, target in [("left_data", "左ファイル"), ("right_data", "右ファイル"),
+                              ("left_file", "左ファイル"), ("right_file", "右ファイル"),
+                              ("join_type", "統合方法"), ("統合キー", "統合キー")]:
+            if alias in s:
+                s[target] = s.pop(alias)
+        if "join_keys" in s:
+            jk = s.pop("join_keys")
+            if isinstance(jk, list):
+                parts = [f"「{k.get('left', '')}」と「{k.get('right', '')}」" for k in jk]
+                s["統合キー"] = "、".join(parts)
+            else:
+                s["統合キー"] = str(jk)
+        if "keep_columns" in s:
+            cols = s.pop("keep_columns")
+            s["残すカラム"] = "、".join(cols) if isinstance(cols, list) else cols
+
+    # 連結
+    if "連結" in op:
+        for alias, target in [("left_column", "連結対象1"), ("right_column", "連結対象2"),
+                              ("separator", "区切り文字"), ("new_column", "保存名")]:
+            if alias in s:
+                s[target] = s.pop(alias)
+        if "表示方法" not in s:
+            s["表示方法"] = "残さない"
+
+    # 時刻演算
+    if "時刻演算" in op:
+        if "target_column" in s:
+            s["対象カラム"] = s.pop("target_column")
+        if "unit" in s:
+            s["単位"] = s.pop("unit")
+        if "new_column" in s:
+            s["保存名"] = s.pop("new_column")
+        if "operation" in s:
+            op_val = s.pop("operation")
+            if "現在" in op_val or "本日" in op_val:
+                s["本日種別"] = "本日の日付"
+                s["演算子"] = "-"
+
+    # 削除
+    if "削除" in op:
+        if "columns" in s:
+            cols = s.pop("columns")
+            s["削除カラム"] = "、".join(cols) if isinstance(cols, list) else cols
+
+    # カラム名変更
+    if "カラム名変更" in op or "カラム名の変更" in op:
+        if "changes" in s:
+            changes = s.pop("changes")
+            parts = [f"「{c.get('from', '')}」を\"{c.get('to', '')}\"に変更する" for c in changes]
+            s["変更内容"] = "\n".join(parts)
+
+    # 追加
+    if "追加" in op:
+        if "position" in s:
+            s["追加位置"] = s.pop("position")
+        if "data_type" in s:
+            s["データ型"] = s.pop("data_type")
+        if "column_name" in s:
+            s["カラム名"] = s.pop("column_name")
+        if "processing_date" in s:
+            s["加工処理実行日カラム"] = "チェックする"
+
+    # 名寄せ
+    if "名寄せ" in op:
+        if "key_columns" in s:
+            keys = s.pop("key_columns")
+            s["名寄せキー"] = "、".join(keys) if isinstance(keys, list) else keys
+        if "priority_column" in s:
+            s["優先カラム"] = s.pop("priority_column")
+        if "priority_order" in s:
+            s["優先順"] = s.pop("priority_order")
+
+    # ランキング
+    if "ランキング" in op:
+        if "group_columns" in s:
+            gc = s.pop("group_columns")
+            s["グループカラム"] = "、".join(gc) if isinstance(gc, list) else gc
+        if "ranking_column" in s or "sort_column" in s:
+            s["ソートカラム"] = s.pop("ranking_column", s.pop("sort_column", ""))
+        if "order" in s:
+            s["ソート順"] = s.pop("order")
+        if "tie_handling" in s:
+            s["同率順位"] = s.pop("tie_handling")
+
+    # 絞込み
+    if "絞込み" in op or "絞り込み" in op:
+        if "conditions" in s:
+            conds = s.pop("conditions")
+            parts = []
+            for c in conds:
+                col = c.get("column", "")
+                ope = c.get("operator", "")
+                val = c.get("value", "")
+                if val:
+                    parts.append(f"「{col}」が\"{val}\"《{ope}》に絞り込む")
+                else:
+                    parts.append(f"「{col}」が《{ope}》に絞り込む")
+            logic = s.pop("logic", "AND")
+            s["絞込み条件"] = f"\n{logic}\n".join(parts)
+
+    # テンプレート縦横変換
+    if "テンプレート" in op and ("縦持ち" in op or "横持ち" in op):
+        if "aggregate_keys" in s or "group_by" in s:
+            keys = s.pop("aggregate_keys", s.pop("group_by", []))
+            s["集約キーカラム"] = "、".join(keys) if isinstance(keys, list) else keys
+        if "pivot_columns" in s:
+            cols = s.pop("pivot_columns")
+            s["横並びカラム"] = "、".join(cols) if isinstance(cols, list) else cols
+        if "sort_columns" in s:
+            sc = s.pop("sort_columns")
+            if isinstance(sc, list) and sc:
+                s["並び順カラム"] = sc[0].get("column", "")
+                s["並び順"] = sc[0].get("order", "昇順")
+        if "max_items" in s:
+            s["件数"] = s.pop("max_items")
+
+    return s
+
+
 def render_step(step: dict) -> str:
     """1つのprocessing_stepを手順書テキストに変換"""
     masters = _load_masters()
     op = step.get("operation", "")
-    settings = step.get("settings", {})
+    settings = _normalize_settings(op, step.get("settings", {}))
 
     master_key = _resolve_master_key(op, settings)
     master = masters.get(master_key)
 
     if not master:
-        return _fallback_render(op, settings)
+        return _direct_render(op, settings)
 
     template = _select_template(master, settings)
     if not template:
-        return _fallback_render(op, settings)
+        return _direct_render(op, settings)
 
     try:
         return template.format(**settings).strip()
     except KeyError:
-        return _fallback_render(op, settings)
+        return _direct_render(op, settings)
 
 
 def _resolve_master_key(op: str, settings: dict) -> str:
@@ -117,11 +265,111 @@ def _select_template(master: dict, settings: dict) -> str:
     return master.get("template_no_separator", "")
 
 
-def _fallback_render(op: str, settings: dict) -> str:
+def _direct_render(op: str, settings: dict) -> str:
+    """テンプレートにマッチしない場合、settingsから直接b→dashフォーマットで出力"""
     lines = [f"『{op}』"]
-    for k, v in settings.items():
-        if v:
-            lines.append(f"  {k}: {v}")
+
+    if "集約" in op:
+        if "集約キーカラム" in settings:
+            lines.append(f"「{settings['集約キーカラム']}」を集約のキーとして、")
+        if "集計設定" in settings:
+            lines.append(settings["集計設定"])
+        if "カラム名変更" in settings:
+            lines.append("『カラム名の変更』")
+            lines.append(settings["カラム名変更"])
+    elif "横統合" in op:
+        left = settings.get("左ファイル", "")
+        right = settings.get("右ファイル", "")
+        method = settings.get("統合方法", "先に選択したデータに対して統合する")
+        key = settings.get("統合キー", "")
+        keep = settings.get("残すカラム", "")
+        lines.append(f"【{left}】と【{right}】を{key}を統合キーとして、《{method}》")
+        lines.append(f"残すカラムは、")
+        if isinstance(keep, str):
+            lines.append(f"【{left}】：{keep}")
+            lines.append(f"【{right}】：上記以外")
+        else:
+            lines.append(f"【{left}】：全て")
+            lines.append(f"【{right}】：全て")
+    elif "連結" in op:
+        c1 = settings.get("連結対象1", "")
+        c2 = settings.get("連結対象2", "")
+        sep = settings.get("区切り文字", "")
+        name = settings.get("保存名", "")
+        disp = settings.get("表示方法", "残さない")
+        if sep:
+            lines.append(f"「{c1}」と「{c2}」を選択")
+            lines.append(f"[テキスト挿入]を押下し、カラムとカラムの間に\"{sep}\"を挿入し、[適用]を押下する")
+        else:
+            lines.append(f"「{c1}」と「{c2}」を選択")
+        lines.append(f"クレンジングタスクの保存名を\"{name}\"にする")
+        lines.append(f"表示方法《{disp}》を選択")
+    elif "時刻演算" in op:
+        if settings.get("本日種別"):
+            lines.append(f"《{settings['本日種別']}》《{settings.get('演算子', '-')}》「{settings.get('対象カラム', '')}」　[計算結果]を《{settings.get('単位', '日')}》で算出")
+        else:
+            lines.append(f"「{settings.get('対象カラム', '')}」の時刻演算")
+        if settings.get("保存名"):
+            lines.append(f"クレンジングタスクの保存名を\"{settings['保存名']}\"にする")
+            lines.append("表示方法《残す》を選択")
+    elif "削除" in op:
+        lines.append(f"「{settings.get('削除カラム', '')}」を削除する")
+    elif "カラム名変更" in op or "カラム名の変更" in op:
+        if "変更内容" in settings:
+            lines.append(settings["変更内容"])
+        else:
+            for k, v in settings.items():
+                lines.append(f"「{k}」を\"{v}\"に変更する")
+    elif "追加" in op:
+        pos = settings.get("追加位置", "右に追加")
+        dt = settings.get("データ型", "テキスト型")
+        name = settings.get("カラム名", "追加列")
+        if settings.get("加工処理実行日カラム"):
+            lines.append(f"「{name}」の《{pos}》を選択")
+            lines.append(f"《{dt}》を選択し、[加工処理実行日のカラムを追加する]にチェックを入れる")
+        else:
+            lines.append(f"「{name}」の《{pos}》を選択")
+            lines.append(f"《{dt}》の\"\"を追加")
+    elif "名寄せ" in op:
+        key = settings.get("名寄せキー", "")
+        pri = settings.get("優先カラム", "")
+        order = settings.get("優先順", "最も新しい日時")
+        lines.append(f"「{key}」を名寄せするキーとして、「{pri}」を《{order}》に名寄せする")
+    elif "ランキング" in op:
+        gc = settings.get("グループカラム", "")
+        sc = settings.get("ソートカラム", "")
+        order = settings.get("ソート順", "大きい順")
+        tie = settings.get("同率順位", "同率なし")
+        if gc:
+            lines.append(f"「{gc}」をグループ化する単位として、「{sc}」を《{order}》に《{tie}》で順位付けする")
+        else:
+            lines.append(f"「{sc}」を《{order}》に《{tie}》で順位付けする")
+    elif "絞込み" in op or "絞り込み" in op:
+        if "絞込み条件" in settings:
+            lines.append(settings["絞込み条件"])
+        else:
+            for k, v in settings.items():
+                lines.append(f"「{k}」が《{v}》に絞り込む")
+    elif "テンプレート" in op:
+        if "縦持ち" in op and "横" in op:
+            key = settings.get("集約キーカラム", "")
+            cols = settings.get("横並びカラム", "")
+            sort_col = settings.get("並び順カラム", "")
+            sort_ord = settings.get("並び順", "昇順")
+            n = settings.get("件数", 5)
+            lines.append(f"「{key}」を集約のキーとして選択し、[適用]を押下する")
+            lines.append(f"[横並びにしたいカラム]に{cols}の順で選択し、[適用]を押下する")
+            lines.append(f"[並び順カラム]に「{sort_col}」《{sort_ord}》を選択し、[適用]を押下する")
+            lines.append(f"[横並びにしたいカラムの数]を、上位《{n}》位まで横に並べるとし、[適用]を押下する")
+        else:
+            for k, v in settings.items():
+                if v:
+                    lines.append(f"  {k}: {v}")
+    else:
+        for k, v in settings.items():
+            if v:
+                lines.append(f"  {k}: {v}")
+
     return "\n".join(lines)
 
 
