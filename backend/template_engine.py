@@ -61,7 +61,10 @@ def _normalize_settings(op: str, settings: dict) -> dict:
     if "横統合" in op or ("統合" in op and "縦" not in op):
         for alias, target in [("left_data", "左ファイル"), ("right_data", "右ファイル"),
                               ("left_file", "左ファイル"), ("right_file", "右ファイル"),
-                              ("join_type", "統合方法")]:
+                              ("left", "左ファイル"), ("right", "右ファイル"),
+                              ("join_type", "統合方法"), ("method", "統合方法"),
+                              ("join_key", "統合キー"), ("key", "統合キー"),
+                              ("keep_columns", "残すカラム"), ("columns", "残すカラム")]:
             if alias in s and target not in s:
                 s[target] = s.pop(alias)
         # 統合キーがdict形式の場合（{"テーブルA": "カラムA", "テーブルB": "カラムB"}）
