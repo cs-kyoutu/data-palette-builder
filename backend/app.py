@@ -743,41 +743,60 @@ async def chat(req: ChatRequest):
 
     session["messages"].append({"role": "user", "content": req.message})
 
-    # 回答を受けたら → Step1をスキップして直接Step2（設計書生成）に進む
-    # 回答内容をStep2のコンテキストに含める
-    qa_context = req.message
-    plan_text = json.dumps({
-        "action": "plan",
-        "operations": ["横統合", "絞込み", "名寄せ", "ランキング", "テンプレート 縦持ちを横持ちに変換", "連結"],
-        "flow": f"技術確認回答: {qa_context}",
-        "needs_web_hearing": False
-    }, ensure_ascii=False)
+    # Step1を続行（過去の回答を含むコンテキストでAIに判断させる）
+    # 過去のQ&Aを要約してプロンプトに追加
+    qa_history = []
+    for msg in session["messages"]:
+        if msg["role"] == "user":
+            qa_history.append(msg["content"])
+    qa_summary = "\n".join(f"- ユーザー回答: {q}" for q in qa_history[1:])  # 最初のメッセージは除外
 
-    session["plan"] = plan_text
-    session["step"] = "step2"
-
-    step2_prompt = get_system_prompt_step2(
-        session["input_tables"], session["output_mapping"], plan_text
-    )
-    # 回答内容もStep2に渡す
-    step2_user_msg = f"技術確認の回答: {qa_context}\n\nこの回答を踏まえて設計書JSONを出力してください。追加質問は不要です。"
-    session["messages_step2"] = [{"role": "user", "content": step2_user_msg}]
+    base_prompt = get_system_prompt_step1(session["input_tables"], session["output_mapping"])
+    if qa_summary:
+        base_prompt += f"\n\n## これまでの技術確認の回答\n{qa_summary}\n\n上記で回答済みの質問は絶対に繰り返さないこと。未確認の項目があれば次の質問をする。全て確認済みならplan JSONを出力する。"
 
     try:
-        response2 = client.messages.create(
+        response = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=16000,
-            system=step2_prompt,
-            messages=session["messages_step2"],
+            max_tokens=2000,
+            system=base_prompt,
+            messages=[{"role": "user", "content": f"回答: {req.message}\n\n未確認の項目があれば次の質問を、全て確認済みならplan JSONを出力してください。"}],
         )
-        assistant_text = response2.content[0].text
-        session["messages_step2"].append({"role": "assistant", "content": assistant_text})
+        step1_text = response.content[0].text
     except Exception as e:
         session["messages"].pop()
-        return ChatResponse(session_id=req.session_id, reply=f"Step2エラー: {e}", status="asking")
+        return ChatResponse(session_id=req.session_id, reply=f"APIエラー: {e}", status="asking")
 
-    session["messages"].append({"role": "assistant", "content": assistant_text})
-    step1_text = assistant_text  # Phase3処理のために
+    session["messages"].append({"role": "assistant", "content": step1_text})
+
+    # plan JSONが出たら → Step2自動遷移
+    if "```json" in step1_text:
+        try:
+            plan_json = json.loads(step1_text.split("```json")[1].split("```")[0].strip())
+            if plan_json.get("action") == "plan":
+                session["plan"] = json.dumps(plan_json, ensure_ascii=False)
+                session["step"] = "step2"
+
+                step2_prompt = get_system_prompt_step2(
+                    session["input_tables"], session["output_mapping"], session["plan"]
+                )
+                step2_user_msg = f"技術確認完了。回答内容:\n{qa_summary}\n\n設計書JSONを出力してください。"
+                session["messages_step2"] = [{"role": "user", "content": step2_user_msg}]
+                try:
+                    response2 = client.messages.create(
+                        model="claude-sonnet-4-20250514",
+                        max_tokens=16000,
+                        system=step2_prompt,
+                        messages=session["messages_step2"],
+                    )
+                    assistant_text = response2.content[0].text
+                    session["messages_step2"].append({"role": "assistant", "content": assistant_text})
+                    # step1_textをassistant_textで上書き（Phase3処理用）
+                    step1_text = assistant_text
+                except Exception as e:
+                    return ChatResponse(session_id=req.session_id, reply=f"Step2エラー: {e}", status="asking")
+        except (json.JSONDecodeError, IndexError):
+            pass  # plan JSONが出なければ次の質問として返す
 
     # Step1でplan JSONが出たら → Step2自動遷移
     if "```json" in step1_text:
