@@ -214,14 +214,12 @@ B) 選択肢2の具体的な内容
 C) 選択肢3の具体的な内容
 ```
 
-質問項目（順番に1つずつ聞く）：
-1. 閲覧/カート等の商品IDが格納されているリレーション項目番号は？
-   A) リレーション項目_7  B) リレーション項目_10  C) その他
-2. そのリレーション項目のデータ形式は？
-   A) 1レコード1商品ID  B) カンマ区切りで複数商品ID  C) その他
-3. 顧客IDが格納されているリレーション項目番号は？
-   A) リレーション項目_1  B) リレーション項目_2  C) その他
+質問項目（まとめて1回で聞く）：
+- 閲覧/カート等の商品IDが格納されているリレーション項目番号
+- そのリレーション項目のデータ形式（1レコード1値 or カンマ区切り複数値）
+- 顧客IDが格納されているリレーション項目番号
 
+**質問は最大1回。回答を受けたら次は必ずplan JSONを出力すること。同じ質問を繰り返すのは禁止。**
 それ以外の質問（対象期間、件数、優先順位等の要件）は禁止。
 
 ## 出力形式
@@ -229,7 +227,8 @@ C) 選択肢3の具体的な内容
 ```json
 {{"action": "plan", "operations": ["横統合", "絞込み", "名寄せ", "テンプレート 縦持ちを横持ちに変換"], "flow": "簡潔な処理フロー説明", "needs_web_hearing": false}}
 ```
-技術確認が必要な場合はテキストで質問（上記フォーマット厳守、1回1質問）。
+技術確認が必要な場合はテキストで質問（1回のみ、回答後は即plan JSON出力）。
+**回答を受け取ったら、その回答を反映して必ずplan JSONを出力すること。追加質問は禁止。**
 """
 
 # --- Phase1 Step2: 詳細設計プロンプト（該当Skillsのみ） ---
@@ -303,14 +302,10 @@ def format_output_mapping(mapping: dict) -> str:
 
 
 def get_system_prompt_step1(input_tables: list[dict], output_mapping: dict) -> str:
-    """Phase1 Step1: 方針決定（軽量、Skills無し）"""
-    # テーブル名サマリーだけ（カラム詳細は省略して軽量化）
-    table_summary = "\n".join(
-        f"- **{t['table_name']}**: {len(t.get('columns', []))}カラム"
-        for t in input_tables
-    )
+    """Phase1 Step1: 方針決定（カラム詳細含む）"""
+    # カラム詳細も含める（会話が成立しないため）
     return SYSTEM_PROMPT_STEP1.format(
-        input_tables=table_summary,
+        input_tables=format_input_tables(input_tables),
         output_mapping=format_output_mapping(output_mapping),
     )
 
