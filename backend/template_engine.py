@@ -58,28 +58,61 @@ def _normalize_settings(op: str, settings: dict) -> dict:
                 s["カラム名変更"] = "\n".join(rename_parts)
 
     # 横統合
-    if "横統合" in op or "統合" in op:
+    if "横統合" in op or ("統合" in op and "縦" not in op):
         for alias, target in [("left_data", "左ファイル"), ("right_data", "右ファイル"),
                               ("left_file", "左ファイル"), ("right_file", "右ファイル"),
-                              ("join_type", "統合方法"), ("統合キー", "統合キー")]:
-            if alias in s:
+                              ("join_type", "統合方法")]:
+            if alias in s and target not in s:
                 s[target] = s.pop(alias)
+        # 統合キーがdict形式の場合（{"テーブルA": "カラムA", "テーブルB": "カラムB"}）
+        if "統合キー" in s and isinstance(s["統合キー"], dict):
+            jk_dict = s.pop("統合キー")
+            tables = list(jk_dict.keys())
+            columns = list(jk_dict.values())
+            if len(tables) >= 2:
+                if "左ファイル" not in s:
+                    s["左ファイル"] = tables[0]
+                if "右ファイル" not in s:
+                    s["右ファイル"] = tables[1]
+                s["統合キー"] = f"「{columns[0]}」と「{columns[1]}」"
+        # 統合キーがlist形式の場合（[{"left": "カラムA", "right": "カラムB"}]）
         if "join_keys" in s:
             jk = s.pop("join_keys")
             if isinstance(jk, list):
-                parts = [f"「{k.get('left', '')}」と「{k.get('right', '')}」" for k in jk]
+                parts = [f"「{k.get('left', '')}」と「{k.get('right', '')}」" for k in jk if isinstance(k, dict)]
                 s["統合キー"] = "、".join(parts)
+            elif isinstance(jk, dict):
+                tables = list(jk.keys())
+                columns = list(jk.values())
+                if len(tables) >= 2:
+                    if "左ファイル" not in s:
+                        s["左ファイル"] = tables[0]
+                    if "右ファイル" not in s:
+                        s["右ファイル"] = tables[1]
+                    s["統合キー"] = f"「{columns[0]}」と「{columns[1]}」"
             else:
                 s["統合キー"] = str(jk)
         if "keep_columns" in s:
             cols = s.pop("keep_columns")
             s["残すカラム"] = "、".join(cols) if isinstance(cols, list) else cols
+        # 残すカラムがリストのままの場合も文字列化
+        if "残すカラム" in s and isinstance(s["残すカラム"], list):
+            s["残すカラム"] = "、".join(s["残すカラム"])
 
     # 連結
     if "連結" in op:
+        # 対象カラムがリスト形式の場合（["姓", "名"]）
+        if "対象カラム" in s:
+            cols = s.pop("対象カラム")
+            if isinstance(cols, list):
+                for i, c in enumerate(cols[:6]):
+                    s[f"連結対象{i+1}"] = c
+            else:
+                s["連結対象1"] = cols
         for alias, target in [("left_column", "連結対象1"), ("right_column", "連結対象2"),
-                              ("separator", "区切り文字"), ("new_column", "保存名")]:
-            if alias in s:
+                              ("separator", "区切り文字"), ("new_column", "保存名"),
+                              ("新カラム名", "保存名")]:
+            if alias in s and target not in s:
                 s[target] = s.pop(alias)
         if "表示方法" not in s:
             s["表示方法"] = "残さない"
