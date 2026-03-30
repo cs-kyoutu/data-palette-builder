@@ -213,7 +213,10 @@ def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
     ws.sheet_properties.pageSetUpPr.fitToPage = True
 
     title = generation_data.get("title", "データパレット構築手順書")
-    filename = f"{title}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    # ファイル名に使えない文字をサニタイズ
+    import re
+    safe_title = re.sub(r'[/\\:*?"<>|]', '_', title)[:50]
+    filename = f"{safe_title}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     filepath = OUTPUT_DIR / filename
     wb.save(filepath)
     return str(filepath), filename
