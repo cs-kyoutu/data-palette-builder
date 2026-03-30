@@ -721,29 +721,41 @@ async def chat(req: ChatRequest):
 
     session["messages"].append({"role": "user", "content": req.message})
 
-    # 回答を受けたらStep1のプロンプトに回答内容を埋め込んでplan強制出力
-    base_prompt = get_system_prompt_step1(session["input_tables"], session["output_mapping"])
-    # 過去のQ&Aを要約してプロンプトに追加
-    qa_context = ""
-    for msg in session["messages"]:
-        if msg["role"] == "user" and msg["content"] != "以下のインプットテーブルとアウトプット定義に基づいて、データパレット構築手順書を生成してください。":
-            qa_context += f"\nユーザー回答: {msg['content']}"
-    if qa_context:
-        base_prompt += f"\n\n## 技術確認の回答（既に受領済み）\n{qa_context}\n\n上記回答を踏まえ、**追加質問は禁止**。即座にplan JSONを出力してください。"
+    # 回答を受けたら → Step1をスキップして直接Step2（設計書生成）に進む
+    # 回答内容をStep2のコンテキストに含める
+    qa_context = req.message
+    plan_text = json.dumps({
+        "action": "plan",
+        "operations": ["横統合", "絞込み", "名寄せ", "ランキング", "テンプレート 縦持ちを横持ちに変換", "連結"],
+        "flow": f"技術確認回答: {qa_context}",
+        "needs_web_hearing": False
+    }, ensure_ascii=False)
+
+    session["plan"] = plan_text
+    session["step"] = "step2"
+
+    step2_prompt = get_system_prompt_step2(
+        session["input_tables"], session["output_mapping"], plan_text
+    )
+    # 回答内容もStep2に渡す
+    step2_user_msg = f"技術確認の回答: {qa_context}\n\nこの回答を踏まえて設計書JSONを出力してください。追加質問は不要です。"
+    session["messages_step2"] = [{"role": "user", "content": step2_user_msg}]
 
     try:
-        response = client.messages.create(
+        response2 = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=2000,
-            system=base_prompt,
-            messages=[{"role": "user", "content": "技術確認の回答を受けました。plan JSONを出力してください。"}],
+            max_tokens=16000,
+            system=step2_prompt,
+            messages=session["messages_step2"],
         )
-        step1_text = response.content[0].text
+        assistant_text = response2.content[0].text
+        session["messages_step2"].append({"role": "assistant", "content": assistant_text})
     except Exception as e:
         session["messages"].pop()
-        return ChatResponse(session_id=req.session_id, reply=f"APIエラー: {e}", status="asking")
+        return ChatResponse(session_id=req.session_id, reply=f"Step2エラー: {e}", status="asking")
 
-    session["messages"].append({"role": "assistant", "content": step1_text})
+    session["messages"].append({"role": "assistant", "content": assistant_text})
+    step1_text = assistant_text  # Phase3処理のために
 
     # Step1でplan JSONが出たら → Step2自動遷移
     if "```json" in step1_text:
