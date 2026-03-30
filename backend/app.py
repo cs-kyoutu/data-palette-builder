@@ -721,13 +721,22 @@ async def chat(req: ChatRequest):
 
     session["messages"].append({"role": "user", "content": req.message})
 
-    # Step1の会話を続行（技術確認の回答を受けて方針決定）
+    # 回答を受けたらStep1のプロンプトに回答内容を埋め込んでplan強制出力
+    base_prompt = get_system_prompt_step1(session["input_tables"], session["output_mapping"])
+    # 過去のQ&Aを要約してプロンプトに追加
+    qa_context = ""
+    for msg in session["messages"]:
+        if msg["role"] == "user" and msg["content"] != "以下のインプットテーブルとアウトプット定義に基づいて、データパレット構築手順書を生成してください。":
+            qa_context += f"\nユーザー回答: {msg['content']}"
+    if qa_context:
+        base_prompt += f"\n\n## 技術確認の回答（既に受領済み）\n{qa_context}\n\n上記回答を踏まえ、**追加質問は禁止**。即座にplan JSONを出力してください。"
+
     try:
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=2000,
-            system=get_system_prompt_step1(session["input_tables"], session["output_mapping"]),
-            messages=session["messages"],
+            system=base_prompt,
+            messages=[{"role": "user", "content": "技術確認の回答を受けました。plan JSONを出力してください。"}],
         )
         step1_text = response.content[0].text
     except Exception as e:
