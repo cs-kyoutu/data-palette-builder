@@ -826,8 +826,15 @@ async def chat(req: ChatRequest):
                             template_text = render_step(s)
                         except Exception:
                             template_text = f"『{op}』"
-                        param_values = list(settings.values())[:5]
-                        param_values = [", ".join(v) if isinstance(v, list) else str(v) if not isinstance(v, str) else v for v in param_values]
+                        param_values = []
+                        for v in list(settings.values())[:5]:
+                            if isinstance(v, list):
+                                parts = [json.dumps(item, ensure_ascii=False) if isinstance(item, dict) else str(item) for item in v]
+                                param_values.append(", ".join(parts))
+                            elif isinstance(v, dict):
+                                param_values.append(json.dumps(v, ensure_ascii=False))
+                            else:
+                                param_values.append(str(v))
                         while len(param_values) < 5:
                             param_values.append("")
                         proc_rows.append([sn, op, "", template_text, save_as, "", *param_values, template_text])
