@@ -25,21 +25,13 @@ def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
     STEP_MARKS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩",
                   "⑪", "⑫", "⑬", "⑭", "⑮", "⑯", "⑰", "⑱", "⑲", "⑳"]
 
-    # --- 列幅設定（シート2フォーマット準拠） ---
+    # --- 列幅設定（出力列: A〜F） ---
     ws.column_dimensions["A"].width = 4
     ws.column_dimensions["B"].width = 8    # 対象作業No（①②③）
     ws.column_dimensions["C"].width = 8    # 作業詳細No.
-    ws.column_dimensions["D"].width = 12   # アイコン（操作名）
-    ws.column_dimensions["E"].width = 45   # アイコン利用方法（テンプレートテキスト）
-    ws.column_dimensions["F"].width = 20   # 作成後項目名
-    ws.column_dimensions["G"].width = 18   # 対象1（パラメータ1）
-    ws.column_dimensions["H"].width = 18   # 対象2
-    ws.column_dimensions["I"].width = 18   # 対象3
-    ws.column_dimensions["J"].width = 18   # 対象4
-    ws.column_dimensions["K"].width = 18   # 対象5
-    ws.column_dimensions["L"].width = 50   # 完成形テキスト
-    for c in "MNOPQRSTU":
-        ws.column_dimensions[c].width = 13
+    ws.column_dimensions["D"].width = 14   # アイコン（操作名）
+    ws.column_dimensions["E"].width = 25   # 作成後項目名
+    ws.column_dimensions["F"].width = 70   # 手順書（完成形テキスト）
 
     # --- セクション帯を書く関数 ---
     def write_section_header(row, title_text):
@@ -94,15 +86,10 @@ def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
     write_section_header(cur_row, "■ 手順書")
     cur_row += 1
 
-    # ヘッダー行
-    headers_left = ["", "対象\n作業No", "作業\n詳細No.", "アイコン", "アイコン利用方法", "作成後\n項目名"]
-    headers_right = ["手順書作成用項目1", "手順書作成用項目2", "手順書作成用項目3", "手順書作成用項目4", "手順書作成用項目5", "完成形テキスト"]
-    for j, h in enumerate(headers_left):
+    # ヘッダー行（出力列: B, C, D, E, F のみ）
+    headers = ["", "対象\n作業No", "作業\n詳細No.", "アイコン", "作成後\n項目名", "手順書"]
+    for j, h in enumerate(headers):
         cell = ws.cell(row=cur_row, column=j + 1, value=h)
-        cell.font = font9_bold
-        cell.alignment = wrap
-    for j, h in enumerate(headers_right):
-        cell = ws.cell(row=cur_row, column=7 + j, value=h)
         cell.font = font9_bold
         cell.alignment = wrap
     cur_row += 1
@@ -112,16 +99,9 @@ def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
         step_counter = 0
 
         for p_idx, p_row in enumerate(proc_rows):
-            # p_row format: [step_val, op_type, use_data, template_text, save_as, result, param1, param2, param3, param4, param5, complete_text]
             step_val = p_row[0] if len(p_row) > 0 else ""
             op_type = p_row[1] if len(p_row) > 1 else ""
-            template_text = p_row[3] if len(p_row) > 3 else ""
             save_as = p_row[4] if len(p_row) > 4 else ""
-            # パラメータ値（G〜K列）
-            params = []
-            for pi in range(6, min(len(p_row), 11)):
-                params.append(p_row[pi] if pi < len(p_row) else "")
-            # 完成形テキスト
             complete_text = p_row[11] if len(p_row) > 11 else ""
 
             # B列: 対象作業No（①②③）
@@ -141,25 +121,13 @@ def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
             # D列: アイコン（操作名）
             ws.cell(row=cur_row, column=4, value=op_type).font = font9
 
-            # E列: アイコン利用方法（テンプレートテキスト）
-            tmpl_cell = ws.cell(row=cur_row, column=5, value=template_text)
-            tmpl_cell.font = font9
-            tmpl_cell.alignment = wrap
-
-            # F列: 作成後項目名
+            # E列: 作成後項目名
             if save_as:
-                ws.cell(row=cur_row, column=6, value=save_as).font = font9
+                ws.cell(row=cur_row, column=5, value=save_as).font = font9
 
-            # G〜K列: パラメータ値（対象1〜5）
-            for pi, pval in enumerate(params):
-                if pval:
-                    cell = ws.cell(row=cur_row, column=7 + pi, value=str(pval))
-                    cell.font = font9
-                    cell.alignment = wrap
-
-            # L列: 完成形テキスト
+            # F列: 手順書（完成形テキスト）
             if complete_text:
-                comp_cell = ws.cell(row=cur_row, column=12, value=complete_text)
+                comp_cell = ws.cell(row=cur_row, column=6, value=complete_text)
                 comp_cell.font = font9
                 comp_cell.alignment = wrap
 
