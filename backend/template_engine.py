@@ -152,21 +152,31 @@ def _normalize_settings(op: str, settings: dict) -> dict:
 
     # カラム名変更
     if "カラム名変更" in op or "カラム名の変更" in op:
-        if "changes" in s:
-            changes = s.pop("changes")
-            if isinstance(changes, list):
-                parts = []
-                for c in changes:
-                    if isinstance(c, dict):
-                        parts.append(f"「{c.get('from', '')}」を\"{c.get('to', '')}\"に変更する")
+        # 各種キー名に対応
+        rename_list = None
+        for key in ["changes", "renames", "rename_mappings", "column_renames", "rename_rules"]:
+            if key in s:
+                rename_list = s.pop(key)
+                break
+        # dict形式（{"旧名": "新名"}）のケース
+        if rename_list is None:
+            for key in list(s.keys()):
+                if isinstance(s[key], dict):
+                    rename_list = [{"from": k, "to": v} for k, v in s.pop(key).items()]
+                    break
+        if rename_list and isinstance(rename_list, list):
+            parts = []
+            for c in rename_list:
+                if isinstance(c, dict):
+                    from_name = c.get("from", c.get("old", ""))
+                    to_name = c.get("to", c.get("new", ""))
+                    if from_name and to_name:
+                        parts.append(f"「{from_name}」を\"{to_name}\"に変更する")
+            if parts:
                 s["変更内容"] = "\n".join(parts)
-        if "renames" in s:
-            renames = s.pop("renames")
-            if isinstance(renames, list):
-                parts = []
-                for c in renames:
-                    if isinstance(c, dict):
-                        parts.append(f"「{c.get('from', '')}」を\"{c.get('to', '')}\"に変更する")
+        elif rename_list and isinstance(rename_list, dict):
+            parts = [f"「{k}」を\"{v}\"に変更する" for k, v in rename_list.items() if k and v]
+            if parts:
                 s["変更内容"] = "\n".join(parts)
 
     # 追加
@@ -444,11 +454,13 @@ def _direct_render(op: str, settings: dict) -> str:
     elif "削除" in op:
         lines.append(f"「{settings.get('削除カラム', '')}」を削除する")
     elif "カラム名変更" in op or "カラム名の変更" in op:
-        if "変更内容" in settings:
+        if "変更内容" in settings and settings["変更内容"]:
             lines.append(settings["変更内容"])
         else:
+            # settingsのキー=値ペアが有効な場合のみ出力
             for k, v in settings.items():
-                lines.append(f"「{k}」を\"{v}\"に変更する")
+                if k and v and isinstance(v, str) and k not in ("変更内容",):
+                    lines.append(f"「{k}」を\"{v}\"に変更する")
     elif "追加" in op:
         pos = settings.get("追加位置", "右に追加")
         dt = settings.get("データ型", "テキスト型")
