@@ -702,15 +702,22 @@
     const tables = {};
 
     if (isBdashMeta && headerIdx >= 0) {
-      // b→dashメタデータ形式
+      // b→dashメタデータ形式: ヘッダーからカラム位置を動的に特定
+      const headerParts = lines[headerIdx].split(/\t/).map(s => s.trim());
+      const findCol = (keywords) => headerParts.findIndex(h => keywords.some(k => h.includes(k)));
+      const tableCol = findCol(["データファイル名"]);
+      const nameCol = findCol(["カラム論理名"]);
+      const typeCol = findCol(["データ型"]);
+      const custIdCol = findCol(["顧客IDフラグ"]);
+
       for (let i = headerIdx + 1; i < lines.length; i++) {
-        const parts = lines[i].split(/\t+/).map(s => s.trim());
+        const parts = lines[i].split(/\t/).map(s => s.trim());
         if (parts.length < 3) continue;
-        // データファイル名、カラム論理名、データ型、顧客IDフラグを探す
-        const tableName = parts[1] || parts[0];
-        const colName = (parts[6] || parts[2] || "").replace(/【.+】/g, "").trim();
-        const dataType = (parts[10] || parts[3] || "").replace("型", "");
-        const custIdFlag = parts[3] === "★TRUE" || parts[3] === "TRUE";
+        const tableName = tableCol >= 0 ? parts[tableCol] : (parts[1] || parts[0]);
+        let colName = nameCol >= 0 ? parts[nameCol] : (parts[2] || "");
+        colName = colName.replace(/【.+】/g, "").trim();
+        const dataType = typeCol >= 0 ? (parts[typeCol] || "").replace("型", "") : "";
+        const custIdFlag = custIdCol >= 0 && (parts[custIdCol] === "★TRUE" || parts[custIdCol] === "TRUE");
 
         if (!tableName || !colName) continue;
         if (!tables[tableName]) tables[tableName] = [];
@@ -1133,49 +1140,85 @@
     const lines = text.split("\n").filter(l => l.trim());
     if (lines.length === 0) return { columns: [], raw_text: text };
 
+    // b→dashメタデータ形式の検出
+    const isBdashMeta = lines.some(l => l.includes("データファイル名") && l.includes("カラム論理名"));
+
     const columns = [];
-    for (const line of lines) {
-      const trimmed = line.trim();
-      // ヘッダー行・区切り行はスキップ
-      if (/^[#＃]|^---|^===|カラム名.*データ型/.test(trimmed)) continue;
-      if (/^\s*$/.test(trimmed)) continue;
 
-      // タブ区切りを優先、なければ2スペース以上で分割
-      let parts;
-      if (trimmed.includes("\t")) {
-        parts = trimmed.split(/\t+/).map(s => s.trim());
-      } else {
-        parts = trimmed.split(/\s{2,}/).map(s => s.trim());
-      }
-      parts = parts.filter(Boolean);
+    if (isBdashMeta) {
+      // ヘッダー行を探す
+      let headerIdx = lines.findIndex(l => l.includes("データファイル名") || l.includes("カラム論理名"));
+      if (headerIdx >= 0) {
+        const headerParts = lines[headerIdx].split(/\t/).map(s => s.trim());
+        const findCol = (keywords) => headerParts.findIndex(h => keywords.some(k => h.includes(k)));
+        const tableCol = findCol(["データファイル名"]);
+        const nameCol = findCol(["カラム論理名"]);
+        const typeCol = findCol(["データ型"]);
+        const custIdCol = findCol(["顧客IDフラグ"]);
 
-      // 行番号を除去
-      let offset = 0;
-      if (parts.length > 1 && /^\d+\.?$/.test(parts[0])) offset = 1;
+        for (let i = headerIdx + 1; i < lines.length; i++) {
+          const parts = lines[i].split(/\t/).map(s => s.trim());
+          if (parts.length < 3) continue;
+          const tableName = tableCol >= 0 ? parts[tableCol] : "";
+          let colName = nameCol >= 0 ? parts[nameCol] : "";
+          colName = colName.replace(/【.+】/g, "").trim();
+          const dataType = typeCol >= 0 ? (parts[typeCol] || "") : "";
+          const custIdFlag = custIdCol >= 0 && (parts[custIdCol] === "★TRUE" || parts[custIdCol] === "TRUE");
 
-      const name = parts[offset] || "";
-      if (!name) continue;
-
-      // 残りのフィールドをベストエフォートで取得
-      const rest = parts.slice(offset + 1);
-      let type = "", source_table = "", source_column = "", definition = "";
-
-      for (let i = 0; i < rest.length; i++) {
-        if (/型$|テキスト|整数|日付|日時|真偽|小数/.test(rest[i]) && !type) {
-          type = rest[i];
-        } else if (!source_table && !type) {
-          // 型の前なら主キーマーク等、スキップ
-          continue;
-        } else if (type && !source_table && !/加工/.test(rest[i])) {
-          source_table = rest[i];
-        } else if (source_table && !source_column && !/加工|#\d|参照/.test(rest[i])) {
-          source_column = rest[i];
-        } else {
-          definition += (definition ? " " : "") + rest[i];
+          if (!colName) continue;
+          columns.push({
+            name: colName,
+            type: dataType,
+            source_table: tableName,
+            source_column: colName,
+            definition: custIdFlag ? "顧客IDキー" : "加工なし"
+          });
         }
       }
+    } else {
+      // 従来のパーサー
+      for (const line of lines) {
+        const trimmed = line.trim();
+        // ヘッダー行・区切り行はスキップ
+        if (/^[#＃]|^---|^===|カラム名.*データ型/.test(trimmed)) continue;
+        if (/^\s*$/.test(trimmed)) continue;
 
-      columns.push({ name, type, source_table, source_column, definition });
+        // タブ区切りを優先、なければ2スペース以上で分割
+        let parts;
+        if (trimmed.includes("\t")) {
+          parts = trimmed.split(/\t+/).map(s => s.trim());
+        } else {
+          parts = trimmed.split(/\s{2,}/).map(s => s.trim());
+        }
+        parts = parts.filter(Boolean);
+
+        // 行番号を除去
+        let offset = 0;
+        if (parts.length > 1 && /^\d+\.?$/.test(parts[0])) offset = 1;
+
+        const name = parts[offset] || "";
+        if (!name) continue;
+
+        // 残りのフィールドをベストエフォートで取得
+        const rest = parts.slice(offset + 1);
+        let type = "", source_table = "", source_column = "", definition = "";
+
+        for (let i = 0; i < rest.length; i++) {
+          if (/型$|テキスト|整数|日付|日時|真偽|小数/.test(rest[i]) && !type) {
+            type = rest[i];
+          } else if (!source_table && !type) {
+            continue;
+          } else if (type && !source_table && !/加工/.test(rest[i])) {
+            source_table = rest[i];
+          } else if (source_table && !source_column && !/加工|#\d|参照/.test(rest[i])) {
+            source_column = rest[i];
+          } else {
+            definition += (definition ? " " : "") + rest[i];
+          }
+        }
+
+        columns.push({ name, type, source_table, source_column, definition });
+      }
     }
 
     return { columns, raw_text: text };
