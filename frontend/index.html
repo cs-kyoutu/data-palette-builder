@@ -331,7 +331,7 @@
     }
     .ai-messages {
       padding: 16px;
-      max-height: 400px;
+      max-height: 600px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -341,6 +341,7 @@
       display: flex;
       gap: 10px;
       animation: fadeIn 0.3s ease;
+      flex-shrink: 0;
     }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(6px); }
@@ -588,6 +589,7 @@
       border: 2px solid var(--primary);
       border-radius: 10px;
       overflow: hidden;
+      flex-shrink: 0;
     }
     .review-card-header {
       background: var(--primary-bg);
@@ -1520,6 +1522,377 @@
       showAiMessage("ai", "エラーが発生しました。");
     }
     isLoading = false;
+  }
+
+  // --- Mode switching ---
+  function switchMode(mode, btn) {
+    currentMode = mode;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+
+    if (mode === 'consultation') {
+      document.getElementById('consultationArea').classList.remove('hidden');
+      document.getElementById('procedureColumns').classList.add('hidden');
+      document.getElementById('generateArea').classList.add('hidden');
+      document.getElementById('aiArea').classList.add('hidden');
+    } else {
+      document.getElementById('consultationArea').classList.add('hidden');
+      document.getElementById('procedureColumns').classList.remove('hidden');
+      document.getElementById('generateArea').classList.remove('hidden');
+      // aiAreaは手順書生成後に表示されるので隠さない
+    }
+  }
+
+  function toggleConsultationIndustry(key, chip) {
+    const chips = document.querySelectorAll('#consultationIndustryChips .preset-chip');
+    if (consultationIndustry === key) {
+      consultationIndustry = null;
+      chips.forEach(c => c.classList.remove('selected'));
+    } else {
+      consultationIndustry = key;
+      chips.forEach(c => c.classList.toggle('selected', c.dataset.key === key));
+    }
+  }
+
+  // --- 施策相談 ---
+  async function sendConsultation() {
+    const input = document.getElementById('consultationInput');
+    const text = input.value.trim();
+    if (!text || isLoading) return;
+    isLoading = true;
+    input.value = '';
+
+    // ウェルカムメッセージを消す
+    const welcome = document.querySelector('.consultation-welcome');
+    if (welcome) welcome.remove();
+
+    const msgContainer = document.getElementById('consultationMessages');
+
+    showConsultationMessage('user', text, msgContainer);
+    showConsultationTyping(msgContainer);
+
+    try {
+      let res;
+      if (!consultationSessionId) {
+        // 初回: /api/consultation/start
+        res = await fetch('/api/consultation/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, industry: consultationIndustry }),
+        });
+      } else {
+        // 続き: /api/chat
+        res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: consultationSessionId, message: text }),
+        });
+      }
+
+      const data = await res.json();
+      consultationSessionId = data.session_id;
+      removeConsultationTyping(msgContainer);
+
+      if (data.status === 'consultation_complete' && data.consultation_result) {
+        // レビュー画面表示
+        consultationResult = data.consultation_result;
+        showConsultationMessage('ai', data.reply, msgContainer);
+        showReviewCard(data.consultation_result, msgContainer);
+        document.getElementById('consultationInputWrap').classList.add('hidden');
+      } else {
+        showConsultationMessage('ai', data.reply, msgContainer, true);
+      }
+    } catch(e) {
+      removeConsultationTyping(msgContainer);
+      showConsultationMessage('ai', 'エラーが発生しました。もう一度お試しください。', msgContainer);
+    }
+    isLoading = false;
+  }
+
+  async function sendConsultationAnswer(answer) {
+    if (isLoading || !consultationSessionId) return;
+    isLoading = true;
+
+    const msgContainer = document.getElementById('consultationMessages');
+
+    // 既存のカードUIを無効化
+    removeConsultationQuestionUI();
+
+    showConsultationMessage('user', answer, msgContainer);
+    showConsultationTyping(msgContainer);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: consultationSessionId, message: answer }),
+      });
+      const data = await res.json();
+      removeConsultationTyping(msgContainer);
+
+      if (data.status === 'consultation_complete' && data.consultation_result) {
+        consultationResult = data.consultation_result;
+        showConsultationMessage('ai', data.reply, msgContainer);
+        showReviewCard(data.consultation_result, msgContainer);
+        document.getElementById('consultationInputWrap').classList.add('hidden');
+      } else {
+        showConsultationMessage('ai', data.reply, msgContainer, true);
+      }
+    } catch(e) {
+      removeConsultationTyping(msgContainer);
+      showConsultationMessage('ai', 'エラーが発生しました。', msgContainer);
+    }
+    isLoading = false;
+  }
+
+  function showConsultationMessage(role, text, container, parseQuestions = false) {
+    const msg = document.createElement('div');
+    msg.className = `ai-msg ${role}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    if (role === 'ai') {
+      const img = document.createElement('img');
+      img.src = '/bdash_hakase.png';
+      img.alt = 'AI';
+      avatar.appendChild(img);
+    }
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    if (role === 'ai' && parseQuestions) {
+      const parsed = parseAiQuestions(text);
+      if (parsed) {
+        const textSpan = document.createElement('span');
+        textSpan.textContent = parsed.intro;
+        bubble.appendChild(textSpan);
+
+        const cards = document.createElement('div');
+        cards.className = 'question-cards';
+        parsed.options.forEach(opt => {
+          const card = document.createElement('div');
+          card.className = 'question-card';
+          card.innerHTML = `<div class="card-label">${opt.label}</div>${opt.desc ? `<div class="card-desc">${opt.desc}</div>` : ''}`;
+          card.onclick = () => {
+            removeConsultationQuestionUI();
+            sendConsultationAnswer(opt.label);
+          };
+          cards.appendChild(card);
+        });
+        bubble.appendChild(cards);
+
+        // その他入力
+        const otherRow = document.createElement('div');
+        otherRow.className = 'question-other';
+        const otherInput = document.createElement('input');
+        otherInput.type = 'text';
+        otherInput.placeholder = 'その他（自由入力）';
+        otherInput.onkeydown = (e) => {
+          if (e.key === 'Enter' && otherInput.value.trim()) {
+            removeConsultationQuestionUI();
+            sendConsultationAnswer(otherInput.value.trim());
+          }
+        };
+        const otherBtn = document.createElement('button');
+        otherBtn.className = 'send-card-btn';
+        otherBtn.textContent = '送信';
+        otherBtn.onclick = () => {
+          if (otherInput.value.trim()) {
+            removeConsultationQuestionUI();
+            sendConsultationAnswer(otherInput.value.trim());
+          }
+        };
+        otherRow.appendChild(otherInput);
+        otherRow.appendChild(otherBtn);
+        bubble.appendChild(otherRow);
+
+        // 通常入力欄は非表示（カードで回答するため）
+        // ただし通常入力も残す
+      } else {
+        bubble.textContent = text;
+      }
+    } else {
+      bubble.textContent = text;
+    }
+
+    msg.appendChild(avatar);
+    msg.appendChild(bubble);
+    container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function showConsultationTyping(container) {
+    const msg = document.createElement('div');
+    msg.className = 'ai-msg ai';
+    msg.id = 'consultationTyping';
+    msg.innerHTML = `<div class="avatar"><img src="/bdash_hakase.png" alt="AI"></div><div class="bubble"><div class="typing-indicator"><span></span><span></span><span></span></div></div>`;
+    container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function removeConsultationTyping(container) {
+    const el = document.getElementById('consultationTyping');
+    if (el) el.remove();
+  }
+
+  function removeConsultationQuestionUI() {
+    const area = document.getElementById('consultationMessages');
+    area.querySelectorAll('.question-cards').forEach(el => {
+      el.querySelectorAll('.question-card').forEach(c => {
+        c.style.pointerEvents = 'none';
+        c.style.opacity = '0.5';
+      });
+    });
+    area.querySelectorAll('.question-other').forEach(el => {
+      el.style.pointerEvents = 'none';
+      el.style.opacity = '0.5';
+    });
+  }
+
+  // --- レビュー画面 ---
+  function showReviewCard(result, container) {
+    const card = document.createElement('div');
+    card.className = 'review-card';
+
+    // ヘッダー
+    let headerText = '施策設計結果';
+    if (result.strategy_name) headerText += `: ${result.strategy_name}`;
+    card.innerHTML = `<div class="review-card-header">${headerText}</div>`;
+
+    const body = document.createElement('div');
+    body.className = 'review-card-body';
+
+    // 概要
+    if (result.strategy_summary) {
+      const summary = document.createElement('div');
+      summary.className = 'review-card-section';
+      summary.innerHTML = `<div class="review-card-section-title">概要</div><div>${result.strategy_summary}</div>`;
+      body.appendChild(summary);
+    }
+
+    // 4観点サマリー
+    if (result.requirements) {
+      const req = result.requirements;
+      const reqSection = document.createElement('div');
+      reqSection.className = 'review-card-section';
+      let reqHtml = '<div class="review-card-section-title">施策要件</div>';
+      reqHtml += '<table><tr><th>観点</th><th>内容</th></tr>';
+      if (req.who) reqHtml += `<tr><td><strong>誰に</strong></td><td>${req.who}</td></tr>`;
+      if (req.what) reqHtml += `<tr><td><strong>何を</strong></td><td>${req.what}</td></tr>`;
+      if (req.when) reqHtml += `<tr><td><strong>いつ</strong></td><td>${req.when}</td></tr>`;
+      if (req.exclude) reqHtml += `<tr><td><strong>除外</strong></td><td>${req.exclude}</td></tr>`;
+      reqHtml += '</table>';
+      reqSection.innerHTML = reqHtml;
+      body.appendChild(reqSection);
+    }
+
+    // インプットテーブル
+    if (result.input_tables && result.input_tables.length > 0) {
+      const inputSection = document.createElement('div');
+      inputSection.className = 'review-card-section';
+      let inputHtml = '<div class="review-card-section-title">インプットテーブル</div>';
+      for (const t of result.input_tables) {
+        inputHtml += `<div style="margin-bottom:4px;"><strong>${t.table_name}</strong>（${t.columns.length}カラム）</div>`;
+      }
+      inputSection.innerHTML = inputHtml;
+      body.appendChild(inputSection);
+    }
+
+    // アウトプット定義
+    if (result.output_mapping && result.output_mapping.columns) {
+      const outputSection = document.createElement('div');
+      outputSection.className = 'review-card-section';
+      let outputHtml = '<div class="review-card-section-title">アウトプット定義（顧客単位・横持ち）</div>';
+      outputHtml += '<table><tr><th>カラム名</th><th>用途</th><th>定義</th><th>ソース</th></tr>';
+      for (const col of result.output_mapping.columns) {
+        const purposeLabel = col.purpose === 'segment' ? 'セグメント' : col.purpose === 'personalize' ? '差し込み' : '-';
+        outputHtml += `<tr><td>${col.name}</td><td>${purposeLabel}</td><td>${col.definition || '-'}</td><td>${col.source_table || '-'}</td></tr>`;
+      }
+      outputHtml += '</table>';
+      outputSection.innerHTML = outputHtml;
+      body.appendChild(outputSection);
+    }
+
+    card.appendChild(body);
+
+    // アクションボタン
+    const actions = document.createElement('div');
+    actions.className = 'review-actions';
+    actions.style.padding = '0 14px 14px';
+    actions.innerHTML = `
+      <button class="btn-primary" onclick="applyConsultationResult()">この定義で手順書を生成する</button>
+      <button class="btn-secondary" onclick="editConsultationResult()">定義を編集する</button>
+    `;
+    card.appendChild(actions);
+
+    container.appendChild(card);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  async function applyConsultationResult() {
+    if (!consultationResult || isLoading) return;
+    isLoading = true;
+
+    // 手順書モードに切替
+    switchMode('procedure', document.querySelectorAll('.mode-btn')[1]);
+
+    // データをセット
+    inputTables = consultationResult.input_tables;
+    outputMapping = consultationResult.output_mapping;
+    renderInputPreview();
+    renderOutputPreview();
+    document.getElementById('inputCount').textContent = `${inputTables.length} テーブル`;
+    document.getElementById('outputCount').textContent = `${outputMapping.columns.length} カラム`;
+
+    // AIエリア表示
+    const aiArea = document.getElementById('aiArea');
+    aiArea.classList.remove('hidden');
+    showAiMessage('user', '施策相談の結果から手順書を生成します...');
+    showTyping();
+
+    try {
+      const res = await fetch('/api/consultation/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: consultationSessionId,
+          input_tables: inputTables,
+          output_mapping: outputMapping,
+        }),
+      });
+      const data = await res.json();
+      sessionId = data.session_id;
+      removeTyping();
+      showAiMessage('ai', data.reply, data.download_url);
+
+      if (data.status === 'asking') {
+        const parsed = parseAiQuestions(data.reply);
+        if (!parsed) {
+          document.getElementById('aiInputArea').classList.add('visible');
+        }
+      }
+    } catch(e) {
+      removeTyping();
+      showAiMessage('ai', 'エラーが発生しました。');
+    }
+    isLoading = false;
+  }
+
+  function editConsultationResult() {
+    if (!consultationResult) return;
+
+    // 手順書モードに切替
+    switchMode('procedure', document.querySelectorAll('.mode-btn')[1]);
+
+    // データをセット
+    inputTables = consultationResult.input_tables;
+    outputMapping = consultationResult.output_mapping;
+    renderInputPreview();
+    renderOutputPreview();
+    document.getElementById('inputCount').textContent = `${inputTables.length} テーブル`;
+    document.getElementById('outputCount').textContent = `${outputMapping.columns.length} カラム`;
+    updateGenerateBtn();
   }
 
   function showTyping() {

@@ -4,7 +4,7 @@
     {
       "name": "data-palette-builder",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["start_combined.py"],
+      "runtimeArgs": ["C:/Users/yugam/.claude/cache/data-palette-builder/start.py"],
       "port": 8002
     }
   ]

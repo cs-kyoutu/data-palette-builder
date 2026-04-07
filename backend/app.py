@@ -74,8 +74,21 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     session_id: str
     reply: str
-    status: str  # "asking" | "done" | "review"
+    status: str  # "asking" | "done" | "review" | "consultation_complete"
     download_url: str | None = None
+    consultation_result: dict | None = None
+
+
+class ConsultationStartRequest(BaseModel):
+    message: str
+    industry: str | None = None
+
+
+class ConsultationApplyRequest(BaseModel):
+    session_id: str
+    input_tables: list[dict] | None = None
+    output_mapping: dict | None = None
+
 
 class FeedbackRequest(BaseModel):
     session_id: str
@@ -179,6 +192,154 @@ def select_skills_phase1(input_tables: list[dict], output_mapping: dict) -> list
         skills.append("birthday_pattern")
 
     return skills
+
+
+# --- 施策相談エージェント用プロンプト ---
+SYSTEM_PROMPT_CONSULTATION = """あなたはb→dashを使ったマーケティング施策の設計コンサルタントです。
+ユーザーが実現したい施策を聞き取り、b→dashデータパレットで必要な「インプットテーブル」と「アウトプット定義」を設計します。
+
+## 利用可能なデータテーブル
+{industry_tables}
+
+## 過去の施策相談ナレッジ
+{knowledge}
+
+## 施策設計の4観点
+施策用データは以下の4観点で要件を整理します。**1回に1つだけ質問する。**
+
+### 1. 誰に送るのか（セグメント条件）
+ターゲットとなる顧客の抽出条件を明確にする。
+- 例: 「過去3日以内にカートに商品を入れたが購入していない人」
+- 例: 「30日以上購入がない休眠顧客」
+- 例: 「来月誕生日の会員」
+
+### 2. 何を送るのか・何を差し込むのか（パーソナライズ情報）
+メールやメッセージに差し込む顧客別のデータを決める。
+- 宛先情報: メールアドレス、LINE ID等
+- 差し込みデータ: 商品名、価格、画像URL、ポイント残高、クーポンコード等
+
+### 3. いつ送るのか（配信タイミング）
+- 例: 「カート投入の翌日」「毎週月曜」「誕生日の3日前」
+- リアルタイムトリガー or バッチ配信
+
+### 4. 誰を除外するのか（除外条件）
+- 例: 「既に購入済みの人」「配信停止者」「直近N日以内に同じメールを送った人」
+
+## 対話フロー
+1. まず施策の概要を理解する（ユーザーの最初のメッセージから）
+2. 業界が未選択なら業界を確認する
+3. 上記4観点のうち、ユーザーの最初のメッセージから読み取れなかった項目を順に確認する
+4. 全て揃ったらアウトプットテーブル定義JSONを出力する
+
+**すでにユーザーが言及している観点は再度聞かない。**
+**質問は最大5回まで。5回を超えたら推論で補完してJSON出力すること。**
+
+## 質問フォーマット（必ずこの形式）
+```
+質問の説明文
+
+A) 選択肢1の具体的な内容
+B) 選択肢2の具体的な内容
+C) 選択肢3の具体的な内容
+```
+
+## アウトプットテーブルの設計方針
+最終的なアウトプットテーブルは**顧客単位の横持ち（1行=1顧客）**にする。
+
+カラムは以下の2種類で構成される:
+1. **セグメント抽出に使った項目**: ターゲット条件の判定に使ったカラム（フラグ、日付、金額等）
+2. **差し込み情報**: 配信時にパーソナライズで使うカラム（宛先、商品名、価格等）
+
+## 出力形式（全ての情報が揃ったら）
+以下のJSON形式で出力してください（```json で囲む）。
+
+```json
+{{{{
+  "action": "consultation_result",
+  "strategy_name": "施策名",
+  "strategy_summary": "施策の概要説明",
+  "requirements": {{{{
+    "who": "誰に送るか（セグメント条件の要約）",
+    "what": "何を差し込むか（パーソナライズ情報の要約）",
+    "when": "いつ送るか（配信タイミング）",
+    "exclude": "誰を除外するか（除外条件の要約）"
+  }}}},
+  "input_tables": [
+    {{{{
+      "table_name": "テーブル名",
+      "columns": [
+        {{{{"name": "カラム名", "type": "テキスト|数値|日付|日時", "description": "カラムの説明"}}}}
+      ]
+    }}}}
+  ],
+  "output_mapping": {{{{
+    "columns": [
+      {{{{
+        "name": "アウトプットのカラム名",
+        "definition": "このカラムの定義・算出ロジック（具体的に書く）",
+        "source_column": "元カラム名",
+        "source_table": "元テーブル名",
+        "purpose": "segment|personalize"
+      }}}}
+    ]
+  }}}}
+}}}}
+```
+
+## 重要なルール
+- **input_tables**: 利用可能なテーブルから必要なものだけ選ぶ。カラムも必要なものだけ。
+- **output_mappingは顧客単位の横持ち**: 1行=1顧客。複数商品がある場合は「カート投入商品名1」「カート投入商品名2」のように横展開する。
+- **purposeフィールド**: 各カラムが「segment」（セグメント抽出用）か「personalize」（差し込み用）かを明記する。
+- **definitionは具体的に書く**:
+  - 良い例: 「webアクセスログのカート投入イベントから、過去3日以内に投入された商品IDを取得し、商品テーブルと結合して商品名を取得。顧客単位で最新のカート投入日順に最大3件を横展開」
+  - 悪い例: 「カートに入れた商品名」
+- **source_column / source_table も必ず埋める**
+- 過去のナレッジがある場合は参考にしつつ、今回の要件に合わせて調整する
+"""
+
+
+def get_consultation_system_prompt(industry: str | None = None) -> str:
+    """施策相談エージェント用のシステムプロンプトを生成"""
+    if industry and industry in INDUSTRIES:
+        ind = INDUSTRIES[industry]
+        tables_text = f"### {ind['label']}（{ind['description']}）\n\n"
+        for tbl_name, tbl_info in ind["data_tables"].items():
+            tables_text += f"#### {tbl_name}テーブル\n"
+            tables_text += f"{tbl_info.get('description', '')}\n"
+            tables_text += "| カラム名 | 型 | 説明 |\n|---------|-----|------|\n"
+            for col in tbl_info["columns"]:
+                tables_text += f"| {col['name']} | {col.get('type', '')} | {col.get('description', '')} |\n"
+            tables_text += "\n"
+    else:
+        tables_text = "業界が未選択です。以下の業界プリセットがあります:\n\n"
+        for key, ind in INDUSTRIES.items():
+            tbl_names = ", ".join(ind["data_tables"].keys())
+            tables_text += f"- **{ind['label']}**: {tbl_names}\n"
+        tables_text += "\nまず業界を確認してからテーブル詳細を参照します。"
+
+    knowledge_text = _get_consultation_knowledge()
+
+    return SYSTEM_PROMPT_CONSULTATION.format(
+        industry_tables=tables_text,
+        knowledge=knowledge_text or "（過去のナレッジはありません）",
+    )
+
+
+def _get_consultation_knowledge(limit: int = 3) -> str:
+    """施策相談ナレッジを検索"""
+    kb = _load_knowledge_base()
+    consultation_entries = [e for e in kb if e.get("type") == "consultation"]
+    if not consultation_entries:
+        return ""
+    recent = consultation_entries[-limit:]
+    lines = ["以下は過去の施策相談の結果です:"]
+    for entry in recent:
+        lines.append(f"\n#### {entry.get('strategy_name', '不明')}")
+        lines.append(f"概要: {entry.get('strategy_summary', '')}")
+        out_cols = entry.get("output_columns", [])
+        if out_cols:
+            lines.append(f"アウトプットカラム: {', '.join(out_cols[:5])}")
+    return "\n".join(lines)
 
 
 # --- Phase1 Step1: 方針決定プロンプト（軽量、Skills無し） ---
@@ -741,11 +902,16 @@ async def generate(req: GenerateRequest):
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    """追加質問への回答（技術確認の回答 → Step1再実行 → Step2）"""
+    """追加質問への回答（モードに応じて分岐）"""
     session = sessions.get(req.session_id)
     if not session:
         raise HTTPException(404, "セッションが見つかりません")
 
+    # 施策相談モードの場合
+    if session.get("mode") == "consultation":
+        return await _handle_consultation_chat(req, session)
+
+    # 手順書モード（既存ロジック）
     session["messages"].append({"role": "user", "content": req.message})
 
     # Step1を続行（過去の回答を含むコンテキストでAIに判断させる）
@@ -968,6 +1134,145 @@ async def feedback(req: FeedbackRequest):
             "original_steps": design_doc.get("processing_steps", []),
         })
         return {"status": "saved", "message": "修正内容をナレッジに保存しました"}
+
+
+# --- 施策相談エンドポイント ---
+
+@app.post("/api/consultation/start", response_model=ChatResponse)
+async def consultation_start(req: ConsultationStartRequest):
+    """施策相談セッションを開始"""
+    session_id = str(uuid.uuid4())
+    sessions[session_id] = {
+        "mode": "consultation",
+        "messages": [],
+        "industry": req.industry,
+        "consultation_result": None,
+        "question_count": 0,
+    }
+    session = sessions[session_id]
+
+    system_prompt = get_consultation_system_prompt(req.industry)
+    user_message = req.message
+    if req.industry and req.industry in INDUSTRIES:
+        user_message += f"\n\n（業界: {INDUSTRIES[req.industry]['label']}）"
+
+    session["messages"].append({"role": "user", "content": user_message})
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4000,
+            system=system_prompt,
+            messages=session["messages"],
+        )
+        reply_text = response.content[0].text
+    except Exception as e:
+        session["messages"].pop()
+        return ChatResponse(session_id=session_id, reply=f"APIエラー: {e}", status="asking")
+
+    session["messages"].append({"role": "assistant", "content": reply_text})
+    session["question_count"] = session.get("question_count", 0) + 1
+
+    result = _check_consultation_result(reply_text, session)
+    if result:
+        return ChatResponse(
+            session_id=session_id,
+            reply=reply_text.split("```json")[0].strip() or "施策設計が完了しました！",
+            status="consultation_complete",
+            consultation_result=result,
+        )
+
+    return ChatResponse(session_id=session_id, reply=reply_text, status="asking")
+
+
+@app.post("/api/consultation/apply", response_model=ChatResponse)
+async def consultation_apply(req: ConsultationApplyRequest):
+    """施策相談の結果を手順書パイプラインに橋渡し"""
+    session = sessions.get(req.session_id)
+    if not session:
+        raise HTTPException(404, "セッションが見つかりません")
+
+    consultation_result = session.get("consultation_result")
+    if not consultation_result:
+        raise HTTPException(400, "施策相談が完了していません")
+
+    input_tables = req.input_tables or consultation_result["input_tables"]
+    output_mapping = req.output_mapping or consultation_result["output_mapping"]
+
+    _save_knowledge({
+        "type": "consultation",
+        "strategy_name": consultation_result.get("strategy_name", ""),
+        "strategy_summary": consultation_result.get("strategy_summary", ""),
+        "output_columns": [c.get("name", "") for c in output_mapping.get("columns", [])],
+        "input_table_names": [t.get("table_name", "") for t in input_tables],
+    })
+
+    new_session_id = str(uuid.uuid4())
+    generate_req = GenerateRequest(
+        session_id=new_session_id,
+        input_tables=input_tables,
+        output_mapping=output_mapping,
+        additional_context="",
+    )
+    result = await generate(generate_req)
+    result.session_id = new_session_id
+    return result
+
+
+async def _handle_consultation_chat(req: ChatRequest, session: dict) -> ChatResponse:
+    """施策相談モードのチャットハンドラ"""
+    session["messages"].append({"role": "user", "content": req.message})
+    session["question_count"] = session.get("question_count", 0) + 1
+
+    industry = session.get("industry")
+    if not industry:
+        for key, ind in INDUSTRIES.items():
+            if ind["label"] in req.message:
+                session["industry"] = key
+                industry = key
+                break
+
+    system_prompt = get_consultation_system_prompt(industry)
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4000,
+            system=system_prompt,
+            messages=session["messages"],
+        )
+        reply_text = response.content[0].text
+    except Exception as e:
+        session["messages"].pop()
+        return ChatResponse(session_id=req.session_id, reply=f"APIエラー: {e}", status="asking")
+
+    session["messages"].append({"role": "assistant", "content": reply_text})
+
+    result = _check_consultation_result(reply_text, session)
+    if result:
+        return ChatResponse(
+            session_id=req.session_id,
+            reply=reply_text.split("```json")[0].strip() or "施策設計が完了しました！",
+            status="consultation_complete",
+            consultation_result=result,
+        )
+
+    return ChatResponse(session_id=req.session_id, reply=reply_text, status="asking")
+
+
+def _check_consultation_result(text: str, session: dict) -> dict | None:
+    """AIレスポンスからconsultation_result JSONを抽出"""
+    if "```json" not in text:
+        return None
+    try:
+        json_str = text.split("```json")[1].split("```")[0].strip()
+        data = json.loads(json_str)
+        if data.get("action") == "consultation_result":
+            session["consultation_result"] = data
+            return data
+    except (json.JSONDecodeError, IndexError):
+        pass
+    return None
 
 
 # --- フロントエンド配信 ---
