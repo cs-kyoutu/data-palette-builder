@@ -509,6 +509,152 @@
     .question-other .send-card-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .hidden { display: none !important; }
+
+    /* Mode selector */
+    .mode-selector {
+      max-width: 1200px;
+      margin: 0 auto 16px;
+      display: flex;
+      gap: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 4px;
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      background: transparent;
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+    .mode-btn:hover { color: var(--text); background: var(--bg); }
+    .mode-btn.active {
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 2px 6px rgba(12,170,235,0.20);
+    }
+
+    /* Consultation area */
+    .consultation-welcome {
+      text-align: center;
+      padding: 32px 24px 16px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .consultation-welcome h3 {
+      font-size: 16px;
+      color: var(--primary-dark);
+      margin-bottom: 8px;
+    }
+    .consultation-industry-select {
+      padding: 12px 16px 0;
+    }
+    .consultation-industry-select .label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .consultation-input-wrap {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .consultation-input-wrap textarea {
+      flex: 1;
+      padding: 10px 12px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      resize: none;
+      min-height: 42px;
+      max-height: 100px;
+      color: var(--text);
+    }
+    .consultation-input-wrap textarea:focus { border-color: var(--primary); outline: none; }
+
+    /* Review card */
+    .review-card {
+      margin-top: 12px;
+      border: 2px solid var(--primary);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .review-card-header {
+      background: var(--primary-bg);
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--primary-dark);
+    }
+    .review-card-body {
+      padding: 12px 14px;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .review-card-body table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .review-card-body th {
+      background: var(--bg);
+      padding: 4px 8px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--primary-dark);
+      border-bottom: 1px solid var(--border);
+    }
+    .review-card-body td {
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11.5px;
+    }
+    .review-card-section {
+      margin-bottom: 10px;
+    }
+    .review-card-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .review-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .review-actions button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+    .review-actions .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+    .review-actions .btn-primary:hover { background: var(--primary-dark); }
+    .review-actions .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1.5px solid var(--border);
+    }
+    .review-actions .btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
   </style>
 </head>
 <body>
@@ -519,8 +665,34 @@
 </div>
 
 <div class="main-content">
-  <!-- 2カラム: インプット / アウトプット -->
-  <div class="columns">
+  <!-- モードセレクター -->
+  <div class="mode-selector">
+    <button class="mode-btn active" onclick="switchMode('consultation', this)">施策相談</button>
+    <button class="mode-btn" onclick="switchMode('procedure', this)">テーブル定義から手順書</button>
+  </div>
+
+  <!-- ===== 施策相談エリア ===== -->
+  <div class="ai-area" id="consultationArea">
+    <div class="ai-area-header">施策相談エージェント</div>
+    <div class="consultation-industry-select">
+      <div class="label">業界を選択（任意）</div>
+      <div class="preset-chips" id="consultationIndustryChips"></div>
+    </div>
+    <div class="ai-messages" id="consultationMessages">
+      <div class="consultation-welcome">
+        <h3>どんな施策をやりたいですか？</h3>
+        <p>施策の概要を伝えてください。必要なテーブル定義とアウトプット定義を一緒に設計します。</p>
+      </div>
+    </div>
+    <div class="consultation-input-wrap" id="consultationInputWrap">
+      <textarea id="consultationInput" placeholder="例: カート落ちした人にリマインドメールを送りたい" rows="1"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendConsultation();}"></textarea>
+      <button class="send-btn" onclick="sendConsultation()">&#10148;</button>
+    </div>
+  </div>
+
+  <!-- ===== 手順書モード: 2カラム: インプット / アウトプット ===== -->
+  <div class="columns hidden" id="procedureColumns">
     <!-- ===== インプット（左） ===== -->
     <div class="panel">
       <div class="panel-header">
@@ -601,7 +773,7 @@
   </div>
 
   <!-- 生成ボタン -->
-  <div class="generate-area">
+  <div class="generate-area hidden" id="generateArea">
     <button class="generate-btn" id="generateBtn" onclick="generate()" disabled>手順書を生成する</button>
   </div>
 
@@ -626,11 +798,18 @@
   let isLoading = false;
   let industriesData = {};
 
+  // 施策相談用
+  let currentMode = 'consultation';  // 'consultation' | 'procedure'
+  let consultationSessionId = null;
+  let consultationResult = null;
+  let consultationIndustry = null;
+
   // --- Init ---
   async function init() {
     try {
       const res = await fetch("/api/industries");
       industriesData = await res.json();
+      // 手順書モード用プリセット
       const chipsContainer = document.getElementById("presetChips");
       for (const [key, ind] of Object.entries(industriesData)) {
         const chip = document.createElement("button");
@@ -639,6 +818,16 @@
         chip.textContent = ind.label;
         chip.onclick = () => togglePreset(key);
         chipsContainer.appendChild(chip);
+      }
+      // 施策相談モード用業界チップ
+      const consultChips = document.getElementById("consultationIndustryChips");
+      for (const [key, ind] of Object.entries(industriesData)) {
+        const chip = document.createElement("button");
+        chip.className = "preset-chip";
+        chip.dataset.key = key;
+        chip.textContent = ind.label;
+        chip.onclick = () => toggleConsultationIndustry(key, chip);
+        consultChips.appendChild(chip);
       }
     } catch(e) { console.error(e); }
 
@@ -1126,12 +1315,45 @@
       link.download = "";
       bubble.appendChild(document.createElement("br"));
       bubble.appendChild(link);
+
+      // フィードバックエリア
+      const fbArea = document.createElement("div");
+      fbArea.style.cssText = "margin-top:12px; padding-top:10px; border-top:1px solid var(--border);";
+      fbArea.innerHTML = `
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">この手順書は正しいですか？</div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button onclick="sendFeedback(true, this)" style="padding:4px 12px; border:1px solid #4CAF50; border-radius:4px; background:white; color:#4CAF50; cursor:pointer; font-size:12px;">✓ 正しい</button>
+          <button onclick="showCorrectionInput(this)" style="padding:4px 12px; border:1px solid #f44336; border-radius:4px; background:white; color:#f44336; cursor:pointer; font-size:12px;">✗ 修正が必要</button>
+        </div>
+        <div class="correction-area" style="display:none; margin-top:8px;">
+          <textarea placeholder="修正内容を入力..." style="width:100%; height:60px; border:1px solid var(--border); border-radius:6px; padding:6px; font-size:12px; resize:vertical;"></textarea>
+          <button onclick="sendFeedback(false, this)" style="margin-top:4px; padding:4px 12px; border:none; border-radius:4px; background:var(--primary); color:white; cursor:pointer; font-size:12px;">送信</button>
+        </div>
+      `;
+      bubble.appendChild(fbArea);
     }
 
     msg.appendChild(avatar);
     msg.appendChild(bubble);
     container.appendChild(msg);
     container.scrollTop = container.scrollHeight;
+  }
+
+  function showCorrectionInput(btn) {
+    const area = btn.closest("div").parentElement.querySelector(".correction-area");
+    area.style.display = "block";
+  }
+
+  function sendFeedback(isCorrect, btn) {
+    const correction = isCorrect ? null : btn.closest(".correction-area")?.querySelector("textarea")?.value;
+    fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, is_correct: isCorrect, correction: correction })
+    }).then(r => r.json()).then(d => {
+      const fbArea = btn.closest("div[style*='border-top']") || btn.closest("div").parentElement;
+      fbArea.innerHTML = `<div style="font-size:12px; color:var(--text-muted); margin-top:8px;">${isCorrect ? "✓ フィードバックを保存しました" : "✗ 修正内容を保存しました"}</div>`;
+    }).catch(e => console.error("FB error:", e));
   }
 
   // --- アウトプットテーブル定義テキストパーサー ---

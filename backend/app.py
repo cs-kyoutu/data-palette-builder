@@ -338,6 +338,11 @@ def get_system_prompt_step2(input_tables: list[dict], output_mapping: dict, plan
     skill_names = select_skills_from_plan(plan, input_tables, output_mapping)
     skills_text = "\n\n---\n\n".join(load_skill(name) for name in skill_names if load_skill(name))
 
+    # Past knowledge (success + correction cases)
+    knowledge_text = get_similar_knowledge(output_mapping)
+    if knowledge_text:
+        skills_text += chr(10)*2 + "---" + chr(10)*2 + knowledge_text
+
     return SYSTEM_PROMPT_STEP2.format(
         input_tables=format_input_tables(input_tables),
         output_mapping=format_output_mapping(output_mapping),
