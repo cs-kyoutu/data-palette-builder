@@ -155,9 +155,15 @@ SKILLS_DIR = BASE_DIR / "skills"
 
 
 def load_skill(name: str) -> str:
-    """スキルファイルを読み込む（.md優先、なければ.yaml）"""
+    """スキルファイルを読み込む（.md優先、なければ.yaml、patterns/配下も対応）"""
+    # まず直下を探す
     for ext in (".md", ".yaml"):
         path = SKILLS_DIR / f"{name}{ext}"
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+    # patterns/配下を探す
+    for ext in (".md", ".yaml"):
+        path = SKILLS_DIR / "patterns" / f"{name}{ext}"
         if path.exists():
             return path.read_text(encoding="utf-8")
     return ""
@@ -174,24 +180,24 @@ def select_skills_phase1(input_tables: list[dict], output_mapping: dict) -> list
 
     # インプットのテーブル名
     input_text = " ".join(t.get("table_name", "") for t in input_tables)
+    all_text = output_text + input_text
 
     # web行動キーワード
     web_keywords = ["閲覧", "カート", "かご", "お気に入り", "PV", "Click", "サイト"]
     if any(kw in output_text for kw in web_keywords) or "webアクセスログ" in input_text:
         skills.append("web_data")
+        skills.append("web_access")
 
     # カート・お気に入り → 購入除外
-    if any(kw in output_text for kw in ["カート", "かご", "お気に入り"]):
+    if any(kw in all_text for kw in ["カート", "かご", "お気に入り"]):
         skills.append("purchase_exclusion")
+        skills.append("cart_and_purchase")
 
     # 誕生日パターン
-    all_text = output_text + " ".join(
-        col.get("name", "") for t in input_tables for col in t.get("columns", [])
-    )
     if any(kw in all_text for kw in ["誕生日", "生年月日"]):
         skills.append("birthday_pattern")
 
-    return skills
+    return list(dict.fromkeys(skills))
 
 
 # --- 施策相談エージェント用プロンプト ---
@@ -568,24 +574,52 @@ def select_skills_from_plan(plan: str, input_tables: list[dict], output_mapping:
     """planの操作リストに基づいて必要なSkillsだけ選択"""
     skills = []
 
-    # hearing_defaultsはwebデータ関連の場合のみ
+    # design_patterns（共通ルール）は常に読む
+    skills.append("design_patterns")
+
+    # アウトプットのテキスト
+    output_text = ""
+    for col in output_mapping.get("columns", []):
+        output_text += col.get("name", "") + " " + col.get("definition", "") + " "
+    all_text = plan + " " + output_text
+
+    # インプットのテーブル名
     input_text = " ".join(t.get("table_name", "") for t in input_tables)
+
+    # --- パターン別ファイル選択 ---
+
+    # web系 → web_access + hearing_defaults + web_data
     if "webアクセスログ" in input_text or "web" in plan.lower():
         skills.append("hearing_defaults")
         skills.append("web_data")
+        skills.append("web_access")  # patterns/web_access.md
 
-    # カート・お気に入り
-    if any(kw in plan for kw in ["カート", "かご", "お気に入り", "購入除外"]):
+    # カート・お気に入り・購入除外 → cart_and_purchase + purchase_exclusion
+    if any(kw in all_text for kw in ["カート", "かご", "お気に入り", "購入除外", "購入済み"]):
         skills.append("purchase_exclusion")
+        skills.append("cart_and_purchase")  # patterns/cart_and_purchase.md
 
     # 誕生日
-    if any(kw in plan for kw in ["誕生日", "生年月日", "年齢"]):
+    if any(kw in all_text for kw in ["誕生日", "生年月日", "年齢"]):
         skills.append("birthday_pattern")
 
-    # design_patternsは常に（操作パターンの参照用）
-    skills.append("design_patterns")
+    # 金額・KPI・パーセント・フォーマット
+    if any(kw in all_text for kw in ["金額", "売上", "KPI", "パーセント", "受注回数", "四則演算", "期間判定"]):
+        skills.append("calculation_and_format")  # patterns/
 
-    return skills
+    # 差分・多段統合・時系列・LTV
+    if any(kw in all_text for kw in ["差分", "前日", "多段", "LTV", "月次", "ダミー", "時系列"]):
+        skills.append("advanced_integration")  # patterns/
+
+    # URL生成・置換・テキスト操作
+    if any(kw in all_text for kw in ["URL生成", "URLエンコード", "正規表現", "置換", "NULL", "型変換"]):
+        skills.append("text_and_cleanup")  # patterns/
+
+    # 差し替え・タスク編集・SQLジョブ
+    if any(kw in all_text for kw in ["差し替え", "タスク編集", "SQLジョブ", "年月マスタ", "地域分割"]):
+        skills.append("operational")  # patterns/
+
+    return list(dict.fromkeys(skills))  # 重複除去（順序保持）
 
 
 # 後方互換用
