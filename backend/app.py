@@ -327,10 +327,16 @@ def _format_strategy_templates(templates: list[dict]) -> str:
         lines.append(f"### {tpl['name']}（ID: {tpl['id']}）")
         lines.append(f"概要: {tpl['description']}")
         lines.append(f"- 誰に: {tpl['who']}")
-        lines.append(f"- 何を: {', '.join(tpl['what'])}")
+        what = tpl['what']
+        lines.append(f"- 何を: {', '.join(what) if isinstance(what, list) else what}")
         lines.append(f"- いつ: {tpl['when']}")
         lines.append(f"- 除外: {', '.join(tpl['exclude'])}")
         lines.append(f"- **必ずユーザーに聞く項目**: {', '.join(tpl['ask_user'])}")
+        notes = tpl.get('processing_notes', [])
+        if notes:
+            lines.append(f"- **処理上の注意点**:")
+            for note in notes:
+                lines.append(f"  - {note}")
         lines.append("")
     return "\n".join(lines)
 
