@@ -90,6 +90,26 @@ class ConsultationApplyRequest(BaseModel):
     output_mapping: dict | None = None
 
 
+class OrganizationStartRequest(BaseModel):
+    consultation_session_id: str
+    input_tables: list[dict]
+    additional_hint: str | None = None
+
+
+class OrganizationChatRequest(BaseModel):
+    session_id: str
+    message: str
+
+
+class OrganizationUpdateTablesRequest(BaseModel):
+    session_id: str
+    input_tables: list[dict]
+
+
+class OrganizationFinalizeRequest(BaseModel):
+    session_id: str
+
+
 class FeedbackRequest(BaseModel):
     session_id: str
     result: str  # "ok" | "fix"
@@ -390,6 +410,107 @@ def get_consultation_system_prompt(industry: str | None = None) -> str:
         industry_tables=tables_text,
         knowledge=knowledge_text or "（過去のナレッジはありません）",
         strategy_templates=templates_text,
+    )
+
+
+# --- テーブル定義整理エージェント用プロンプト ---
+SYSTEM_PROMPT_ORGANIZATION = """あなたはb→dashの「テーブル定義整理エージェント」です。
+施策相談フェーズで決まった抽象的な要件（例: 顧客テーブル.メールアドレス）を、
+ユーザーが実際に持っているテーブル定義にマッピングする役割です。
+
+## 施策要件サマリー（Phase1の結果）
+施策名: {strategy_name}
+概要: {strategy_summary}
+
+要件:
+- 誰に: {who}
+- 何を: {what}
+- いつ: {when}
+- 除外: {exclude}
+
+## Phase1の抽象output_mapping
+{abstract_mapping}
+
+## ユーザーが提供した実テーブル定義
+{actual_tables}
+
+## あなたの仕事
+1. Phase1の抽象output_mappingの各カラムを、ユーザーの実テーブルのカラムへ紐付ける
+2. 各カラムに confidence を付与:
+   - high: 実テーブルに明確に該当カラムがある
+   - medium: 推定だが妥当（例: カラム名が違うが意味的に同じ）
+   - low: 曖昧なのでユーザーに確認が必要
+3. 確信が持てない項目（confidence=low）は質問として出す
+4. 実テーブルに存在しないデータは missing_data として警告
+
+## 質問フォーマット（必ずこの形式）
+質問が必要な場合、必ず以下の形式で選択肢を提示する:
+```
+質問の説明文
+
+A) 選択肢1の具体的な内容
+B) 選択肢2の具体的な内容
+C) 選択肢3の具体的な内容
+```
+オープンクエスチョンは禁止。ユーザーは「その他」で自由記述も可能。
+
+## 出力フォーマット
+
+### 途中経過（質問や確認が残っている場合）
+自然文の説明に続けて以下のJSONを出力:
+```json
+{{{{
+  "action": "organization_review",
+  "confirmed": [
+    {{{{"name": "メールアドレス", "source_table": "顧客マスタ", "source_column": "email", "confidence": "high", "reason": "実テーブルに明確に存在"}}}}
+  ],
+  "questions": [
+    {{{{"name": "購入完了判定", "prompt": "購入完了はどのテーブルで判定しますか？", "options": ["A) 受注マスタのステータス", "B) 受注明細の確定日時"]}}}}
+  ],
+  "missing": [
+    {{{{"name": "商品画像URL", "reason": "選択された実テーブルに該当カラムが見つかりません"}}}}
+  ]
+}}}}
+```
+
+### 完了時（全カラムがマッピングされた場合）
+```json
+{{{{
+  "action": "organization_complete",
+  "input_tables": [
+    {{{{"table_name": "...", "columns": [{{{{"name": "...", "type": "...", "description": "..."}}}}]}}}}
+  ],
+  "output_mapping": {{{{
+    "columns": [
+      {{{{"name": "メールアドレス", "definition": "...", "source_table": "顧客マスタ", "source_column": "email", "purpose": "personalize"}}}}
+    ]
+  }}}}
+}}}}
+```
+
+## 重要なルール
+- **推測で決めない**: confidence=low な項目は必ず質問する
+- **マッピングの根拠を簡潔に説明する**
+- **実テーブルに存在しないデータは missing で明示**し、勝手に埋めない
+- input_tablesは実テーブルそのまま（ユーザー提供分）を返し、余計な加工はしない
+- output_mappingのsource_table / source_columnは実テーブルのカラム名と完全一致させる
+"""
+
+
+def get_organization_system_prompt(session: dict) -> str:
+    """テーブル定義整理エージェント用プロンプト生成"""
+    cr = session.get("consultation_result") or {}
+    actual = session.get("input_tables") or []
+    reqs = cr.get("requirements") or {}
+    return SYSTEM_PROMPT_ORGANIZATION.format(
+        strategy_name=cr.get("strategy_name", "不明"),
+        strategy_summary=cr.get("strategy_summary", ""),
+        who=reqs.get("who", ""),
+        what=reqs.get("what", ""),
+        when=reqs.get("when", ""),
+        exclude=reqs.get("exclude", ""),
+        abstract_mapping=json.dumps(cr.get("output_mapping", {}), ensure_ascii=False, indent=2),
+        actual_tables=json.dumps(actual, ensure_ascii=False, indent=2),
     )
 
 
@@ -1283,7 +1404,7 @@ async def consultation_start(req: ConsultationStartRequest):
 
 @app.post("/api/consultation/apply", response_model=ChatResponse)
 async def consultation_apply(req: ConsultationApplyRequest):
-    """施策相談の結果を手順書パイプラインに橋渡し"""
+    """施策相談の結果を手順書パイプラインに橋渡し（互換用、後方互換のため残存）"""
     session = sessions.get(req.session_id)
     if not session:
         raise HTTPException(404, "セッションが見つかりません")
@@ -1299,6 +1420,162 @@ async def consultation_apply(req: ConsultationApplyRequest):
         "type": "consultation",
         "strategy_name": consultation_result.get("strategy_name", ""),
         "strategy_summary": consultation_result.get("strategy_summary", ""),
+        "output_columns": [c.get("name", "") for c in output_mapping.get("columns", [])],
+        "input_table_names": [t.get("table_name", "") for t in input_tables],
+    })
+
+    new_session_id = str(uuid.uuid4())
+    generate_req = GenerateRequest(
+        session_id=new_session_id,
+        input_tables=input_tables,
+        output_mapping=output_mapping,
+        additional_context="",
+    )
+    result = await generate(generate_req)
+    result.session_id = new_session_id
+    return result
+
+
+# ========== テーブル定義整理フェーズ (Phase2) ==========
+
+def _parse_organization_reply(session_id: str, text: str, session: dict) -> ChatResponse:
+    """テーブル定義整理エージェントの返信をパースする"""
+    if "```json" not in text:
+        return ChatResponse(session_id=session_id, reply=text, status="asking")
+
+    try:
+        json_str = text.split("```json", 1)[1].split("```", 1)[0].strip()
+        payload = json.loads(json_str)
+    except (json.JSONDecodeError, IndexError):
+        return ChatResponse(session_id=session_id, reply=text, status="asking")
+
+    action = payload.get("action")
+    display_text = text.split("```json")[0].strip() or "マッピング候補を作成しました。"
+
+    if action == "organization_review":
+        session["review_state"] = payload
+        return ChatResponse(
+            session_id=session_id,
+            reply=display_text,
+            status="organization_review",
+            consultation_result=payload,
+        )
+    if action == "organization_complete":
+        session["input_tables"] = payload.get("input_tables", session.get("input_tables", []))
+        session["output_mapping"] = payload.get("output_mapping")
+        session["finalized"] = True
+        return ChatResponse(
+            session_id=session_id,
+            reply=display_text or "マッピングが確定しました。",
+            status="organization_complete",
+            consultation_result=payload,
+        )
+
+    return ChatResponse(session_id=session_id, reply=text, status="asking")
+
+
+async def _run_organization_initial_mapping(session: dict, session_id: str, hint: str | None = None) -> ChatResponse:
+    """実テーブルに対する初回マッピングをAIに要求"""
+    user_msg = "上記の実テーブルに基づいて、施策要件をマッピングしてください。"
+    if hint:
+        user_msg += f"\n\n補足: {hint}"
+    session["messages"] = [{"role": "user", "content": user_msg}]
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=8000,
+            system=get_organization_system_prompt(session),
+            messages=session["messages"],
+        )
+        reply_text = response.content[0].text
+    except Exception as e:
+        return ChatResponse(session_id=session_id, reply=f"APIエラー: {e}", status="asking")
+
+    session["messages"].append({"role": "assistant", "content": reply_text})
+    return _parse_organization_reply(session_id, reply_text, session)
+
+
+@app.post("/api/organization/start", response_model=ChatResponse)
+async def organization_start(req: OrganizationStartRequest):
+    """Phase1完了後にテーブル定義整理フェーズを開始"""
+    consult = sessions.get(req.consultation_session_id)
+    if not consult:
+        raise HTTPException(404, "施策相談セッションが見つかりません")
+    if not consult.get("consultation_result"):
+        raise HTTPException(400, "施策相談が完了していません")
+
+    org_id = str(uuid.uuid4())
+    sessions[org_id] = {
+        "mode": "organization",
+        "consultation_session_id": req.consultation_session_id,
+        "consultation_result": consult["consultation_result"],
+        "input_tables": req.input_tables,
+        "output_mapping": None,
+        "messages": [],
+        "review_state": None,
+        "finalized": False,
+    }
+    return await _run_organization_initial_mapping(sessions[org_id], org_id, req.additional_hint)
+
+
+@app.post("/api/organization/chat", response_model=ChatResponse)
+async def organization_chat(req: OrganizationChatRequest):
+    """テーブル定義整理フェーズのチャット（質問への回答）"""
+    session = sessions.get(req.session_id)
+    if not session or session.get("mode") != "organization":
+        raise HTTPException(404, "organizationセッションが見つかりません")
+
+    session["messages"].append({"role": "user", "content": req.message})
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=8000,
+            system=get_organization_system_prompt(session),
+            messages=session["messages"],
+        )
+        reply_text = response.content[0].text
+    except Exception as e:
+        session["messages"].pop()
+        return ChatResponse(session_id=req.session_id, reply=f"APIエラー: {e}", status="asking")
+
+    session["messages"].append({"role": "assistant", "content": reply_text})
+    return _parse_organization_reply(req.session_id, reply_text, session)
+
+
+@app.post("/api/organization/update-tables", response_model=ChatResponse)
+async def organization_update_tables(req: OrganizationUpdateTablesRequest):
+    """実テーブルを差し替えて再マッピング"""
+    session = sessions.get(req.session_id)
+    if not session or session.get("mode") != "organization":
+        raise HTTPException(404, "organizationセッションが見つかりません")
+
+    session["input_tables"] = req.input_tables
+    session["output_mapping"] = None
+    session["review_state"] = None
+    session["finalized"] = False
+    return await _run_organization_initial_mapping(session, req.session_id)
+
+
+@app.post("/api/organization/finalize", response_model=ChatResponse)
+async def organization_finalize(req: OrganizationFinalizeRequest):
+    """整理結果を既存の/api/generateに引き渡して手順書生成"""
+    session = sessions.get(req.session_id)
+    if not session or session.get("mode") != "organization":
+        raise HTTPException(404, "organizationセッションが見つかりません")
+
+    if not session.get("output_mapping"):
+        raise HTTPException(400, "マッピングが未確定です")
+
+    input_tables = session["input_tables"]
+    output_mapping = session["output_mapping"]
+    cr = session.get("consultation_result") or {}
+
+    _save_knowledge({
+        "type": "organization",
+        "strategy_name": cr.get("strategy_name", ""),
+        "strategy_summary": cr.get("strategy_summary", ""),
         "output_columns": [c.get("name", "") for c in output_mapping.get("columns", [])],
         "input_table_names": [t.get("table_name", "") for t in input_tables],
     })

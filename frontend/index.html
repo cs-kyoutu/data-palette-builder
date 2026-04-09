@@ -542,6 +542,105 @@
       color: white;
       box-shadow: 0 2px 6px rgba(12,170,235,0.20);
     }
+    .mode-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .mode-btn:disabled:hover { background: transparent; color: var(--text-muted); }
+
+    /* Organization area (Phase 2) */
+    #organizationArea { }
+    .org-strategy-summary {
+      background: var(--primary-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      font-size: 12px;
+    }
+    .org-strategy-summary .title {
+      font-weight: 700;
+      color: var(--primary-dark);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .org-strategy-summary .req-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 3px;
+    }
+    .org-strategy-summary .req-label {
+      color: var(--text-muted);
+      flex-shrink: 0;
+      width: 50px;
+    }
+    .org-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 12px 16px;
+    }
+    .org-grid .panel {
+      display: flex;
+      flex-direction: column;
+      max-height: 600px;
+    }
+    .org-mapping-review {
+      padding: 12px 14px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .org-mapping-review .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 10px 0 6px;
+    }
+    .org-mapping-review .section-title:first-child { margin-top: 0; }
+    .org-mapping-review .confirmed-item {
+      background: #f0fdf4;
+      border-left: 3px solid #22c55e;
+      padding: 6px 10px;
+      margin-bottom: 4px;
+      font-size: 12px;
+      border-radius: 4px;
+    }
+    .org-mapping-review .confirmed-item .col-name {
+      font-weight: 700;
+      color: var(--text);
+    }
+    .org-mapping-review .confirmed-item .source {
+      color: var(--text-muted);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+    .org-mapping-review .missing-item {
+      background: #fef2f2;
+      border-left: 3px solid #ef4444;
+      padding: 6px 10px;
+      margin-bottom: 4px;
+      font-size: 12px;
+      border-radius: 4px;
+    }
+    .org-mapping-review .missing-item .col-name {
+      font-weight: 700;
+      color: #991b1b;
+    }
+    .org-next-btn-wrap {
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+    }
+    .org-next-btn {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .org-next-btn:hover { background: var(--primary-dark); }
+    .org-next-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     /* Consultation area */
     .consultation-welcome {
@@ -680,8 +779,9 @@
 <div class="main-content">
   <!-- モードセレクター -->
   <div class="mode-selector">
-    <button class="mode-btn active" onclick="switchMode('consultation', this)">施策相談</button>
-    <button class="mode-btn" onclick="switchMode('procedure', this)">テーブル定義から手順書</button>
+    <button class="mode-btn active" onclick="switchMode('consultation', this)">1. 施策相談</button>
+    <button class="mode-btn" id="modeBtnOrganization" disabled onclick="switchMode('organization', this)">2. テーブル定義の整理</button>
+    <button class="mode-btn" onclick="switchMode('procedure', this)">3. テーブル定義から手順書</button>
   </div>
 
   <!-- ===== 施策相談エリア ===== -->
@@ -701,6 +801,75 @@
       <textarea id="consultationInput" placeholder="例: カート落ちした人にリマインドメールを送りたい" rows="1"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendConsultation();}"></textarea>
       <button class="send-btn" onclick="sendConsultation()">&#10148;</button>
+    </div>
+  </div>
+
+  <!-- ===== Phase2: テーブル定義の整理エリア ===== -->
+  <div class="ai-area hidden" id="organizationArea">
+    <div class="ai-area-header">テーブル定義整理エージェント</div>
+    <div class="org-strategy-summary" id="orgStrategySummary">
+      <div class="title">施策要件サマリ</div>
+      <div class="content">施策相談の結果がここに表示されます</div>
+    </div>
+    <div class="org-grid">
+      <!-- 左: 実テーブル投入パネル -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2>インプット（実テーブル定義）</h2>
+          <span class="badge" id="orgInputCount">0 テーブル</span>
+        </div>
+
+        <div class="input-method-toggle">
+          <button class="toggle-btn active" id="orgMethodBtnPreset" onclick="switchOrgInputMethod('preset')">プリセット</button>
+          <button class="toggle-btn" id="orgMethodBtnUpload" onclick="switchOrgInputMethod('upload')">ファイルアップロード</button>
+          <button class="toggle-btn" id="orgMethodBtnText" onclick="switchOrgInputMethod('text')">テキスト入力</button>
+        </div>
+
+        <!-- プリセット -->
+        <div id="orgPresetSection">
+          <div class="preset-search-wrap">
+            <span class="preset-search-icon">🔍</span>
+            <input type="text" class="preset-search" id="orgPresetSearch" placeholder="業界を検索..." oninput="filterOrgPresets()">
+          </div>
+          <div class="preset-chips" id="orgPresetChips"></div>
+        </div>
+
+        <!-- ファイルアップロード -->
+        <div id="orgUploadSection" class="hidden">
+          <div class="drop-zone" id="orgInputDropzone" onclick="document.getElementById('orgInputFile').click()">
+            <div class="icon">&#128196;</div>
+            <p>テーブル定義書をドロップ<br>または クリックして選択（Excel / CSV）</p>
+            <input type="file" id="orgInputFile" accept=".xlsx,.xls,.csv" multiple style="display:none" onchange="handleOrgInputFiles(this.files)">
+          </div>
+        </div>
+
+        <!-- テキスト入力 -->
+        <div id="orgTextSection" class="hidden">
+          <textarea class="text-input-area" id="orgInputTextInput"
+            rows="8" placeholder="テーブル定義をペースト（タブ区切り、スペース区切り、b→dashメタデータ形式対応）"></textarea>
+          <button class="upload-btn" onclick="parseOrgInputText()">テーブル定義を読み込む</button>
+        </div>
+
+        <div class="preview-area" id="orgInputPreview"></div>
+      </div>
+
+      <!-- 右: マッピング結果 + AIチャット -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2>マッピング整理</h2>
+          <span class="badge" id="orgMappingBadge">未確定</span>
+        </div>
+        <div class="org-mapping-review" id="orgMappingReview"></div>
+        <div class="ai-messages" id="organizationMessages" style="max-height:300px;"></div>
+        <div class="consultation-input-wrap" id="organizationInputWrap">
+          <textarea id="organizationInput" placeholder="回答を入力..." rows="1"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendOrganization();}"></textarea>
+          <button class="send-btn" onclick="sendOrganization()">&#10148;</button>
+        </div>
+        <div class="org-next-btn-wrap hidden" id="orgNextBtnWrap">
+          <button class="org-next-btn" onclick="finalizeOrganization()">次へ: 手順書を生成する</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -812,10 +981,15 @@
   let industriesData = {};
 
   // 施策相談用
-  let currentMode = 'consultation';  // 'consultation' | 'procedure'
+  let currentMode = 'consultation';  // 'consultation' | 'organization' | 'procedure'
   let consultationSessionId = null;
   let consultationResult = null;
   let consultationIndustry = null;
+
+  // テーブル定義整理用 (Phase2)
+  let organizationSessionId = null;
+  let organizationInputTables = [];
+  let organizationReviewState = null;
 
   // --- Init ---
   async function init() {
@@ -842,6 +1016,8 @@
         chip.onclick = () => toggleConsultationIndustry(key, chip);
         consultChips.appendChild(chip);
       }
+      // Phase2 整理モード用プリセットチップ
+      populateOrgPresetChips();
     } catch(e) { console.error(e); }
 
     setupDropZone("inputDropZone", "inputFileInput", handleInputFiles);
@@ -1541,16 +1717,19 @@
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
 
+    const show = (id) => document.getElementById(id).classList.remove('hidden');
+    const hide = (id) => document.getElementById(id).classList.add('hidden');
+
+    ['consultationArea','organizationArea','procedureColumns','generateArea','aiArea'].forEach(hide);
+
     if (mode === 'consultation') {
-      document.getElementById('consultationArea').classList.remove('hidden');
-      document.getElementById('procedureColumns').classList.add('hidden');
-      document.getElementById('generateArea').classList.add('hidden');
-      document.getElementById('aiArea').classList.add('hidden');
+      show('consultationArea');
+    } else if (mode === 'organization') {
+      show('organizationArea');
     } else {
-      document.getElementById('consultationArea').classList.add('hidden');
-      document.getElementById('procedureColumns').classList.remove('hidden');
-      document.getElementById('generateArea').classList.remove('hidden');
-      // aiAreaは手順書生成後に表示されるので隠さない
+      show('procedureColumns');
+      show('generateArea');
+      // aiAreaは手順書生成後に表示されるので明示的には出さない
     }
   }
 
@@ -1832,8 +2011,8 @@
     actions.className = 'review-actions';
     actions.style.padding = '0 14px 14px';
     actions.innerHTML = `
-      <button class="btn-primary" onclick="applyConsultationResult()">この定義で手順書を生成する</button>
-      <button class="btn-secondary" onclick="editConsultationResult()">定義を編集する</button>
+      <button class="btn-primary" onclick="applyConsultationResult()">次へ: テーブル定義を整理する</button>
+      <button class="btn-secondary" onclick="editConsultationResult()">手順書モードへ直接進む</button>
     `;
     card.appendChild(actions);
 
@@ -1845,8 +2024,53 @@
     if (!consultationResult || isLoading) return;
     isLoading = true;
 
+    // Phase2 (テーブル定義の整理) モードへ
+    const orgBtn = document.getElementById('modeBtnOrganization');
+    orgBtn.disabled = false;
+    switchMode('organization', orgBtn);
+
+    // Phase1サマリを描画
+    renderOrgStrategySummary(consultationResult);
+
+    // Phase1のinput_tablesを仮投入（ユーザーが差し替え可能）
+    organizationInputTables = consultationResult.input_tables || [];
+    renderOrgInputPreview();
+    populateOrgPresetChips();
+
+    // マッピング初期化
+    const reviewEl = document.getElementById('orgMappingReview');
+    reviewEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">AIがマッピング中です…</div>';
+    document.getElementById('orgMappingBadge').textContent = '処理中';
+
+    const msgContainer = document.getElementById('organizationMessages');
+    msgContainer.innerHTML = '';
+    showConsultationTyping(msgContainer);
+
+    try {
+      const res = await fetch('/api/organization/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          consultation_session_id: consultationSessionId,
+          input_tables: organizationInputTables,
+        }),
+      });
+      const data = await res.json();
+      organizationSessionId = data.session_id;
+      removeConsultationTyping(msgContainer);
+      handleOrganizationResponse(data);
+    } catch(e) {
+      removeConsultationTyping(msgContainer);
+      showConsultationMessage('ai', 'マッピング中にエラーが発生しました。', msgContainer);
+    }
+    isLoading = false;
+  }
+
+  function editConsultationResult() {
+    if (!consultationResult) return;
+
     // 手順書モードに切替
-    switchMode('procedure', document.querySelectorAll('.mode-btn')[1]);
+    switchMode('procedure', document.querySelectorAll('.mode-btn')[2]);
 
     // データをセット
     inputTables = consultationResult.input_tables;
@@ -1855,28 +2079,368 @@
     renderOutputPreview();
     document.getElementById('inputCount').textContent = `${inputTables.length} テーブル`;
     document.getElementById('outputCount').textContent = `${outputMapping.columns.length} カラム`;
+    updateGenerateBtn();
+  }
+
+  // ========== Phase 2: テーブル定義の整理 ==========
+  function renderOrgStrategySummary(result) {
+    const el = document.getElementById('orgStrategySummary');
+    const req = result.requirements || {};
+    let html = `<div class="title">📋 施策要件: ${result.strategy_name || ''}</div>`;
+    if (result.strategy_summary) {
+      html += `<div style="margin-bottom:6px;color:var(--text);">${result.strategy_summary}</div>`;
+    }
+    if (req.who) html += `<div class="req-row"><div class="req-label">誰に</div><div>${req.who}</div></div>`;
+    if (req.what) html += `<div class="req-row"><div class="req-label">何を</div><div>${req.what}</div></div>`;
+    if (req.when) html += `<div class="req-row"><div class="req-label">いつ</div><div>${req.when}</div></div>`;
+    if (req.exclude) html += `<div class="req-row"><div class="req-label">除外</div><div>${req.exclude}</div></div>`;
+    el.innerHTML = html;
+  }
+
+  function renderOrgInputPreview() {
+    const el = document.getElementById('orgInputPreview');
+    const count = document.getElementById('orgInputCount');
+    count.textContent = `${organizationInputTables.length} テーブル`;
+    if (!organizationInputTables.length) {
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:12px;">テーブル定義を投入してください</div>';
+      return;
+    }
+    let html = '';
+    for (const t of organizationInputTables) {
+      html += `<div class="table-preview"><strong>${t.table_name}</strong>（${t.columns.length}カラム）</div>`;
+    }
+    el.innerHTML = html;
+  }
+
+  function populateOrgPresetChips() {
+    const container = document.getElementById('orgPresetChips');
+    if (!container || !industriesData) return;
+    if (container.childElementCount > 0) return; // 初回のみ
+    Object.entries(industriesData).forEach(([key, preset]) => {
+      const chip = document.createElement('button');
+      chip.className = 'preset-chip';
+      chip.textContent = preset.label;
+      chip.dataset.key = key;
+      chip.onclick = () => toggleOrgPreset(key, chip);
+      container.appendChild(chip);
+    });
+  }
+
+  function toggleOrgPreset(key, chip) {
+    const preset = industriesData && industriesData[key];
+    if (!preset) return;
+    document.querySelectorAll('#orgPresetChips .preset-chip').forEach(c => c.classList.remove('selected'));
+    chip.classList.add('selected');
+    // プリセットのテーブル定義を投入
+    organizationInputTables = Object.entries(preset.data_tables).map(([name, t]) => ({
+      table_name: name,
+      columns: t.columns.map(c => ({ name: c.name, type: c.type || '', description: c.description || '' })),
+    }));
+    renderOrgInputPreview();
+    triggerOrgRemap();
+  }
+
+  function filterOrgPresets() {
+    const q = document.getElementById('orgPresetSearch').value.toLowerCase();
+    document.querySelectorAll('#orgPresetChips .preset-chip').forEach(chip => {
+      chip.style.display = chip.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  }
+
+  function switchOrgInputMethod(method) {
+    ['preset','upload','text'].forEach(m => {
+      const btn = document.getElementById('orgMethodBtn' + m.charAt(0).toUpperCase() + m.slice(1));
+      if (btn) btn.classList.toggle('active', m === method);
+    });
+    document.getElementById('orgPresetSection').classList.toggle('hidden', method !== 'preset');
+    document.getElementById('orgUploadSection').classList.toggle('hidden', method !== 'upload');
+    document.getElementById('orgTextSection').classList.toggle('hidden', method !== 'text');
+  }
+
+  async function handleOrgInputFiles(files) {
+    if (!files || !files.length) return;
+    const fd = new FormData();
+    for (const f of files) fd.append('files', f);
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.input_tables) {
+        organizationInputTables = data.input_tables;
+        renderOrgInputPreview();
+        triggerOrgRemap();
+      }
+    } catch(e) {
+      alert('アップロードに失敗しました');
+    }
+  }
+
+  async function parseOrgInputText() {
+    const text = document.getElementById('orgInputTextInput').value;
+    if (!text.trim()) return;
+    // 既存のparseAndSetInputTextロジックを転用するため、一時的に手順書モードのtextareaへ流す
+    const procedureInput = document.getElementById('inputTextInput');
+    const originalValue = procedureInput.value;
+    const originalTables = inputTables;
+    procedureInput.value = text;
+    parseAndSetInputText();
+    if (inputTables && inputTables.length) {
+      organizationInputTables = inputTables;
+      // procedure側の状態を復元（Phase3で使うため、ここでは一時利用）
+      // inputTables は Phase2の値として維持される
+      renderOrgInputPreview();
+      triggerOrgRemap();
+    }
+    procedureInput.value = originalValue;
+  }
+
+  async function triggerOrgRemap() {
+    if (!organizationSessionId || !organizationInputTables.length) return;
+    const reviewEl = document.getElementById('orgMappingReview');
+    reviewEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">テーブル変更を検知。再マッピング中です…</div>';
+    document.getElementById('orgMappingBadge').textContent = '処理中';
+    document.getElementById('orgNextBtnWrap').classList.add('hidden');
+
+    const msgContainer = document.getElementById('organizationMessages');
+    showConsultationTyping(msgContainer);
+
+    try {
+      const res = await fetch('/api/organization/update-tables', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: organizationSessionId,
+          input_tables: organizationInputTables,
+        }),
+      });
+      const data = await res.json();
+      removeConsultationTyping(msgContainer);
+      handleOrganizationResponse(data);
+    } catch(e) {
+      removeConsultationTyping(msgContainer);
+      showConsultationMessage('ai', 'マッピングに失敗しました。', msgContainer);
+    }
+  }
+
+  async function sendOrganization() {
+    const input = document.getElementById('organizationInput');
+    const text = input.value.trim();
+    if (!text || isLoading || !organizationSessionId) return;
+    isLoading = true;
+    input.value = '';
+
+    const msgContainer = document.getElementById('organizationMessages');
+    showConsultationMessage('user', text, msgContainer);
+    showConsultationTyping(msgContainer);
+
+    try {
+      const res = await fetch('/api/organization/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: organizationSessionId, message: text }),
+      });
+      const data = await res.json();
+      removeConsultationTyping(msgContainer);
+      handleOrganizationResponse(data);
+    } catch(e) {
+      removeConsultationTyping(msgContainer);
+      showConsultationMessage('ai', 'エラーが発生しました。', msgContainer);
+    }
+    isLoading = false;
+  }
+
+  async function sendOrganizationAnswer(answer) {
+    if (isLoading || !organizationSessionId) return;
+    isLoading = true;
+    const msgContainer = document.getElementById('organizationMessages');
+    removeOrgQuestionUI();
+    showConsultationMessage('user', answer, msgContainer);
+    showConsultationTyping(msgContainer);
+    try {
+      const res = await fetch('/api/organization/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: organizationSessionId, message: answer }),
+      });
+      const data = await res.json();
+      removeConsultationTyping(msgContainer);
+      handleOrganizationResponse(data);
+    } catch(e) {
+      removeConsultationTyping(msgContainer);
+      showConsultationMessage('ai', 'エラーが発生しました。', msgContainer);
+    }
+    isLoading = false;
+  }
+
+  function removeOrgQuestionUI() {
+    const area = document.getElementById('organizationMessages');
+    area.querySelectorAll('.question-cards').forEach(el => {
+      el.querySelectorAll('.question-card').forEach(c => {
+        c.style.pointerEvents = 'none';
+        c.style.opacity = '0.5';
+      });
+    });
+    area.querySelectorAll('.question-other').forEach(el => {
+      el.style.pointerEvents = 'none';
+      el.style.opacity = '0.5';
+    });
+  }
+
+  function handleOrganizationResponse(data) {
+    const msgContainer = document.getElementById('organizationMessages');
+    organizationReviewState = data.consultation_result || organizationReviewState;
+
+    if (data.status === 'organization_review' && data.consultation_result) {
+      renderOrgMappingReview(data.consultation_result);
+      showOrganizationMessageWithQuestions(data.reply, data.consultation_result.questions);
+      document.getElementById('orgMappingBadge').textContent = '確認中';
+      document.getElementById('orgNextBtnWrap').classList.add('hidden');
+    } else if (data.status === 'organization_complete' && data.consultation_result) {
+      renderOrgMappingReview(data.consultation_result);
+      showConsultationMessage('ai', data.reply || 'マッピングが確定しました。', msgContainer);
+      document.getElementById('orgMappingBadge').textContent = '確定 ✓';
+      document.getElementById('orgMappingBadge').style.background = '#22c55e';
+      document.getElementById('orgMappingBadge').style.color = '#fff';
+      document.getElementById('orgNextBtnWrap').classList.remove('hidden');
+      // 次へボタンを有効化: Phase3 モードボタンも有効（既に常時可能）
+    } else {
+      showConsultationMessage('ai', data.reply, msgContainer, true);
+    }
+  }
+
+  function showOrganizationMessageWithQuestions(introText, questions) {
+    const msgContainer = document.getElementById('organizationMessages');
+    // introテキスト表示
+    if (introText && introText.trim()) {
+      showConsultationMessage('ai', introText, msgContainer);
+    }
+    // 質問があればカードUIを描画
+    if (questions && questions.length) {
+      for (const q of questions) {
+        const msg = document.createElement('div');
+        msg.className = 'ai-msg ai';
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        const img = document.createElement('img');
+        img.src = '/bdash_hakase.png';
+        img.alt = 'AI';
+        avatar.appendChild(img);
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        const title = document.createElement('div');
+        title.innerHTML = `<strong>${q.name || ''}</strong>: ${q.prompt || ''}`;
+        bubble.appendChild(title);
+        const cards = document.createElement('div');
+        cards.className = 'question-cards';
+        (q.options || []).forEach(opt => {
+          const card = document.createElement('div');
+          card.className = 'question-card';
+          card.innerHTML = `<div class="card-label">${opt}</div>`;
+          card.onclick = () => sendOrganizationAnswer(`${q.name}: ${opt}`);
+          cards.appendChild(card);
+        });
+        bubble.appendChild(cards);
+        // その他入力
+        const otherRow = document.createElement('div');
+        otherRow.className = 'question-other';
+        const otherInput = document.createElement('input');
+        otherInput.type = 'text';
+        otherInput.placeholder = 'その他（自由入力）';
+        otherInput.onkeydown = (e) => {
+          if (e.key === 'Enter' && otherInput.value.trim()) {
+            sendOrganizationAnswer(`${q.name}: ${otherInput.value.trim()}`);
+          }
+        };
+        const otherBtn = document.createElement('button');
+        otherBtn.className = 'send-card-btn';
+        otherBtn.textContent = '送信';
+        otherBtn.onclick = () => {
+          if (otherInput.value.trim()) sendOrganizationAnswer(`${q.name}: ${otherInput.value.trim()}`);
+        };
+        otherRow.appendChild(otherInput);
+        otherRow.appendChild(otherBtn);
+        bubble.appendChild(otherRow);
+        msg.appendChild(avatar);
+        msg.appendChild(bubble);
+        msgContainer.appendChild(msg);
+      }
+      msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+  }
+
+  function renderOrgMappingReview(review) {
+    const el = document.getElementById('orgMappingReview');
+    let html = '';
+    const confirmed = review.confirmed || [];
+    const questions = review.questions || [];
+    const missing = review.missing || [];
+
+    if (confirmed.length) {
+      html += '<div class="section-title">✓ 確定したマッピング</div>';
+      for (const c of confirmed) {
+        html += `<div class="confirmed-item">
+          <div class="col-name">${c.name}</div>
+          <div class="source">→ ${c.source_table || '?'}.${c.source_column || '?'} ${c.confidence ? `(${c.confidence})` : ''}</div>
+          ${c.reason ? `<div class="source">${c.reason}</div>` : ''}
+        </div>`;
+      }
+    }
+    if (questions.length) {
+      html += `<div class="section-title">? 確認が必要 (${questions.length})</div>`;
+      html += '<div style="font-size:11px;color:var(--text-muted);">右のチャットで回答してください</div>';
+    }
+    if (missing.length) {
+      html += '<div class="section-title">⚠ 不足しているデータ</div>';
+      for (const m of missing) {
+        html += `<div class="missing-item">
+          <div class="col-name">${m.name}</div>
+          <div class="source">${m.reason || ''}</div>
+        </div>`;
+      }
+    }
+    if (!html) {
+      html = '<div style="color:var(--text-muted);font-size:12px;">マッピング結果がここに表示されます</div>';
+    }
+    el.innerHTML = html;
+  }
+
+  async function finalizeOrganization() {
+    if (!organizationSessionId || isLoading) return;
+    isLoading = true;
+
+    // Phase3 モードへ
+    switchMode('procedure', document.querySelectorAll('.mode-btn')[2]);
 
     // AIエリア表示
     const aiArea = document.getElementById('aiArea');
     aiArea.classList.remove('hidden');
-    showAiMessage('user', '施策相談の結果から手順書を生成します...');
+    showAiMessage('user', 'テーブル定義整理の結果から手順書を生成します...');
     showTyping();
 
     try {
-      const res = await fetch('/api/consultation/apply', {
+      const res = await fetch('/api/organization/finalize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: consultationSessionId,
-          input_tables: inputTables,
-          output_mapping: outputMapping,
-        }),
+        body: JSON.stringify({ session_id: organizationSessionId }),
       });
       const data = await res.json();
       sessionId = data.session_id;
+
+      // 確定マッピングを手順書モードのビューに反映
+      if (organizationReviewState && organizationReviewState.input_tables) {
+        inputTables = organizationReviewState.input_tables;
+      } else {
+        inputTables = organizationInputTables;
+      }
+      if (organizationReviewState && organizationReviewState.output_mapping) {
+        outputMapping = organizationReviewState.output_mapping;
+      }
+      renderInputPreview();
+      renderOutputPreview();
+      document.getElementById('inputCount').textContent = `${inputTables.length} テーブル`;
+      document.getElementById('outputCount').textContent = `${outputMapping.columns.length} カラム`;
+
       removeTyping();
       showAiMessage('ai', data.reply, data.download_url);
-
       if (data.status === 'asking') {
         const parsed = parseAiQuestions(data.reply);
         if (!parsed) {
@@ -1888,22 +2452,6 @@
       showAiMessage('ai', 'エラーが発生しました。');
     }
     isLoading = false;
-  }
-
-  function editConsultationResult() {
-    if (!consultationResult) return;
-
-    // 手順書モードに切替
-    switchMode('procedure', document.querySelectorAll('.mode-btn')[1]);
-
-    // データをセット
-    inputTables = consultationResult.input_tables;
-    outputMapping = consultationResult.output_mapping;
-    renderInputPreview();
-    renderOutputPreview();
-    document.getElementById('inputCount').textContent = `${inputTables.length} テーブル`;
-    document.getElementById('outputCount').textContent = `${outputMapping.columns.length} カラム`;
-    updateGenerateBtn();
   }
 
   function showTyping() {
