@@ -851,6 +851,15 @@
         </div>
 
         <div class="preview-area" id="orgInputPreview"></div>
+
+        <div style="padding:12px 14px;border-top:1px solid var(--border);">
+          <button class="org-next-btn" id="orgRunMappingBtn" onclick="runOrgMapping()" disabled>
+            AIマッピングを実行
+          </button>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:center;">
+            テーブル定義の投入が完了したらクリック
+          </div>
+        </div>
       </div>
 
       <!-- 右: マッピング結果 + AIチャット -->
@@ -2020,9 +2029,8 @@
     container.scrollTop = container.scrollHeight;
   }
 
-  async function applyConsultationResult() {
-    if (!consultationResult || isLoading) return;
-    isLoading = true;
+  function applyConsultationResult() {
+    if (!consultationResult) return;
 
     // Phase2 (テーブル定義の整理) モードへ
     const orgBtn = document.getElementById('modeBtnOrganization');
@@ -2032,31 +2040,69 @@
     // Phase1サマリを描画
     renderOrgStrategySummary(consultationResult);
 
-    // Phase1のinput_tablesを仮投入（ユーザーが差し替え可能）
-    organizationInputTables = consultationResult.input_tables || [];
+    // マッピング状態を初期化（テーブル投入はユーザー操作待ち）
+    organizationSessionId = null;
+    organizationReviewState = null;
+    organizationInputTables = [];
     renderOrgInputPreview();
     populateOrgPresetChips();
 
-    // マッピング初期化
+    const reviewEl = document.getElementById('orgMappingReview');
+    reviewEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">左側でテーブル定義を投入し、「AIマッピングを実行」ボタンを押してください</div>';
+    document.getElementById('orgMappingBadge').textContent = '未実行';
+    document.getElementById('orgNextBtnWrap').classList.add('hidden');
+
+    const msgContainer = document.getElementById('organizationMessages');
+    msgContainer.innerHTML = '';
+
+    updateRunMappingBtn();
+  }
+
+  function updateRunMappingBtn() {
+    const btn = document.getElementById('orgRunMappingBtn');
+    if (!btn) return;
+    btn.disabled = !organizationInputTables || organizationInputTables.length === 0;
+  }
+
+  async function runOrgMapping() {
+    if (isLoading || !organizationInputTables.length) return;
+    isLoading = true;
+
     const reviewEl = document.getElementById('orgMappingReview');
     reviewEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">AIがマッピング中です…</div>';
     document.getElementById('orgMappingBadge').textContent = '処理中';
+    document.getElementById('orgNextBtnWrap').classList.add('hidden');
 
     const msgContainer = document.getElementById('organizationMessages');
     msgContainer.innerHTML = '';
     showConsultationTyping(msgContainer);
 
     try {
-      const res = await fetch('/api/organization/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          consultation_session_id: consultationSessionId,
-          input_tables: organizationInputTables,
-        }),
-      });
-      const data = await res.json();
-      organizationSessionId = data.session_id;
+      let data;
+      if (!organizationSessionId) {
+        // 初回: /api/organization/start
+        const res = await fetch('/api/organization/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            consultation_session_id: consultationSessionId,
+            input_tables: organizationInputTables,
+          }),
+        });
+        data = await res.json();
+        organizationSessionId = data.session_id;
+      } else {
+        // 再マッピング: /api/organization/update-tables
+        const res = await fetch('/api/organization/update-tables', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: organizationSessionId,
+            input_tables: organizationInputTables,
+          }),
+        });
+        data = await res.json();
+      }
       removeConsultationTyping(msgContainer);
       handleOrganizationResponse(data);
     } catch(e) {
@@ -2128,16 +2174,16 @@
 
   function toggleOrgPreset(key, chip) {
     const preset = industriesData && industriesData[key];
-    if (!preset) return;
+    if (!preset || !preset.tables) return;
     document.querySelectorAll('#orgPresetChips .preset-chip').forEach(c => c.classList.remove('selected'));
     chip.classList.add('selected');
-    // プリセットのテーブル定義を投入
-    organizationInputTables = Object.entries(preset.data_tables).map(([name, t]) => ({
-      table_name: name,
+    // プリセットのテーブル定義を投入（AIマッピングはボタン押下時）
+    organizationInputTables = preset.tables.map(t => ({
+      table_name: t.table_name,
       columns: t.columns.map(c => ({ name: c.name, type: c.type || '', description: c.description || '' })),
     }));
     renderOrgInputPreview();
-    triggerOrgRemap();
+    updateRunMappingBtn();
   }
 
   function filterOrgPresets() {
@@ -2167,58 +2213,27 @@
       if (data.input_tables) {
         organizationInputTables = data.input_tables;
         renderOrgInputPreview();
-        triggerOrgRemap();
+        updateRunMappingBtn();
       }
     } catch(e) {
       alert('アップロードに失敗しました');
     }
   }
 
-  async function parseOrgInputText() {
+  function parseOrgInputText() {
     const text = document.getElementById('orgInputTextInput').value;
     if (!text.trim()) return;
-    // 既存のparseAndSetInputTextロジックを転用するため、一時的に手順書モードのtextareaへ流す
+    // 既存のparseAndSetInputTextロジックを転用
     const procedureInput = document.getElementById('inputTextInput');
     const originalValue = procedureInput.value;
-    const originalTables = inputTables;
     procedureInput.value = text;
     parseAndSetInputText();
     if (inputTables && inputTables.length) {
       organizationInputTables = inputTables;
-      // procedure側の状態を復元（Phase3で使うため、ここでは一時利用）
-      // inputTables は Phase2の値として維持される
       renderOrgInputPreview();
-      triggerOrgRemap();
+      updateRunMappingBtn();
     }
     procedureInput.value = originalValue;
-  }
-
-  async function triggerOrgRemap() {
-    if (!organizationSessionId || !organizationInputTables.length) return;
-    const reviewEl = document.getElementById('orgMappingReview');
-    reviewEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">テーブル変更を検知。再マッピング中です…</div>';
-    document.getElementById('orgMappingBadge').textContent = '処理中';
-    document.getElementById('orgNextBtnWrap').classList.add('hidden');
-
-    const msgContainer = document.getElementById('organizationMessages');
-    showConsultationTyping(msgContainer);
-
-    try {
-      const res = await fetch('/api/organization/update-tables', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: organizationSessionId,
-          input_tables: organizationInputTables,
-        }),
-      });
-      const data = await res.json();
-      removeConsultationTyping(msgContainer);
-      handleOrganizationResponse(data);
-    } catch(e) {
-      removeConsultationTyping(msgContainer);
-      showConsultationMessage('ai', 'マッピングに失敗しました。', msgContainer);
-    }
   }
 
   async function sendOrganization() {
