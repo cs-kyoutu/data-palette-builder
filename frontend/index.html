@@ -583,6 +583,16 @@
       color: var(--text);
     }
     .consultation-input-wrap textarea:focus { border-color: var(--primary); outline: none; }
+    .consultation-input-wrap .send-btn {
+      width: 42px; height: 42px;
+      background: var(--primary); color: white;
+      border: none; border-radius: 8px;
+      cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .consultation-input-wrap .send-btn:hover { background: var(--primary-dark); }
+    .consultation-input-wrap .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     /* Review card */
     .review-card {
@@ -663,7 +673,7 @@
 <body>
 
 <div class="header">
-  <img src="/bdash_hakase.png" alt="logo" style="height:28px; margin-right:8px;">
+  <img src="/bdash_hakase.png" alt="" style="height:28px; margin-right:8px;" onerror="this.style.display='none'">
   <h1>データパレット構築 設計書・手順書ジェネレータ</h1>
 </div>
 
