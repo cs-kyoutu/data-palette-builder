@@ -65,18 +65,22 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
 
 # --- パス定義 ---
 BASE_DIR = Path(__file__).parent.parent
-# Render Disk がマウントされていれば /data を使用、なければローカルパス
-_PERSIST_DIR = Path(os.environ.get("PERSIST_DIR", ""))
-if _PERSIST_DIR.is_dir():
-    UPLOAD_DIR = _PERSIST_DIR / "uploads"
-    OUTPUT_DIR = _PERSIST_DIR / "output"
-    KNOWLEDGE_PATH = _PERSIST_DIR / "knowledge_base.json"
-else:
-    UPLOAD_DIR = Path(__file__).parent / "uploads"
-    OUTPUT_DIR = Path(__file__).parent / "output"
-    KNOWLEDGE_PATH = BASE_DIR / "skills" / "knowledge_base.json"
+UPLOAD_DIR = Path(__file__).parent / "uploads"
+OUTPUT_DIR = Path(__file__).parent / "output"
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
+
+# --- Supabase接続 ---
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+_supabase_client = None
+
+def _get_supabase():
+    global _supabase_client
+    if _supabase_client is None and SUPABASE_URL and SUPABASE_KEY:
+        from supabase import create_client
+        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return _supabase_client
 
 # --- 業界プリセット ---
 INDUSTRIES_PATH = BASE_DIR / "templates" / "industries.json"
@@ -173,30 +177,125 @@ class FeedbackRequest(BaseModel):
     fix_description: str = ""
 
 
-# --- ナレッジベース管理 ---
+# --- ナレッジベース管理（Supabase or JSONファイル） ---
+KNOWLEDGE_PATH = BASE_DIR / "skills" / "knowledge_base.json"
+
+
 def _load_knowledge_base() -> list[dict]:
+    """ナレッジ全件取得"""
+    sb = _get_supabase()
+    if sb:
+        try:
+            res = sb.table("knowledge").select("*").order("created_at", desc=True).limit(200).execute()
+            return res.data or []
+        except Exception:
+            pass
+    # フォールバック: JSONファイル
     if KNOWLEDGE_PATH.exists():
         with open(KNOWLEDGE_PATH, encoding="utf-8") as f:
             return json.load(f)
     return []
 
+
 def _save_knowledge(entry: dict):
-    kb = _load_knowledge_base()
+    """ナレッジ1件保存"""
     entry["created_at"] = datetime.now().isoformat()
     entry["id"] = str(uuid.uuid4())[:8]
+
+    # 配列/dict以外のフィールドを raw_data にまとめて保存
+    db_entry = {
+        "id": entry["id"],
+        "type": entry.get("type", ""),
+        "strategy_name": entry.get("strategy_name", ""),
+        "strategy_summary": entry.get("strategy_summary", ""),
+        "output_columns": entry.get("output_columns", []),
+        "input_table_names": entry.get("input_table_names", []),
+        "correction": entry.get("correction", ""),
+        "summary": entry.get("summary", ""),
+        "processing_steps": entry.get("processing_steps", []),
+        "processing_groups": entry.get("processing_groups", []),
+        "created_at": entry["created_at"],
+        "raw_data": entry,  # 全フィールドをJSONBに保存（後方互換）
+    }
+
+    sb = _get_supabase()
+    if sb:
+        try:
+            sb.table("knowledge").insert(db_entry).execute()
+            return
+        except Exception:
+            pass
+
+    # フォールバック: JSONファイル
+    kb = []
+    if KNOWLEDGE_PATH.exists():
+        with open(KNOWLEDGE_PATH, encoding="utf-8") as f:
+            kb = json.load(f)
     kb.append(entry)
-    # 最新100件のみ保持
-    if len(kb) > 100:
-        kb = kb[-100:]
+    if len(kb) > 200:
+        kb = kb[-200:]
     with open(KNOWLEDGE_PATH, "w", encoding="utf-8") as f:
         json.dump(kb, f, ensure_ascii=False, indent=2)
+
+
+def _delete_knowledge(entry_id: str) -> bool:
+    """ナレッジ1件削除"""
+    sb = _get_supabase()
+    if sb:
+        try:
+            sb.table("knowledge").delete().eq("id", entry_id).execute()
+            return True
+        except Exception:
+            pass
+    # フォールバック: JSONファイル
+    if KNOWLEDGE_PATH.exists():
+        with open(KNOWLEDGE_PATH, encoding="utf-8") as f:
+            kb = json.load(f)
+        new_kb = [e for e in kb if e.get("id") != entry_id]
+        if len(new_kb) < len(kb):
+            with open(KNOWLEDGE_PATH, "w", encoding="utf-8") as f:
+                json.dump(new_kb, f, ensure_ascii=False, indent=2)
+            return True
+    return False
+
+
+def _update_knowledge(entry_id: str, update: dict) -> dict | None:
+    """ナレッジ1件更新"""
+    update.pop("id", None)
+    update.pop("created_at", None)
+
+    sb = _get_supabase()
+    if sb:
+        try:
+            # raw_data も更新
+            if "raw_data" not in update:
+                existing = sb.table("knowledge").select("raw_data").eq("id", entry_id).execute()
+                if existing.data:
+                    raw = existing.data[0].get("raw_data", {})
+                    raw.update(update)
+                    update["raw_data"] = raw
+            res = sb.table("knowledge").update(update).eq("id", entry_id).execute()
+            return res.data[0] if res.data else None
+        except Exception:
+            pass
+    # フォールバック: JSONファイル
+    if KNOWLEDGE_PATH.exists():
+        with open(KNOWLEDGE_PATH, encoding="utf-8") as f:
+            kb = json.load(f)
+        for i, e in enumerate(kb):
+            if e.get("id") == entry_id:
+                kb[i].update(update)
+                with open(KNOWLEDGE_PATH, "w", encoding="utf-8") as f:
+                    json.dump(kb, f, ensure_ascii=False, indent=2)
+                return kb[i]
+    return None
+
 
 def get_similar_knowledge(output_mapping: dict, limit: int = 3) -> str:
     """アウトプット定義から類似ナレッジを検索"""
     kb = _load_knowledge_base()
     if not kb:
         return ""
-    # 簡易的なキーワードマッチで類似ケースを取得
     output_keywords = set()
     for col in output_mapping.get("columns", []):
         for val in [col.get("name", ""), col.get("definition", "")]:
@@ -1758,28 +1857,17 @@ async def get_knowledge_entry(entry_id: str):
 @app.put("/api/knowledge/{entry_id}", dependencies=[Depends(verify_token)])
 async def update_knowledge_entry(entry_id: str, update: dict):
     """ナレッジ1件を更新"""
-    kb = _load_knowledge_base()
-    for i, entry in enumerate(kb):
-        if entry.get("id") == entry_id:
-            # id と created_at は変更不可
-            update.pop("id", None)
-            update.pop("created_at", None)
-            kb[i].update(update)
-            with open(KNOWLEDGE_PATH, "w", encoding="utf-8") as f:
-                json.dump(kb, f, ensure_ascii=False, indent=2)
-            return {"status": "updated", "entry": kb[i]}
-    raise HTTPException(404, "ナレッジが見つかりません")
+    result = _update_knowledge(entry_id, update)
+    if result is None:
+        raise HTTPException(404, "ナレッジが見つかりません")
+    return {"status": "updated", "entry": result}
 
 
 @app.delete("/api/knowledge/{entry_id}", dependencies=[Depends(verify_token)])
 async def delete_knowledge_entry(entry_id: str):
     """ナレッジ1件を削除"""
-    kb = _load_knowledge_base()
-    new_kb = [e for e in kb if e.get("id") != entry_id]
-    if len(new_kb) == len(kb):
+    if not _delete_knowledge(entry_id):
         raise HTTPException(404, "ナレッジが見つかりません")
-    with open(KNOWLEDGE_PATH, "w", encoding="utf-8") as f:
-        json.dump(new_kb, f, ensure_ascii=False, indent=2)
     return {"status": "deleted"}
 
 

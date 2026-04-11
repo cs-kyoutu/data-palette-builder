@@ -11,11 +11,9 @@ services:
         sync: false
       - key: CORS_ORIGIN
         value: "https://data-palette-builder.onrender.com"
-      - key: PERSIST_DIR
-        value: "/data"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
       - key: PYTHON_VERSION
         value: "3.11.9"
-    disk:
-      name: data-palette-data
-      mountPath: /data
-      sizeGB: 1
