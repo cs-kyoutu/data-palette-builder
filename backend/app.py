@@ -21,9 +21,10 @@ except ImportError:
     pass  # Render環境では環境変数で設定
 
 import anthropic
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 from .parser import (
@@ -33,13 +34,34 @@ from .parser import (
 from .excel_builder import build_spreadsheet
 from .template_engine import generate_procedure_text, render_step
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(title="データパレット構築手順書ジェネレータ")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[os.environ.get("CORS_ORIGIN", "*")],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- 認証 ---
+AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "")
+security = HTTPBearer(auto_error=False)
+
+
+async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Bearer Token認証。APP_AUTH_TOKEN未設定の場合は認証スキップ（ローカル開発用）"""
+    if not AUTH_TOKEN:
+        return  # トークン未設定ならスキップ（ローカル）
+    if not credentials or credentials.credentials != AUTH_TOKEN:
+        raise HTTPException(status_code=401, detail="認証エラー: 無効なトークンです")
+
 
 # --- パス定義 ---
 BASE_DIR = Path(__file__).parent.parent
@@ -56,6 +78,34 @@ with open(INDUSTRIES_PATH, encoding="utf-8") as f:
 
 # --- セッション管理 ---
 sessions: dict[str, dict] = {}
+
+# --- ファイル自動クリーンアップ ---
+import threading
+import time as _time
+
+
+def _cleanup_old_files():
+    """1時間ごとにアップロード/出力ファイルをクリーンアップ"""
+    MAX_AGE_HOURS = 24
+    while True:
+        _time.sleep(3600)  # 1時間ごとに実行
+        now = _time.time()
+        for d in [UPLOAD_DIR, OUTPUT_DIR]:
+            for f in d.iterdir():
+                if f.is_file() and (now - f.stat().st_mtime) > MAX_AGE_HOURS * 3600:
+                    try:
+                        f.unlink()
+                    except OSError:
+                        pass
+        # 古いセッションも掃除（24時間以上前のセッション）
+        stale = [k for k, v in sessions.items()
+                 if v.get("created_at", now) < now - MAX_AGE_HOURS * 3600]
+        for k in stale:
+            sessions.pop(k, None)
+
+
+_cleanup_thread = threading.Thread(target=_cleanup_old_files, daemon=True)
+_cleanup_thread.start()
 
 # --- Claude APIクライアント ---
 client = anthropic.Anthropic()
@@ -857,7 +907,7 @@ def _parse_json_with_repair(json_str: str) -> dict:
 
 # --- APIエンドポイント ---
 
-@app.get("/api/industries")
+@app.get("/api/industries", dependencies=[Depends(verify_token)])
 async def list_industries():
     """業界プリセット一覧を返す"""
     result = {}
@@ -876,7 +926,7 @@ async def list_industries():
     return result
 
 
-@app.post("/api/upload")
+@app.post("/api/upload", dependencies=[Depends(verify_token)])
 async def upload_file(
     file: UploadFile = File(...),
     file_type: str = Form("input"),  # "input" or "output"
@@ -906,11 +956,12 @@ async def upload_file(
                 result = parse_output_excel(str(save_path))
             return {"type": "output", "mapping": result, "filename": file.filename}
     except Exception as e:
-        raise HTTPException(400, f"ファイル解析エラー: {e}")
+        raise HTTPException(400, f"ファイルの解析に失敗しました。ファイル形式を確認してください。")
 
 
-@app.post("/api/generate", response_model=ChatResponse)
-async def generate(req: GenerateRequest):
+@app.post("/api/generate", response_model=ChatResponse, dependencies=[Depends(verify_token)])
+@limiter.limit("10/minute")
+async def generate(request: Request, req: GenerateRequest):
     """設計書を生成する（2段階API）"""
     session_id = req.session_id or str(uuid.uuid4())
 
@@ -922,6 +973,7 @@ async def generate(req: GenerateRequest):
             "output_mapping": req.output_mapping,
             "step": "step1",  # step1 or step2
             "plan": None,
+            "created_at": _time.time(),
         }
 
     session = sessions[session_id]
@@ -1127,8 +1179,9 @@ async def generate(req: GenerateRequest):
     )
 
 
-@app.post("/api/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
+@app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(verify_token)])
+@limiter.limit("20/minute")
+async def chat(request: Request, req: ChatRequest):
     """追加質問への回答（モードに応じて分岐）"""
     session = sessions.get(req.session_id)
     if not session:
@@ -1163,7 +1216,7 @@ async def chat(req: ChatRequest):
         step1_text = response.content[0].text
     except Exception as e:
         session["messages"].pop()
-        return ChatResponse(session_id=req.session_id, reply=f"APIエラー: {e}", status="asking")
+        return ChatResponse(session_id=req.session_id, reply=f"エラーが発生しました。しばらく待ってから再度お試しください。", status="asking")
 
     session["messages"].append({"role": "assistant", "content": step1_text})
 
@@ -1301,7 +1354,7 @@ async def chat(req: ChatRequest):
     )
 
 
-@app.get("/api/download/{session_id}")
+@app.get("/api/download/{session_id}", dependencies=[Depends(verify_token)])
 async def download(session_id: str):
     session = sessions.get(session_id)
     if not session or "last_file" not in session:
@@ -1313,7 +1366,7 @@ async def download(session_id: str):
     )
 
 
-@app.get("/api/download-design/{session_id}")
+@app.get("/api/download-design/{session_id}", dependencies=[Depends(verify_token)])
 async def download_design(session_id: str):
     """設計書JSONをダウンロード"""
     session = sessions.get(session_id)
@@ -1332,7 +1385,7 @@ class FeedbackRequest(BaseModel):
     is_correct: bool
     correction: str | None = None
 
-@app.post("/api/feedback")
+@app.post("/api/feedback", dependencies=[Depends(verify_token)])
 async def feedback(req: FeedbackRequest):
     """手順書生成後のフィードバック → ナレッジに自動蓄積"""
     session = sessions.get(req.session_id)
@@ -1365,8 +1418,9 @@ async def feedback(req: FeedbackRequest):
 
 # --- 施策相談エンドポイント ---
 
-@app.post("/api/consultation/start", response_model=ChatResponse)
-async def consultation_start(req: ConsultationStartRequest):
+@app.post("/api/consultation/start", response_model=ChatResponse, dependencies=[Depends(verify_token)])
+@limiter.limit("10/minute")
+async def consultation_start(request: Request, req: ConsultationStartRequest):
     """施策相談セッションを開始"""
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
@@ -1375,6 +1429,7 @@ async def consultation_start(req: ConsultationStartRequest):
         "industry": req.industry,
         "consultation_result": None,
         "question_count": 0,
+        "created_at": _time.time(),
     }
     session = sessions[session_id]
 
@@ -1395,7 +1450,7 @@ async def consultation_start(req: ConsultationStartRequest):
         reply_text = response.content[0].text
     except Exception as e:
         session["messages"].pop()
-        return ChatResponse(session_id=session_id, reply=f"APIエラー: {e}", status="asking")
+        return ChatResponse(session_id=session_id, reply=f"エラーが発生しました。しばらく待ってから再度お試しください。", status="asking")
 
     session["messages"].append({"role": "assistant", "content": reply_text})
     session["question_count"] = session.get("question_count", 0) + 1
@@ -1412,7 +1467,7 @@ async def consultation_start(req: ConsultationStartRequest):
     return ChatResponse(session_id=session_id, reply=reply_text, status="asking")
 
 
-@app.post("/api/consultation/apply", response_model=ChatResponse)
+@app.post("/api/consultation/apply", response_model=ChatResponse, dependencies=[Depends(verify_token)])
 async def consultation_apply(req: ConsultationApplyRequest):
     """施策相談の結果を手順書パイプラインに橋渡し（互換用、後方互換のため残存）"""
     session = sessions.get(req.session_id)
@@ -1500,14 +1555,15 @@ async def _run_organization_initial_mapping(session: dict, session_id: str, hint
         )
         reply_text = response.content[0].text
     except Exception as e:
-        return ChatResponse(session_id=session_id, reply=f"APIエラー: {e}", status="asking")
+        return ChatResponse(session_id=session_id, reply=f"エラーが発生しました。しばらく待ってから再度お試しください。", status="asking")
 
     session["messages"].append({"role": "assistant", "content": reply_text})
     return _parse_organization_reply(session_id, reply_text, session)
 
 
-@app.post("/api/organization/start", response_model=ChatResponse)
-async def organization_start(req: OrganizationStartRequest):
+@app.post("/api/organization/start", response_model=ChatResponse, dependencies=[Depends(verify_token)])
+@limiter.limit("10/minute")
+async def organization_start(request: Request, req: OrganizationStartRequest):
     """Phase1完了後にテーブル定義整理フェーズを開始"""
     consult = sessions.get(req.consultation_session_id)
     if not consult:
@@ -1529,8 +1585,9 @@ async def organization_start(req: OrganizationStartRequest):
     return await _run_organization_initial_mapping(sessions[org_id], org_id, req.additional_hint)
 
 
-@app.post("/api/organization/chat", response_model=ChatResponse)
-async def organization_chat(req: OrganizationChatRequest):
+@app.post("/api/organization/chat", response_model=ChatResponse, dependencies=[Depends(verify_token)])
+@limiter.limit("20/minute")
+async def organization_chat(request: Request, req: OrganizationChatRequest):
     """テーブル定義整理フェーズのチャット（質問への回答）"""
     session = sessions.get(req.session_id)
     if not session or session.get("mode") != "organization":
@@ -1548,13 +1605,13 @@ async def organization_chat(req: OrganizationChatRequest):
         reply_text = response.content[0].text
     except Exception as e:
         session["messages"].pop()
-        return ChatResponse(session_id=req.session_id, reply=f"APIエラー: {e}", status="asking")
+        return ChatResponse(session_id=req.session_id, reply=f"エラーが発生しました。しばらく待ってから再度お試しください。", status="asking")
 
     session["messages"].append({"role": "assistant", "content": reply_text})
     return _parse_organization_reply(req.session_id, reply_text, session)
 
 
-@app.post("/api/organization/update-tables", response_model=ChatResponse)
+@app.post("/api/organization/update-tables", response_model=ChatResponse, dependencies=[Depends(verify_token)])
 async def organization_update_tables(req: OrganizationUpdateTablesRequest):
     """実テーブルを差し替えて再マッピング"""
     session = sessions.get(req.session_id)
@@ -1568,8 +1625,9 @@ async def organization_update_tables(req: OrganizationUpdateTablesRequest):
     return await _run_organization_initial_mapping(session, req.session_id)
 
 
-@app.post("/api/organization/finalize", response_model=ChatResponse)
-async def organization_finalize(req: OrganizationFinalizeRequest):
+@app.post("/api/organization/finalize", response_model=ChatResponse, dependencies=[Depends(verify_token)])
+@limiter.limit("10/minute")
+async def organization_finalize(request: Request, req: OrganizationFinalizeRequest):
     """整理結果を既存の/api/generateに引き渡して手順書生成"""
     session = sessions.get(req.session_id)
     if not session or session.get("mode") != "organization":
@@ -1627,7 +1685,7 @@ async def _handle_consultation_chat(req: ChatRequest, session: dict) -> ChatResp
         reply_text = response.content[0].text
     except Exception as e:
         session["messages"].pop()
-        return ChatResponse(session_id=req.session_id, reply=f"APIエラー: {e}", status="asking")
+        return ChatResponse(session_id=req.session_id, reply=f"エラーが発生しました。しばらく待ってから再度お試しください。", status="asking")
 
     session["messages"].append({"role": "assistant", "content": reply_text})
 
@@ -1664,7 +1722,11 @@ FRONTEND_PATH = BASE_DIR / "frontend"
 @app.get("/", response_class=HTMLResponse)
 async def index():
     html_path = FRONTEND_PATH / "index.html"
-    return html_path.read_text(encoding="utf-8")
+    html = html_path.read_text(encoding="utf-8")
+    # Bearer Token をフロントに注入（全fetchリクエストで自動送信させる）
+    token_script = f'<script>window.__APP_AUTH_TOKEN__="{AUTH_TOKEN}";</script>'
+    html = html.replace("</head>", f"{token_script}</head>")
+    return html
 
 
 @app.get("/bdash_hakase.png")

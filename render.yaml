@@ -7,5 +7,9 @@ services:
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: APP_AUTH_TOKEN
+        sync: false
+      - key: CORS_ORIGIN
+        value: "https://data-palette-builder.onrender.com"
       - key: PYTHON_VERSION
         value: "3.11.9"

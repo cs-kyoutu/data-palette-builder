@@ -1,8 +1,9 @@
-fastapi
-uvicorn
-anthropic
-openpyxl
-python-multipart
-pydantic
-python-dotenv
-pyyaml
+fastapi==0.115.0
+uvicorn==0.30.6
+anthropic==0.42.0
+openpyxl==3.1.5
+python-multipart==0.0.9
+pydantic==2.12.5
+python-dotenv==1.2.2
+pyyaml==6.0.3
+slowapi==0.1.9

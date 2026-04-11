@@ -981,6 +981,29 @@
 </div>
 
 <script>
+  // --- Auth: 全fetchにBearer Token を自動付与 ---
+  (function() {
+    const _origFetch = window.fetch;
+    window.fetch = function(url, opts = {}) {
+      const token = window.__APP_AUTH_TOKEN__;
+      if (token && typeof url === 'string' && url.startsWith('/api/')) {
+        opts.headers = opts.headers || {};
+        if (opts.headers instanceof Headers) {
+          opts.headers.set('Authorization', 'Bearer ' + token);
+        } else {
+          opts.headers['Authorization'] = 'Bearer ' + token;
+        }
+      }
+      return _origFetch.call(this, url, opts);
+    };
+  })();
+
+  // --- XSS防止: HTMLエスケープ ---
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
   // --- State ---
   let inputTables = [];       // [{table_name, columns: [{name, type, description}]}]
   let outputMapping = null;   // {columns: [{name, definition, source_column, source_table}]}
@@ -1458,7 +1481,7 @@
         parsed.options.forEach((opt, i) => {
           const card = document.createElement("div");
           card.className = "question-card";
-          card.innerHTML = `<div class="card-label">${opt.label}</div>${opt.desc ? `<div class="card-desc">${opt.desc}</div>` : ""}`;
+          card.innerHTML = `<div class="card-label">${escapeHtml(opt.label)}</div>${opt.desc ? `<div class="card-desc">${escapeHtml(opt.desc)}</div>` : ""}`;
           card.onclick = () => {
             cards.querySelectorAll(".question-card").forEach(c => c.classList.remove("selected"));
             card.classList.add("selected");
@@ -1872,7 +1895,7 @@
         parsed.options.forEach(opt => {
           const card = document.createElement('div');
           card.className = 'question-card';
-          card.innerHTML = `<div class="card-label">${opt.label}</div>${opt.desc ? `<div class="card-desc">${opt.desc}</div>` : ''}`;
+          card.innerHTML = `<div class="card-label">${escapeHtml(opt.label)}</div>${opt.desc ? `<div class="card-desc">${escapeHtml(opt.desc)}</div>` : ''}`;
           card.onclick = () => {
             removeConsultationQuestionUI();
             sendConsultationAnswer(opt.label);
@@ -1966,7 +1989,7 @@
     if (result.strategy_summary) {
       const summary = document.createElement('div');
       summary.className = 'review-card-section';
-      summary.innerHTML = `<div class="review-card-section-title">概要</div><div>${result.strategy_summary}</div>`;
+      summary.innerHTML = `<div class="review-card-section-title">概要</div><div>${escapeHtml(result.strategy_summary)}</div>`;
       body.appendChild(summary);
     }
 
@@ -2342,14 +2365,14 @@
         const bubble = document.createElement('div');
         bubble.className = 'bubble';
         const title = document.createElement('div');
-        title.innerHTML = `<strong>${q.name || ''}</strong>: ${q.prompt || ''}`;
+        title.innerHTML = `<strong>${escapeHtml(q.name || '')}</strong>: ${escapeHtml(q.prompt || '')}`;
         bubble.appendChild(title);
         const cards = document.createElement('div');
         cards.className = 'question-cards';
         (q.options || []).forEach(opt => {
           const card = document.createElement('div');
           card.className = 'question-card';
-          card.innerHTML = `<div class="card-label">${opt}</div>`;
+          card.innerHTML = `<div class="card-label">${escapeHtml(opt)}</div>`;
           card.onclick = () => sendOrganizationAnswer(`${q.name}: ${opt}`);
           cards.appendChild(card);
         });
