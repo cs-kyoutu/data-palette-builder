@@ -65,9 +65,16 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
 
 # --- パス定義 ---
 BASE_DIR = Path(__file__).parent.parent
-UPLOAD_DIR = Path(__file__).parent / "uploads"
-OUTPUT_DIR = Path(__file__).parent / "output"
-KNOWLEDGE_PATH = BASE_DIR / "skills" / "knowledge_base.json"
+# Render Disk がマウントされていれば /data を使用、なければローカルパス
+_PERSIST_DIR = Path(os.environ.get("PERSIST_DIR", ""))
+if _PERSIST_DIR.is_dir():
+    UPLOAD_DIR = _PERSIST_DIR / "uploads"
+    OUTPUT_DIR = _PERSIST_DIR / "output"
+    KNOWLEDGE_PATH = _PERSIST_DIR / "knowledge_base.json"
+else:
+    UPLOAD_DIR = Path(__file__).parent / "uploads"
+    OUTPUT_DIR = Path(__file__).parent / "output"
+    KNOWLEDGE_PATH = BASE_DIR / "skills" / "knowledge_base.json"
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -959,9 +966,19 @@ async def upload_file(
         raise HTTPException(400, f"ファイルの解析に失敗しました。ファイル形式を確認してください。")
 
 
+async def _generate_core(req: GenerateRequest) -> ChatResponse:
+    """設計書生成のコアロジック（内部呼び出し用）"""
+    return await _generate_impl(req)
+
+
 @app.post("/api/generate", response_model=ChatResponse, dependencies=[Depends(verify_token)])
 @limiter.limit("10/minute")
 async def generate(request: Request, req: GenerateRequest):
+    """設計書を生成する（2段階API）- エンドポイント"""
+    return await _generate_impl(req)
+
+
+async def _generate_impl(req: GenerateRequest):
     """設計書を生成する（2段階API）"""
     session_id = req.session_id or str(uuid.uuid4())
 
@@ -1496,7 +1513,7 @@ async def consultation_apply(req: ConsultationApplyRequest):
         output_mapping=output_mapping,
         additional_context="",
     )
-    result = await generate(generate_req)
+    result = await _generate_core(generate_req)
     result.session_id = new_session_id
     return result
 
@@ -1655,7 +1672,7 @@ async def organization_finalize(request: Request, req: OrganizationFinalizeReque
         output_mapping=output_mapping,
         additional_context="",
     )
-    result = await generate(generate_req)
+    result = await _generate_core(generate_req)
     result.session_id = new_session_id
     return result
 
@@ -1718,6 +1735,53 @@ def _check_consultation_result(text: str, session: dict) -> dict | None:
 
 # --- フロントエンド配信 ---
 FRONTEND_PATH = BASE_DIR / "frontend"
+
+# ========== ナレッジ管理API ==========
+
+@app.get("/api/knowledge", dependencies=[Depends(verify_token)])
+async def get_knowledge():
+    """ナレッジ一覧を返す"""
+    kb = _load_knowledge_base()
+    return {"entries": kb, "total": len(kb)}
+
+
+@app.get("/api/knowledge/{entry_id}", dependencies=[Depends(verify_token)])
+async def get_knowledge_entry(entry_id: str):
+    """ナレッジ1件を返す"""
+    kb = _load_knowledge_base()
+    for entry in kb:
+        if entry.get("id") == entry_id:
+            return entry
+    raise HTTPException(404, "ナレッジが見つかりません")
+
+
+@app.put("/api/knowledge/{entry_id}", dependencies=[Depends(verify_token)])
+async def update_knowledge_entry(entry_id: str, update: dict):
+    """ナレッジ1件を更新"""
+    kb = _load_knowledge_base()
+    for i, entry in enumerate(kb):
+        if entry.get("id") == entry_id:
+            # id と created_at は変更不可
+            update.pop("id", None)
+            update.pop("created_at", None)
+            kb[i].update(update)
+            with open(KNOWLEDGE_PATH, "w", encoding="utf-8") as f:
+                json.dump(kb, f, ensure_ascii=False, indent=2)
+            return {"status": "updated", "entry": kb[i]}
+    raise HTTPException(404, "ナレッジが見つかりません")
+
+
+@app.delete("/api/knowledge/{entry_id}", dependencies=[Depends(verify_token)])
+async def delete_knowledge_entry(entry_id: str):
+    """ナレッジ1件を削除"""
+    kb = _load_knowledge_base()
+    new_kb = [e for e in kb if e.get("id") != entry_id]
+    if len(new_kb) == len(kb):
+        raise HTTPException(404, "ナレッジが見つかりません")
+    with open(KNOWLEDGE_PATH, "w", encoding="utf-8") as f:
+        json.dump(new_kb, f, ensure_ascii=False, indent=2)
+    return {"status": "deleted"}
+
 
 @app.get("/", response_class=HTMLResponse)
 async def index():

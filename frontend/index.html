@@ -546,6 +546,82 @@
       opacity: 0.4;
       cursor: not-allowed;
     }
+
+    /* Knowledge panel */
+    .knowledge-panel {
+      background: var(--surface);
+      min-height: calc(100vh - 60px);
+    }
+    .kb-filter-btn {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .kb-filter-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    .kb-entry {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 8px;
+    }
+    .kb-entry-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .kb-entry-type {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .kb-type-consultation { background: #dbeafe; color: #1e40af; }
+    .kb-type-organization { background: #fef3c7; color: #92400e; }
+    .kb-type-success { background: #dcfce7; color: #166534; }
+    .kb-type-correction { background: #fee2e2; color: #991b1b; }
+    .kb-entry-title {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .kb-entry-date {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .kb-entry-detail {
+      font-size: 12px;
+      color: var(--text);
+      margin-top: 4px;
+      max-height: 100px;
+      overflow: hidden;
+    }
+    .kb-entry-detail.expanded { max-height: none; }
+    .kb-entry-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .kb-entry-actions button {
+      font-size: 11px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .kb-entry-actions .delete-btn { color: #ef4444; border-color: #fca5a5; }
+    .kb-entry-actions .delete-btn:hover { background: #fee2e2; }
     .mode-btn:disabled:hover { background: transparent; color: var(--text-muted); }
 
     /* Organization area (Phase 2) */
@@ -771,12 +847,33 @@
 </head>
 <body>
 
-<div class="header">
-  <img src="/bdash_hakase.png" alt="" style="height:28px; margin-right:8px;" onerror="this.style.display='none'">
-  <h1>データパレット構築 設計書・手順書ジェネレータ(β版)</h1>
+<div class="header" style="display:flex; justify-content:space-between; align-items:center;">
+  <div style="display:flex; align-items:center;">
+    <img src="/bdash_hakase.png" alt="" style="height:28px; margin-right:8px;" onerror="this.style.display='none'">
+    <h1>データパレット構築 設計書・手順書ジェネレータ(β版)</h1>
+  </div>
+  <button onclick="toggleKnowledgePanel()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;">📚 ナレッジ管理</button>
 </div>
 
-<div class="main-content">
+<!-- ナレッジ管理パネル -->
+<div class="knowledge-panel hidden" id="knowledgePanel">
+  <div style="max-width:1200px;margin:0 auto;padding:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="color:var(--primary-dark);font-size:18px;">📚 ナレッジ管理</h2>
+      <button onclick="toggleKnowledgePanel()" style="background:var(--primary);color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;">← 戻る</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button class="kb-filter-btn active" onclick="filterKnowledge('all',this)">すべて</button>
+      <button class="kb-filter-btn" onclick="filterKnowledge('consultation',this)">施策相談</button>
+      <button class="kb-filter-btn" onclick="filterKnowledge('organization',this)">テーブル整理</button>
+      <button class="kb-filter-btn" onclick="filterKnowledge('success',this)">正解パターン</button>
+      <button class="kb-filter-btn" onclick="filterKnowledge('correction',this)">修正FB</button>
+    </div>
+    <div id="knowledgeList" style="max-height:70vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<div class="main-content" id="mainContent">
   <!-- モードセレクター -->
   <div class="mode-selector">
     <button class="mode-btn active" onclick="switchMode('consultation', this)">1. 施策相談</button>
@@ -997,6 +1094,99 @@
       return _origFetch.call(this, url, opts);
     };
   })();
+
+  // --- ナレッジ管理 ---
+  let knowledgeData = [];
+  let knowledgeFilter = 'all';
+
+  function toggleKnowledgePanel() {
+    const panel = document.getElementById('knowledgePanel');
+    const main = document.getElementById('mainContent');
+    if (panel.classList.contains('hidden')) {
+      panel.classList.remove('hidden');
+      main.classList.add('hidden');
+      loadKnowledge();
+    } else {
+      panel.classList.add('hidden');
+      main.classList.remove('hidden');
+    }
+  }
+
+  async function loadKnowledge() {
+    try {
+      const res = await fetch('/api/knowledge');
+      const data = await res.json();
+      knowledgeData = data.entries || [];
+      renderKnowledgeList();
+    } catch(e) {
+      document.getElementById('knowledgeList').innerHTML = '<div style="color:var(--text-muted);">読み込みエラー</div>';
+    }
+  }
+
+  function filterKnowledge(type, btn) {
+    knowledgeFilter = type;
+    document.querySelectorAll('.kb-filter-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderKnowledgeList();
+  }
+
+  function renderKnowledgeList() {
+    const el = document.getElementById('knowledgeList');
+    let entries = knowledgeData;
+    if (knowledgeFilter !== 'all') {
+      entries = entries.filter(e => e.type === knowledgeFilter);
+    }
+    if (!entries.length) {
+      el.innerHTML = '<div style="color:var(--text-muted);padding:20px;text-align:center;">データがありません</div>';
+      return;
+    }
+    // 新しい順
+    entries = [...entries].reverse();
+    let html = '';
+    for (const e of entries) {
+      const typeLabel = {consultation:'施策相談',organization:'テーブル整理',success:'正解パターン',correction:'修正FB'}[e.type] || e.type;
+      const typeClass = {consultation:'consultation',organization:'organization',success:'success',correction:'correction'}[e.type] || 'consultation';
+      const title = e.strategy_name || e.summary || e.type;
+      const date = e.created_at ? new Date(e.created_at).toLocaleString('ja-JP') : '';
+      let detail = '';
+      if (e.strategy_summary) detail += escapeHtml(e.strategy_summary) + '<br>';
+      if (e.output_columns && e.output_columns.length) detail += '<strong>カラム:</strong> ' + escapeHtml(e.output_columns.join(', ')) + '<br>';
+      if (e.input_table_names && e.input_table_names.length) detail += '<strong>テーブル:</strong> ' + escapeHtml(e.input_table_names.join(', ')) + '<br>';
+      if (e.correction) detail += '<strong>修正内容:</strong> ' + escapeHtml(e.correction) + '<br>';
+      html += `<div class="kb-entry" data-id="${escapeHtml(e.id)}" data-type="${escapeHtml(e.type)}">
+        <div class="kb-entry-header">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span class="kb-entry-type kb-type-${typeClass}">${escapeHtml(typeLabel)}</span>
+            <span class="kb-entry-title">${escapeHtml(title)}</span>
+          </div>
+          <span class="kb-entry-date">${date}</span>
+        </div>
+        <div class="kb-entry-detail">${detail || '<span style="color:var(--text-muted);">詳細なし</span>'}</div>
+        <div class="kb-entry-actions">
+          <button onclick="toggleKbDetail(this)">詳細を見る</button>
+          <button class="delete-btn" onclick="deleteKnowledge('${escapeHtml(e.id)}')">削除</button>
+        </div>
+      </div>`;
+    }
+    el.innerHTML = html;
+  }
+
+  function toggleKbDetail(btn) {
+    const detail = btn.closest('.kb-entry').querySelector('.kb-entry-detail');
+    detail.classList.toggle('expanded');
+    btn.textContent = detail.classList.contains('expanded') ? '閉じる' : '詳細を見る';
+  }
+
+  async function deleteKnowledge(id) {
+    if (!confirm('このナレッジを削除しますか？')) return;
+    try {
+      await fetch('/api/knowledge/' + id, { method: 'DELETE' });
+      knowledgeData = knowledgeData.filter(e => e.id !== id);
+      renderKnowledgeList();
+    } catch(e) {
+      alert('削除に失敗しました');
+    }
+  }
 
   // --- XSS防止: HTMLエスケープ ---
   function escapeHtml(str) {
@@ -2445,12 +2635,31 @@
     if (!organizationSessionId || isLoading) return;
     isLoading = true;
 
-    // Phase3 モードへ
+    // 確定マッピングをPhase3のグローバル変数にセット
+    if (organizationReviewState && organizationReviewState.input_tables) {
+      inputTables = organizationReviewState.input_tables;
+    } else {
+      inputTables = organizationInputTables;
+    }
+    if (organizationReviewState && organizationReviewState.output_mapping) {
+      outputMapping = organizationReviewState.output_mapping;
+    }
+
+    // Phase3 モードへ切替
     switchMode('procedure', document.querySelectorAll('.mode-btn')[2]);
 
-    // AIエリア表示
+    // 左右パネルにデータを反映
+    renderInputPreview();
+    renderOutputPreview();
+    document.getElementById('inputCount').textContent = `${inputTables.length} テーブル`;
+    if (outputMapping && outputMapping.columns) {
+      document.getElementById('outputCount').textContent = `${outputMapping.columns.length} カラム`;
+    }
+
+    // AIエリアを表示してからメッセージ表示
     const aiArea = document.getElementById('aiArea');
     aiArea.classList.remove('hidden');
+    document.getElementById('aiMessages').innerHTML = ''; // 前のメッセージをクリア
     showAiMessage('user', 'テーブル定義整理の結果から手順書を生成します...');
     showTyping();
 
@@ -2462,32 +2671,26 @@
       });
       const data = await res.json();
       sessionId = data.session_id;
-
-      // 確定マッピングを手順書モードのビューに反映
-      if (organizationReviewState && organizationReviewState.input_tables) {
-        inputTables = organizationReviewState.input_tables;
-      } else {
-        inputTables = organizationInputTables;
-      }
-      if (organizationReviewState && organizationReviewState.output_mapping) {
-        outputMapping = organizationReviewState.output_mapping;
-      }
-      renderInputPreview();
-      renderOutputPreview();
-      document.getElementById('inputCount').textContent = `${inputTables.length} テーブル`;
-      document.getElementById('outputCount').textContent = `${outputMapping.columns.length} カラム`;
-
       removeTyping();
-      showAiMessage('ai', data.reply, data.download_url);
+
       if (data.status === 'asking') {
+        // Phase3のStep1ヒアリング質問が来た場合
+        showAiMessage('ai', data.reply, data.download_url);
         const parsed = parseAiQuestions(data.reply);
         if (!parsed) {
           document.getElementById('aiInputArea').classList.add('visible');
         }
+      } else if (data.status === 'done' && data.download_url) {
+        // ヒアリング不要で直接手順書完成した場合
+        showAiMessage('ai', data.reply, data.download_url);
+      } else {
+        // その他（エラー等）
+        showAiMessage('ai', data.reply || 'エラーが発生しました。');
+        document.getElementById('aiInputArea').classList.add('visible');
       }
     } catch(e) {
       removeTyping();
-      showAiMessage('ai', 'エラーが発生しました。');
+      showAiMessage('ai', 'エラーが発生しました。もう一度お試しください。');
     }
     isLoading = false;
   }
