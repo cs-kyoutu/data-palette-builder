@@ -868,6 +868,9 @@
       <button class="kb-filter-btn" onclick="filterKnowledge('organization',this)">テーブル整理</button>
       <button class="kb-filter-btn" onclick="filterKnowledge('success',this)">正解パターン</button>
       <button class="kb-filter-btn" onclick="filterKnowledge('correction',this)">修正FB</button>
+      <span style="border-left:1px solid var(--border);margin:0 4px;"></span>
+      <button class="kb-filter-btn" onclick="switchKbTab('templates',this)">📋 施策テンプレート</button>
+      <button class="kb-filter-btn" onclick="switchKbTab('industries',this)">🏭 業界プリセット</button>
     </div>
     <div id="knowledgeList" style="max-height:70vh;overflow-y:auto;"></div>
   </div>
@@ -1186,6 +1189,94 @@
     } catch(e) {
       alert('削除に失敗しました');
     }
+  }
+
+  let kbTab = 'knowledge'; // 'knowledge' | 'templates' | 'industries'
+
+  function switchKbTab(tab, btn) {
+    kbTab = tab;
+    document.querySelectorAll('.kb-filter-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    if (tab === 'templates') loadTemplates();
+    else if (tab === 'industries') loadIndustries();
+    else loadKnowledge();
+  }
+
+  async function loadTemplates() {
+    const el = document.getElementById('knowledgeList');
+    try {
+      const res = await fetch('/api/strategy-templates');
+      const data = await res.json();
+      const entries = data.entries || [];
+      if (!entries.length) { el.innerHTML = '<div style="color:var(--text-muted);padding:20px;text-align:center;">テンプレートがありません</div>'; return; }
+      let html = '';
+      for (const t of entries) {
+        html += `<div class="kb-entry">
+          <div class="kb-entry-header">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span class="kb-entry-type" style="background:#e0f2fe;color:#0369a1;">テンプレート</span>
+              <span class="kb-entry-title">${escapeHtml(t.name || t.id)}</span>
+            </div>
+          </div>
+          <div class="kb-entry-detail">
+            ${t.description ? escapeHtml(t.description) + '<br>' : ''}
+            <strong>誰に:</strong> ${escapeHtml(t.who || '')}<br>
+            <strong>何を:</strong> ${escapeHtml(typeof t.what === 'string' ? t.what : JSON.stringify(t.what))}<br>
+            <strong>いつ:</strong> ${escapeHtml(t.when || '')}<br>
+            <strong>必ず聞く:</strong> ${escapeHtml(JSON.stringify(t.ask_user || []))}
+          </div>
+          <div class="kb-entry-actions">
+            <button onclick="toggleKbDetail(this)">詳細を見る</button>
+            <button class="delete-btn" onclick="deleteTemplate('${escapeHtml(t.id)}')">削除</button>
+          </div>
+        </div>`;
+      }
+      el.innerHTML = html;
+    } catch(e) { el.innerHTML = '<div style="color:var(--text-muted);">読み込みエラー</div>'; }
+  }
+
+  async function deleteTemplate(id) {
+    if (!confirm('このテンプレートを削除しますか？')) return;
+    await fetch('/api/strategy-templates/' + id, { method: 'DELETE' });
+    loadTemplates();
+  }
+
+  async function loadIndustries() {
+    const el = document.getElementById('knowledgeList');
+    try {
+      const res = await fetch('/api/industries');
+      const data = await res.json();
+      const entries = Object.entries(data);
+      if (!entries.length) { el.innerHTML = '<div style="color:var(--text-muted);padding:20px;text-align:center;">プリセットがありません</div>'; return; }
+      let html = '';
+      for (const [key, ind] of entries) {
+        const tables = ind.tables || [];
+        html += `<div class="kb-entry">
+          <div class="kb-entry-header">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span class="kb-entry-type" style="background:#fef3c7;color:#92400e;">業界</span>
+              <span class="kb-entry-title">${escapeHtml(ind.label || key)}</span>
+            </div>
+          </div>
+          <div class="kb-entry-detail">
+            ${escapeHtml(ind.description || '')}<br>
+            <strong>テーブル:</strong> ${tables.map(t => escapeHtml(t.table_name || '')).join(', ')}<br>
+            <strong>合計カラム:</strong> ${tables.reduce((s,t) => s + (t.columns||[]).length, 0)}
+          </div>
+          <div class="kb-entry-actions">
+            <button onclick="toggleKbDetail(this)">詳細を見る</button>
+            <button class="delete-btn" onclick="deleteIndustry('${escapeHtml(key)}')">削除</button>
+          </div>
+        </div>`;
+      }
+      el.innerHTML = html;
+    } catch(e) { el.innerHTML = '<div style="color:var(--text-muted);">読み込みエラー</div>'; }
+  }
+
+  async function deleteIndustry(id) {
+    if (!confirm('この業界プリセットを削除しますか？')) return;
+    await fetch('/api/industries/' + id, { method: 'DELETE' });
+    loadIndustries();
   }
 
   // --- XSS防止: HTMLエスケープ ---
