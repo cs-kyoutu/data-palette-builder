@@ -2462,14 +2462,21 @@
     el.innerHTML = html;
   }
 
-  function populateOrgPresetChips() {
+  async function populateOrgPresetChips() {
     const container = document.getElementById('orgPresetChips');
-    if (!container || !industriesData) return;
-    if (container.childElementCount > 0) return; // 初回のみ
+    if (!container) return;
+    // industriesDataが空なら再取得を試みる
+    if (!industriesData || !Object.keys(industriesData).length) {
+      try {
+        const res = await fetch('/api/industries');
+        industriesData = await res.json();
+      } catch(e) { return; }
+    }
+    container.innerHTML = ''; // 毎回再生成（データ更新に対応）
     Object.entries(industriesData).forEach(([key, preset]) => {
       const chip = document.createElement('button');
       chip.className = 'preset-chip';
-      chip.textContent = preset.label;
+      chip.textContent = preset.label || key;
       chip.dataset.key = key;
       chip.onclick = () => toggleOrgPreset(key, chip);
       container.appendChild(chip);
@@ -2478,13 +2485,15 @@
 
   function toggleOrgPreset(key, chip) {
     const preset = industriesData && industriesData[key];
-    if (!preset || !preset.tables) return;
+    if (!preset) { console.error('Preset not found:', key); return; }
+    const tables = preset.tables || [];
+    if (!tables.length) { console.error('No tables in preset:', key); return; }
     document.querySelectorAll('#orgPresetChips .preset-chip').forEach(c => c.classList.remove('selected'));
     chip.classList.add('selected');
     // プリセットのテーブル定義を投入（AIマッピングはボタン押下時）
-    organizationInputTables = preset.tables.map(t => ({
-      table_name: t.table_name,
-      columns: t.columns.map(c => ({ name: c.name, type: c.type || '', description: c.description || '' })),
+    organizationInputTables = tables.map(t => ({
+      table_name: t.table_name || '',
+      columns: (t.columns || []).map(c => ({ name: c.name || '', type: c.type || '', description: c.description || '' })),
     }));
     renderOrgInputPreview();
     updateRunMappingBtn();
