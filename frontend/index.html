@@ -1279,6 +1279,26 @@
     loadIndustries();
   }
 
+  // --- 認証付きダウンロード ---
+  async function downloadWithAuth(url) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const disposition = res.headers.get('content-disposition') || '';
+      let filename = '手順書.xlsx';
+      const match = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i);
+      if (match) filename = decodeURIComponent(match[1]);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch(e) {
+      alert('ダウンロードに失敗しました。もう一度お試しください。');
+    }
+  }
+
   // --- XSS防止: HTMLエスケープ ---
   function escapeHtml(str) {
     if (!str) return '';
@@ -1810,11 +1830,10 @@
     }
 
     if (downloadUrl) {
-      const link = document.createElement("a");
-      link.href = downloadUrl;
+      const link = document.createElement("button");
       link.className = "download-btn";
       link.textContent = "手順書をダウンロード (.xlsx)";
-      link.download = "";
+      link.onclick = () => downloadWithAuth(downloadUrl);
       bubble.appendChild(document.createElement("br"));
       bubble.appendChild(link);
 
