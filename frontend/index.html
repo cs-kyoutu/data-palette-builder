@@ -2416,6 +2416,41 @@
 
     card.appendChild(body);
 
+    // 手動編集エリア（初期非表示）
+    const editArea = document.createElement('div');
+    editArea.id = 'consultationEditArea';
+    editArea.className = 'review-card-section hidden';
+    editArea.style.cssText = 'padding:12px 14px;border-top:1px solid var(--border);';
+    editArea.innerHTML = `
+      <div class="review-card-section-title">要件を手動編集</div>
+      <div style="display:grid;grid-template-columns:60px 1fr;gap:6px;font-size:12px;">
+        <label style="font-weight:700;padding-top:6px;">① 誰に</label>
+        <textarea id="editWho" rows="2" style="padding:6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;">${escapeHtml(result.requirements?.who || '')}</textarea>
+        <label style="font-weight:700;padding-top:6px;">② 何を</label>
+        <textarea id="editWhat" rows="2" style="padding:6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;">${escapeHtml(result.requirements?.what || '')}</textarea>
+        <label style="font-weight:700;padding-top:6px;">③ いつ</label>
+        <textarea id="editWhen" rows="2" style="padding:6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;">${escapeHtml(result.requirements?.when || '')}</textarea>
+        <label style="font-weight:700;padding-top:6px;">④ 除外</label>
+        <textarea id="editExclude" rows="2" style="padding:6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;">${escapeHtml(result.requirements?.exclude || '')}</textarea>
+      </div>
+      <button class="btn-primary" style="margin-top:8px;font-size:12px;padding:6px 16px;" onclick="applyManualEdit()">編集を反映</button>
+    `;
+    card.appendChild(editArea);
+
+    // FBエリア
+    const fbArea = document.createElement('div');
+    fbArea.style.cssText = 'padding:10px 14px;border-top:1px solid var(--border);font-size:12px;';
+    fbArea.innerHTML = `
+      <div style="color:var(--text-muted);margin-bottom:6px;">この要件定義は正しいですか？</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button onclick="sendConsultationFb(true, this)" style="padding:4px 12px;border:1px solid #4CAF50;border-radius:4px;background:white;color:#4CAF50;cursor:pointer;font-size:12px;">✓ 正しい</button>
+        <button onclick="sendConsultationFb(false, this)" style="padding:4px 12px;border:1px solid #ef4444;border-radius:4px;background:white;color:#ef4444;cursor:pointer;font-size:12px;">✗ 修正が必要</button>
+        <button onclick="toggleConsultationEdit()" style="padding:4px 12px;border:1px solid var(--primary);border-radius:4px;background:white;color:var(--primary);cursor:pointer;font-size:12px;">✏️ 手動で編集</button>
+      </div>
+      <div id="consultationFbResult" style="margin-top:6px;"></div>
+    `;
+    card.appendChild(fbArea);
+
     // アクションボタン
     const actions = document.createElement('div');
     actions.className = 'review-actions';
@@ -2428,6 +2463,58 @@
 
     container.appendChild(card);
     container.scrollTop = container.scrollHeight;
+  }
+
+  function toggleConsultationEdit() {
+    const area = document.getElementById('consultationEditArea');
+    area.classList.toggle('hidden');
+  }
+
+  function applyManualEdit() {
+    if (!consultationResult) return;
+    // 手動編集の内容をconsultationResultに反映
+    consultationResult.requirements = consultationResult.requirements || {};
+    consultationResult.requirements.who = document.getElementById('editWho').value;
+    consultationResult.requirements.what = document.getElementById('editWhat').value;
+    consultationResult.requirements.when = document.getElementById('editWhen').value;
+    consultationResult.requirements.exclude = document.getElementById('editExclude').value;
+
+    // レビューカードのテーブルも更新
+    document.getElementById('consultationEditArea').classList.add('hidden');
+    // カードを再描画
+    const container = document.getElementById('consultationMessages');
+    const oldCard = container.querySelector('.review-card');
+    if (oldCard) oldCard.remove();
+    showReviewCard(consultationResult, container);
+    document.getElementById('consultationInputWrap').classList.add('hidden');
+  }
+
+  async function sendConsultationFb(isCorrect, btn) {
+    const fbResult = document.getElementById('consultationFbResult');
+    if (isCorrect) {
+      // 正しい → ナレッジに保存
+      try {
+        await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: consultationSessionId || 'consultation-fb',
+            result: 'ok',
+            fix_description: '',
+          }),
+        });
+      } catch(e) {}
+      fbResult.innerHTML = '<span style="color:#4CAF50;">✓ フィードバックを保存しました</span>';
+    } else {
+      // 修正が必要 → 編集エリアを表示
+      toggleConsultationEdit();
+      fbResult.innerHTML = '<span style="color:var(--text-muted);">上の編集エリアで修正してください</span>';
+    }
+    // ボタンを無効化
+    btn.parentElement.querySelectorAll('button').forEach(b => {
+      b.disabled = true;
+      b.style.opacity = '0.5';
+    });
   }
 
   function applyConsultationResult() {
