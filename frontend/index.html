@@ -843,6 +843,12 @@
       border: 1.5px solid var(--border);
     }
     .review-actions .btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
+    .copy-btn {
+      background: none; border: 1px solid var(--border); border-radius: 4px;
+      cursor: pointer; font-size: 12px; padding: 2px 6px; opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+    .copy-btn:hover { opacity: 1; }
   </style>
 </head>
 <body>
@@ -1277,6 +1283,26 @@
     if (!confirm('この業界プリセットを削除しますか？')) return;
     await fetch('/api/industries/' + id, { method: 'DELETE' });
     loadIndustries();
+  }
+
+  // --- クリップボードコピー ---
+  function copyText(text) {
+    // HTMLエスケープを元に戻す
+    const tmp = document.createElement('textarea');
+    tmp.innerHTML = text;
+    const decoded = tmp.value;
+    navigator.clipboard.writeText(decoded).then(() => {
+      // コピー成功のフィードバック（ボタンを一時的に変える）
+      event.target.textContent = '✓';
+      setTimeout(() => { event.target.textContent = '📋'; }, 1000);
+    }).catch(() => {
+      // フォールバック
+      tmp.value = decoded;
+      document.body.appendChild(tmp);
+      tmp.select();
+      document.execCommand('copy');
+      document.body.removeChild(tmp);
+    });
   }
 
   // --- 認証付きダウンロード ---
@@ -2289,7 +2315,8 @@
     if (result.strategy_summary) {
       const summary = document.createElement('div');
       summary.className = 'review-card-section';
-      summary.innerHTML = `<div class="review-card-section-title">概要</div><div>${escapeHtml(result.strategy_summary)}</div>`;
+      const summaryText = escapeHtml(result.strategy_summary);
+      summary.innerHTML = `<div class="review-card-section-title">概要 <button class="copy-btn" onclick="copyText('${summaryText.replace(/'/g, "\\'")}')">📋</button></div><div>${summaryText}</div>`;
       body.appendChild(summary);
     }
 
@@ -2298,12 +2325,20 @@
       const req = result.requirements;
       const reqSection = document.createElement('div');
       reqSection.className = 'review-card-section';
+      const items = [
+        { label: '① 誰に', value: req.who },
+        { label: '② 何を', value: req.what },
+        { label: '③ いつ', value: req.when },
+        { label: '④ 除外', value: req.exclude },
+      ];
       let reqHtml = '<div class="review-card-section-title">施策要件</div>';
-      reqHtml += '<table><tr><th>観点</th><th>内容</th></tr>';
-      if (req.who) reqHtml += `<tr><td><strong>誰に</strong></td><td>${req.who}</td></tr>`;
-      if (req.what) reqHtml += `<tr><td><strong>何を</strong></td><td>${req.what}</td></tr>`;
-      if (req.when) reqHtml += `<tr><td><strong>いつ</strong></td><td>${req.when}</td></tr>`;
-      if (req.exclude) reqHtml += `<tr><td><strong>除外</strong></td><td>${req.exclude}</td></tr>`;
+      reqHtml += '<table><tr><th>観点</th><th>内容</th><th></th></tr>';
+      for (const item of items) {
+        if (item.value) {
+          const escaped = escapeHtml(item.value);
+          reqHtml += `<tr><td><strong>${item.label}</strong></td><td>${escaped}</td><td><button class="copy-btn" onclick="copyText('${escaped.replace(/'/g, "\\'")}')">📋</button></td></tr>`;
+        }
+      }
       reqHtml += '</table>';
       reqSection.innerHTML = reqHtml;
       body.appendChild(reqSection);
@@ -2326,10 +2361,11 @@
       const outputSection = document.createElement('div');
       outputSection.className = 'review-card-section';
       let outputHtml = '<div class="review-card-section-title">アウトプット定義（顧客単位・横持ち）</div>';
-      outputHtml += '<table><tr><th>カラム名</th><th>用途</th><th>定義</th><th>ソース</th></tr>';
+      outputHtml += '<table><tr><th>カラム名</th><th>用途</th><th>定義</th><th>ソース</th><th></th></tr>';
       for (const col of result.output_mapping.columns) {
         const purposeLabel = col.purpose === 'segment' ? 'セグメント' : col.purpose === 'personalize' ? '差し込み' : '-';
-        outputHtml += `<tr><td>${col.name}</td><td>${purposeLabel}</td><td>${col.definition || '-'}</td><td>${col.source_table || '-'}</td></tr>`;
+        const defText = escapeHtml(col.definition || '-');
+        outputHtml += `<tr><td>${escapeHtml(col.name)}</td><td>${purposeLabel}</td><td>${defText}</td><td>${escapeHtml(col.source_table || '-')}</td><td><button class="copy-btn" onclick="copyText('${defText.replace(/'/g, "\\'")}')">📋</button></td></tr>`;
       }
       outputHtml += '</table>';
       outputSection.innerHTML = outputHtml;
