@@ -1285,6 +1285,33 @@
     loadIndustries();
   }
 
+  // --- リトライボタン付きエラー表示 ---
+  function showErrorWithRetry(container, retryFn, msgType) {
+    // msgType: 'ai' (aiMessages用) or 'consultation' (consultationMessages用)
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:8px;';
+    const retryBtn = document.createElement('button');
+    retryBtn.textContent = '🔄 リトライ';
+    retryBtn.style.cssText = 'padding:6px 14px;border:1px solid var(--primary);border-radius:6px;background:white;color:var(--primary);cursor:pointer;font-size:12px;font-family:inherit;';
+    retryBtn.onmouseover = () => retryBtn.style.background = 'var(--primary-bg)';
+    retryBtn.onmouseout = () => retryBtn.style.background = 'white';
+    retryBtn.onclick = () => {
+      // エラーメッセージごと消してリトライ
+      const msgEl = errorDiv.closest('.ai-msg');
+      if (msgEl) msgEl.remove();
+      retryFn();
+    };
+    errorDiv.appendChild(retryBtn);
+
+    // 最後のメッセージバブルにリトライボタンを追加
+    const msgs = container.querySelectorAll('.ai-msg');
+    const lastMsg = msgs[msgs.length - 1];
+    if (lastMsg) {
+      const bubble = lastMsg.querySelector('.bubble');
+      if (bubble) bubble.appendChild(errorDiv);
+    }
+  }
+
   // --- クリップボードコピー ---
   function copyText(text) {
     // HTMLエスケープを元に戻す
@@ -1736,7 +1763,8 @@
       }
     } catch(e) {
       removeTyping();
-      showAiMessage("ai", "エラーが発生しました。もう一度お試しください。");
+      showAiMessage("ai", "エラーが発生しました。");
+      showErrorWithRetry(document.getElementById("aiMessages"), () => generate());
     }
 
     isLoading = false;
@@ -1770,6 +1798,11 @@
     } catch(e) {
       removeTyping();
       showAiMessage("ai", "エラーが発生しました。");
+      const _lastText = text;
+      showErrorWithRetry(document.getElementById("aiMessages"), () => {
+        document.getElementById("aiInput").value = _lastText;
+        sendChat();
+      });
     }
 
     isLoading = false;
@@ -2065,6 +2098,8 @@
     } catch(e) {
       removeTyping();
       showAiMessage("ai", "エラーが発生しました。");
+      const _lastAnswer = answer;
+      showErrorWithRetry(document.getElementById("aiMessages"), () => sendAnswer(_lastAnswer));
     }
     isLoading = false;
   }
@@ -2152,7 +2187,12 @@
       }
     } catch(e) {
       removeConsultationTyping(msgContainer);
-      showConsultationMessage('ai', 'エラーが発生しました。もう一度お試しください。', msgContainer);
+      showConsultationMessage('ai', 'エラーが発生しました。', msgContainer);
+      const _lastText = text;
+      showErrorWithRetry(msgContainer, () => {
+        document.getElementById('consultationInput').value = _lastText;
+        sendConsultation();
+      });
     }
     isLoading = false;
   }
@@ -2189,6 +2229,8 @@
     } catch(e) {
       removeConsultationTyping(msgContainer);
       showConsultationMessage('ai', 'エラーが発生しました。', msgContainer);
+      const _lastAnswer = answer;
+      showErrorWithRetry(msgContainer, () => sendConsultationAnswer(_lastAnswer));
     }
     isLoading = false;
   }
@@ -2467,6 +2509,7 @@
     } catch(e) {
       removeConsultationTyping(msgContainer);
       showConsultationMessage('ai', 'マッピング中にエラーが発生しました。', msgContainer);
+      showErrorWithRetry(msgContainer, () => runOrgMapping());
     }
     isLoading = false;
   }
@@ -2627,6 +2670,11 @@
     } catch(e) {
       removeConsultationTyping(msgContainer);
       showConsultationMessage('ai', 'エラーが発生しました。', msgContainer);
+      const _lastText = text;
+      showErrorWithRetry(msgContainer, () => {
+        document.getElementById('organizationInput').value = _lastText;
+        sendOrganization();
+      });
     }
     isLoading = false;
   }
@@ -2650,6 +2698,8 @@
     } catch(e) {
       removeConsultationTyping(msgContainer);
       showConsultationMessage('ai', 'エラーが発生しました。', msgContainer);
+      const _lastAnswer = answer;
+      showErrorWithRetry(msgContainer, () => sendOrganizationAnswer(_lastAnswer));
     }
     isLoading = false;
   }
@@ -2845,7 +2895,8 @@
       }
     } catch(e) {
       removeTyping();
-      showAiMessage('ai', 'エラーが発生しました。もう一度お試しください。');
+      showAiMessage('ai', 'エラーが発生しました。');
+      showErrorWithRetry(document.getElementById("aiMessages"), () => finalizeOrganization());
     }
     isLoading = false;
   }
