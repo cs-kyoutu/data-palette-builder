@@ -2637,14 +2637,45 @@
     const count = document.getElementById('orgInputCount');
     count.textContent = `${organizationInputTables.length} テーブル`;
     if (!organizationInputTables.length) {
-      el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:12px;">テーブル定義を投入してください</div>';
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:12px;">テーブル定義を投入してください（プリセット＋テキスト＋ファイルの合わせ技OK）</div>';
       return;
     }
-    let html = '';
+    let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+    html += '<span style="font-size:11px;color:var(--text-muted);">投入済みテーブル</span>';
+    html += '<button onclick="clearOrgTables()" style="font-size:11px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:white;cursor:pointer;color:var(--text-muted);">全クリア</button>';
+    html += '</div>';
     for (const t of organizationInputTables) {
-      html += `<div class="table-preview"><strong>${t.table_name}</strong>（${t.columns.length}カラム）</div>`;
+      const name = escapeHtml(t.table_name);
+      html += `<div class="table-preview" style="display:flex;justify-content:space-between;align-items:center;">
+        <span><strong>${name}</strong>（${(t.columns||[]).length}カラム）</span>
+        <button onclick="removeOrgTable('${name.replace(/'/g,"\\'")}')" style="font-size:11px;padding:2px 6px;border:none;background:none;cursor:pointer;color:#ef4444;">✕</button>
+      </div>`;
     }
     el.innerHTML = html;
+  }
+
+  function removeOrgTable(tableName) {
+    organizationInputTables = organizationInputTables.filter(t => t.table_name !== tableName);
+    // プリセットチップの選択状態も同期
+    document.querySelectorAll('#orgPresetChips .preset-chip').forEach(chip => {
+      const key = chip.dataset.key;
+      const preset = industriesData && industriesData[key];
+      if (!preset) return;
+      const presetTableNames = (preset.tables || []).map(t => t.table_name);
+      // このプリセットに含まれるテーブルが1つでも残っていなければ selected 解除
+      const stillHas = presetTableNames.some(n => organizationInputTables.find(t => t.table_name === n));
+      if (!stillHas) chip.classList.remove('selected');
+    });
+    renderOrgInputPreview();
+    updateRunMappingBtn();
+  }
+
+  function clearOrgTables() {
+    if (!confirm('投入済みテーブルを全てクリアしますか？')) return;
+    organizationInputTables = [];
+    document.querySelectorAll('#orgPresetChips .preset-chip').forEach(c => c.classList.remove('selected'));
+    renderOrgInputPreview();
+    updateRunMappingBtn();
   }
 
   async function populateOrgPresetChips() {
@@ -2673,15 +2704,31 @@
     if (!preset) { console.error('Preset not found:', key); return; }
     const tables = preset.tables || [];
     if (!tables.length) { console.error('No tables in preset:', key); return; }
-    document.querySelectorAll('#orgPresetChips .preset-chip').forEach(c => c.classList.remove('selected'));
-    chip.classList.add('selected');
-    // プリセットのテーブル定義を投入（AIマッピングはボタン押下時）
-    organizationInputTables = tables.map(t => ({
-      table_name: t.table_name || '',
-      columns: (t.columns || []).map(c => ({ name: c.name || '', type: c.type || '', description: c.description || '' })),
-    }));
+    const isSelected = chip.classList.contains('selected');
+    if (isSelected) {
+      // 既に選択済み → このプリセットのテーブルを除去
+      chip.classList.remove('selected');
+      const tableNames = new Set(tables.map(t => t.table_name));
+      organizationInputTables = organizationInputTables.filter(t => !tableNames.has(t.table_name));
+    } else {
+      // 追加（同名テーブルは上書き、新規は追加）
+      chip.classList.add('selected');
+      const newTables = tables.map(t => ({
+        table_name: t.table_name || '',
+        columns: (t.columns || []).map(c => ({ name: c.name || '', type: c.type || '', description: c.description || '' })),
+      }));
+      organizationInputTables = mergeOrgTables(organizationInputTables, newTables);
+    }
     renderOrgInputPreview();
     updateRunMappingBtn();
+  }
+
+  // テーブルリストをマージ（table_name が同じなら新しい方で上書き、違えば追加）
+  function mergeOrgTables(existing, incoming) {
+    const byName = new Map();
+    for (const t of existing) byName.set(t.table_name, t);
+    for (const t of incoming) byName.set(t.table_name, t);
+    return Array.from(byName.values());
   }
 
   function filterOrgPresets() {
@@ -2709,7 +2756,8 @@
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const data = await res.json();
       if (data.input_tables) {
-        organizationInputTables = data.input_tables;
+        // 既存テーブルに追加（同名は上書き）
+        organizationInputTables = mergeOrgTables(organizationInputTables, data.input_tables);
         renderOrgInputPreview();
         updateRunMappingBtn();
       }
@@ -2723,15 +2771,21 @@
     if (!text.trim()) return;
     // 既存のparseAndSetInputTextロジックを転用
     const procedureInput = document.getElementById('inputTextInput');
-    const originalValue = procedureInput.value;
+    const originalProcedureValue = procedureInput.value;
+    const originalInputTables = inputTables;
     procedureInput.value = text;
     parseAndSetInputText();
     if (inputTables && inputTables.length) {
-      organizationInputTables = inputTables;
+      // 既存に追加（同名は上書き）
+      organizationInputTables = mergeOrgTables(organizationInputTables, inputTables);
       renderOrgInputPreview();
       updateRunMappingBtn();
+      // 入力欄をクリアして次の追加に備える
+      document.getElementById('orgInputTextInput').value = '';
     }
-    procedureInput.value = originalValue;
+    // 手順書モードのstate/UIを復元
+    procedureInput.value = originalProcedureValue;
+    inputTables = originalInputTables;
   }
 
   async function sendOrganization() {
