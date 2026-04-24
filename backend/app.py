@@ -1997,6 +1997,12 @@ async def delete_knowledge_entry(entry_id: str):
     return {"status": "deleted"}
 
 
+@app.get("/healthz")
+async def healthz():
+    """ALB/ECSヘルスチェック用。認証・DB・外部API非依存で即200を返す。"""
+    return {"status": "ok"}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     html_path = FRONTEND_PATH / "index.html"
