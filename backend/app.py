@@ -2143,37 +2143,6 @@ async def delete_industry(ind_id: str):
     return {"status": "deleted"}
 
 
-_SEED_DIR = BASE_DIR / "backend" / "seed"
-_JSON_COLS_INDUSTRIES = {"tables"}
-_JSON_COLS_STRATEGY = {"exclude", "ask_user", "processing_notes", "output_columns", "input_tables"}
-
-
-@app.post("/api/admin/migrate-from-csv", dependencies=[Depends(verify_token)])
-async def migrate_from_csv():
-    """backend/seed/*.csv から industries / strategy_templates を一括投入する一回限りのエンドポイント"""
-    import csv as _csv
-    counts: dict[str, int] = {}
-    targets = (
-        ("industries.csv", "industries", _JSON_COLS_INDUSTRIES, _INDUSTRY_COLS),
-        ("strategy_templates.csv", "strategy_templates", _JSON_COLS_STRATEGY, _STRATEGY_COLS),
-    )
-    for filename, table, json_cols, cols in targets:
-        path = _SEED_DIR / filename
-        if not path.exists():
-            raise HTTPException(404, f"Seed file not found: {filename}")
-        with open(path, encoding="utf-8") as f:
-            reader = _csv.DictReader(f)
-            n = 0
-            for row in reader:
-                for c in json_cols:
-                    if c in row and row[c]:
-                        row[c] = json.loads(row[c])
-                _upsert(table, row, cols)
-                n += 1
-            counts[table] = n
-    return {"status": "migrated", "counts": counts}
-
-
 # --- フロントエンド配信 ---
 FRONTEND_PATH = BASE_DIR / "frontend"
 
