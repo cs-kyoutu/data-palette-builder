@@ -70,19 +70,6 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-# --- Supabase接続（マイグレーション用、移行完了後に削除予定） ---
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-_supabase_client = None
-
-def _get_supabase():
-    global _supabase_client
-    if _supabase_client is None and SUPABASE_URL and SUPABASE_KEY:
-        from supabase import create_client
-        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    return _supabase_client
-
-
 # --- RDS PostgreSQL接続 ---
 import psycopg2
 from psycopg2.extras import RealDictCursor, Json
@@ -2156,19 +2143,34 @@ async def delete_industry(ind_id: str):
     return {"status": "deleted"}
 
 
-@app.post("/api/admin/migrate-from-supabase", dependencies=[Depends(verify_token)])
-async def migrate_from_supabase():
-    """SupabaseからRDSへ industries / strategy_templates をコピーする一回限りのエンドポイント"""
-    sb = _get_supabase()
-    if sb is None:
-        raise HTTPException(400, "SUPABASE_URL/KEY が設定されていません")
+_SEED_DIR = BASE_DIR / "backend" / "seed"
+_JSON_COLS_INDUSTRIES = {"tables"}
+_JSON_COLS_STRATEGY = {"exclude", "ask_user", "processing_notes", "output_columns", "input_tables"}
+
+
+@app.post("/api/admin/migrate-from-csv", dependencies=[Depends(verify_token)])
+async def migrate_from_csv():
+    """backend/seed/*.csv から industries / strategy_templates を一括投入する一回限りのエンドポイント"""
+    import csv as _csv
     counts: dict[str, int] = {}
-    for table, cols in (("industries", _INDUSTRY_COLS), ("strategy_templates", _STRATEGY_COLS)):
-        res = sb.table(table).select("*").execute()
-        rows = res.data or []
-        for row in rows:
-            _upsert(table, row, cols)
-        counts[table] = len(rows)
+    targets = (
+        ("industries.csv", "industries", _JSON_COLS_INDUSTRIES, _INDUSTRY_COLS),
+        ("strategy_templates.csv", "strategy_templates", _JSON_COLS_STRATEGY, _STRATEGY_COLS),
+    )
+    for filename, table, json_cols, cols in targets:
+        path = _SEED_DIR / filename
+        if not path.exists():
+            raise HTTPException(404, f"Seed file not found: {filename}")
+        with open(path, encoding="utf-8") as f:
+            reader = _csv.DictReader(f)
+            n = 0
+            for row in reader:
+                for c in json_cols:
+                    if c in row and row[c]:
+                        row[c] = json.loads(row[c])
+                _upsert(table, row, cols)
+                n += 1
+            counts[table] = n
     return {"status": "migrated", "counts": counts}
 
 
