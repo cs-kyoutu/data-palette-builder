@@ -523,7 +523,7 @@ def get_similar_knowledge(output_mapping: dict, limit: int = 3) -> str:
     scored = []
     for entry in kb:
         score = 0
-        entry_text = json.dumps(entry, ensure_ascii=False)
+        entry_text = json.dumps(entry, ensure_ascii=False, default=str)
         for kw in output_keywords:
             if kw in entry_text:
                 score += 1
