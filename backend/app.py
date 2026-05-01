@@ -8,6 +8,8 @@ FastAPI + Claude API による自動手順書生成Webアプリ
 3. Claude APIがデータパレット構築手順書を生成
 4. Excel形式でダウンロード
 """
+import csv
+import io
 import json
 import os
 import uuid
@@ -23,7 +25,7 @@ except ImportError:
 import anthropic
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
@@ -2307,6 +2309,74 @@ async def delete_knowledge_entry(entry_id: str):
     if not _delete_knowledge(entry_id):
         raise HTTPException(404, "ナレッジが見つかりません")
     return {"status": "deleted"}
+
+
+@app.get("/api/sessions/export", dependencies=[Depends(verify_token)])
+async def export_sessions_csv():
+    """全セッションをCSVで出力（現場メンバーの精度検収用）。
+
+    Excel互換のためUTF-8 BOM付き。1セッション=1行。
+    """
+    rows: list[list[str]] = []
+    header = [
+        "session_id", "mode", "industry",
+        "created_at", "updated_at", "finalized",
+        "first_user_message",
+        "strategy_name", "strategy_summary",
+        "output_columns", "input_table_names",
+        "message_count", "full_transcript",
+    ]
+    rows.append(header)
+
+    with _db_conn() as conn:
+        if conn is None:
+            raise HTTPException(503, "DB未設定")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, mode, data, created_at, updated_at "
+                "FROM sessions ORDER BY created_at DESC"
+            )
+            db_rows = cur.fetchall()
+
+    for r in db_rows:
+        data = r.get("data") or {}
+        messages = data.get("messages") or []
+        first_user = next((m.get("content", "") for m in messages if m.get("role") == "user"), "")
+        consult = data.get("consultation_result") or {}
+        out_map = data.get("output_mapping") or {}
+        out_cols = [c.get("name", "") for c in out_map.get("columns", [])] if isinstance(out_map, dict) else []
+        in_tables = [t.get("table_name", "") for t in (data.get("input_tables") or []) if isinstance(t, dict)]
+        transcript = "\n\n".join(
+            f"[{m.get('role', '?')}] {m.get('content', '')}"
+            for m in messages if isinstance(m, dict)
+        )
+        rows.append([
+            r["id"],
+            data.get("mode", ""),
+            data.get("industry", ""),
+            r["created_at"].isoformat() if r.get("created_at") else "",
+            r["updated_at"].isoformat() if r.get("updated_at") else "",
+            "yes" if data.get("finalized") else "no",
+            first_user,
+            consult.get("strategy_name", "") if isinstance(consult, dict) else "",
+            consult.get("strategy_summary", "") if isinstance(consult, dict) else "",
+            ", ".join(out_cols),
+            ", ".join(in_tables),
+            str(len(messages)),
+            transcript,
+        ])
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_ALL)
+    for row in rows:
+        writer.writerow(row)
+    body = "﻿" + buf.getvalue()  # UTF-8 BOM (Excelの日本語対応)
+    filename = f"sessions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.get("/healthz")

@@ -858,7 +858,10 @@
     <img src="/bdash_hakase.png" alt="" style="height:28px; margin-right:8px;" onerror="this.style.display='none'">
     <h1>データパレット構築 設計書・手順書ジェネレータ(β版)</h1>
   </div>
-  <button onclick="toggleKnowledgePanel()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;">📚 ナレッジ管理</button>
+  <div style="display:flex; gap:8px;">
+    <a href="/api/sessions/export" download style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;text-decoration:none;display:inline-block;">📥 セッション履歴CSV</a>
+    <button onclick="toggleKnowledgePanel()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;">📚 ナレッジ管理</button>
+  </div>
 </div>
 
 <!-- ナレッジ管理パネル -->
