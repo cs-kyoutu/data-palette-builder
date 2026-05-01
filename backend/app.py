@@ -2324,6 +2324,8 @@ async def export_sessions_csv():
         "first_user_message",
         "strategy_name", "strategy_summary",
         "output_columns", "input_table_names",
+        "design_summary", "procedure_text",
+        "processing_steps_count", "excel_download_url",
         "message_count", "full_transcript",
     ]
     rows.append(header)
@@ -2346,6 +2348,11 @@ async def export_sessions_csv():
         out_map = data.get("output_mapping") or {}
         out_cols = [c.get("name", "") for c in out_map.get("columns", [])] if isinstance(out_map, dict) else []
         in_tables = [t.get("table_name", "") for t in (data.get("input_tables") or []) if isinstance(t, dict)]
+        design_doc = data.get("design_doc") or {}
+        design_summary = design_doc.get("summary", "") if isinstance(design_doc, dict) else ""
+        steps_count = len(design_doc.get("processing_steps", [])) if isinstance(design_doc, dict) else 0
+        procedure_text = data.get("procedure_text", "")
+        excel_url = f"/api/download/{r['id']}" if data.get("last_file") else ""
         transcript = "\n\n".join(
             f"[{m.get('role', '?')}] {m.get('content', '')}"
             for m in messages if isinstance(m, dict)
@@ -2362,6 +2369,10 @@ async def export_sessions_csv():
             consult.get("strategy_summary", "") if isinstance(consult, dict) else "",
             ", ".join(out_cols),
             ", ".join(in_tables),
+            design_summary,
+            procedure_text,
+            str(steps_count),
+            excel_url,
             str(len(messages)),
             transcript,
         ])
