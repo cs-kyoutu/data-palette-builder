@@ -18,6 +18,9 @@ const RAW_SHEET = 'raw';
 const CLEAN_SHEET = '全セッション';
 const FINAL_SHEET = '最終アウトプット';
 
+// アプリのベースURL。Excelダウンロードリンクの相対パスに前置する。
+const APP_BASE_URL = 'http://dpb-alb-1673181131.ap-northeast-1.elb.amazonaws.com';
+
 const MODE_LABELS = {
   'consultation': 'Phase 1: 施策相談',
   'organization': 'Phase 2: テーブル整理',
@@ -106,9 +109,20 @@ function buildCleanRow(row, idx) {
     get('processing_steps_count'),
     get('message_count'),
     get('procedure_text'),
-    get('excel_download_url'),
+    absolutizeUrl(String(get('excel_download_url'))),
     formatTranscript(String(get('full_transcript'))),
   ];
+}
+
+/**
+ * "/api/download/..." の相対URLを APP_BASE_URL を前置した絶対URLにする。
+ * 既に http(s) で始まっていればそのまま返す。空文字も空文字のまま。
+ */
+function absolutizeUrl(url) {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.charAt(0) !== '/') return APP_BASE_URL + '/' + url;
+  return APP_BASE_URL + url;
 }
 
 function filterFinalOutputs(cleanRows) {
