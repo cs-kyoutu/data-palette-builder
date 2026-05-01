@@ -398,7 +398,7 @@ _cleanup_thread = threading.Thread(target=_cleanup_old_files, daemon=True)
 _cleanup_thread.start()
 
 # --- Claude APIクライアント ---
-client = anthropic.Anthropic()
+client = anthropic.Anthropic(max_retries=3, timeout=20.0)
 
 # --- データモデル ---
 class GenerateRequest(BaseModel):
@@ -1690,7 +1690,8 @@ async def _chat_body(req: ChatRequest, session: dict):
         step1_text = response.content[0].text
     except Exception as e:
         session["messages"].pop()
-        return ChatResponse(session_id=req.session_id, reply=f"エラーが発生しました。しばらく待ってから再度お試しください。", status="asking")
+        print(f"[ERROR] Anthropic API failure: {type(e).__name__}: {e}", flush=True)
+        return ChatResponse(session_id=req.session_id, reply=f"エラー: {type(e).__name__}: {e}", status="asking")
 
     session["messages"].append({"role": "assistant", "content": step1_text})
 
@@ -1930,7 +1931,8 @@ async def _consultation_start_body(req: ConsultationStartRequest, session_id: st
         reply_text = response.content[0].text
     except Exception as e:
         session["messages"].pop()
-        return ChatResponse(session_id=session_id, reply=f"エラーが発生しました。しばらく待ってから再度お試しください。", status="asking")
+        print(f"[ERROR] Anthropic API failure: {type(e).__name__}: {e}", flush=True)
+        return ChatResponse(session_id=session_id, reply=f"エラー: {type(e).__name__}: {e}", status="asking")
 
     session["messages"].append({"role": "assistant", "content": reply_text})
     session["question_count"] = session.get("question_count", 0) + 1
@@ -2035,7 +2037,8 @@ async def _run_organization_initial_mapping(session: dict, session_id: str, hint
         )
         reply_text = response.content[0].text
     except Exception as e:
-        return ChatResponse(session_id=session_id, reply=f"エラーが発生しました。しばらく待ってから再度お試しください。", status="asking")
+        print(f"[ERROR] Anthropic API failure: {type(e).__name__}: {e}", flush=True)
+        return ChatResponse(session_id=session_id, reply=f"エラー: {type(e).__name__}: {e}", status="asking")
 
     session["messages"].append({"role": "assistant", "content": reply_text})
     return _parse_organization_reply(session_id, reply_text, session)
@@ -2090,7 +2093,8 @@ async def organization_chat(request: Request, req: OrganizationChatRequest):
             reply_text = response.content[0].text
         except Exception as e:
             session["messages"].pop()
-            return ChatResponse(session_id=req.session_id, reply=f"エラーが発生しました。しばらく待ってから再度お試しください。", status="asking")
+            print(f"[ERROR] Anthropic API failure: {type(e).__name__}: {e}", flush=True)
+            return ChatResponse(session_id=req.session_id, reply=f"エラー: {type(e).__name__}: {e}", status="asking")
 
         session["messages"].append({"role": "assistant", "content": reply_text})
         return _parse_organization_reply(req.session_id, reply_text, session)
@@ -2176,7 +2180,8 @@ async def _handle_consultation_chat(req: ChatRequest, session: dict) -> ChatResp
         reply_text = response.content[0].text
     except Exception as e:
         session["messages"].pop()
-        return ChatResponse(session_id=req.session_id, reply=f"エラーが発生しました。しばらく待ってから再度お試しください。", status="asking")
+        print(f"[ERROR] Anthropic API failure: {type(e).__name__}: {e}", flush=True)
+        return ChatResponse(session_id=req.session_id, reply=f"エラー: {type(e).__name__}: {e}", status="asking")
 
     session["messages"].append({"role": "assistant", "content": reply_text})
 
