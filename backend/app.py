@@ -1466,7 +1466,7 @@ async def _generate_impl_body(req: GenerateRequest, session_id: str, session: di
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=2000,
             system=get_system_prompt_step1(req.input_tables, req.output_mapping),
             messages=session["messages"],
@@ -1496,7 +1496,7 @@ async def _generate_impl_body(req: GenerateRequest, session_id: str, session: di
                 ]
                 try:
                     response2 = client.messages.create(
-                        model="claude-sonnet-4-20250514",
+                        model="claude-sonnet-4-6",
                         max_tokens=16000,
                         system=step2_prompt,
                         messages=session["messages_step2"],
@@ -1682,7 +1682,7 @@ async def _chat_body(req: ChatRequest, session: dict):
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=2000,
             system=base_prompt,
             messages=[{"role": "user", "content": f"回答: {req.message}\n\n未確認の項目があれば次の質問を、全て確認済みならplan JSONを出力してください。"}],
@@ -1710,7 +1710,7 @@ async def _chat_body(req: ChatRequest, session: dict):
                 session["messages_step2"] = [{"role": "user", "content": step2_user_msg}]
                 try:
                     response2 = client.messages.create(
-                        model="claude-sonnet-4-20250514",
+                        model="claude-sonnet-4-6",
                         max_tokens=16000,
                         system=step2_prompt,
                         messages=session["messages_step2"],
@@ -1740,7 +1740,7 @@ async def _chat_body(req: ChatRequest, session: dict):
                 ]
                 try:
                     response2 = client.messages.create(
-                        model="claude-sonnet-4-20250514",
+                        model="claude-sonnet-4-6",
                         max_tokens=16000,
                         system=step2_prompt,
                         messages=session["messages_step2"],
@@ -1923,7 +1923,7 @@ async def _consultation_start_body(req: ConsultationStartRequest, session_id: st
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=4000,
             system=system_prompt,
             messages=session["messages"],
@@ -2030,7 +2030,7 @@ async def _run_organization_initial_mapping(session: dict, session_id: str, hint
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4-6",
             max_tokens=8000,
             system=get_organization_system_prompt(session),
             messages=session["messages"],
@@ -2085,7 +2085,7 @@ async def organization_chat(request: Request, req: OrganizationChatRequest):
 
         try:
             response = client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-4-6",
                 max_tokens=8000,
                 system=get_organization_system_prompt(session),
                 messages=session["messages"],
@@ -2172,7 +2172,7 @@ async def _handle_consultation_chat(req: ChatRequest, session: dict) -> ChatResp
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=4000,
             system=system_prompt,
             messages=session["messages"],
