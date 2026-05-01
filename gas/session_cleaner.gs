@@ -27,9 +27,17 @@ const MODE_LABELS = {
   '': 'Phase 3: 設計書・手順書生成',
 };
 
+const EVAL_LABELS = {
+  'good': '👍 良い',
+  'bad': '👎 改善要',
+  '': '（未評価）',
+};
+
 const CLEAN_HEADERS = [
   'セッションID',
   '段階',
+  'ユーザー評価',
+  '修正内容',
   '最初の質問',
   '施策名',
   '施策概要',
@@ -45,6 +53,8 @@ const CLEAN_HEADERS = [
 
 const FINAL_HEADERS = [
   'セッションID',
+  'ユーザー評価',
+  '修正内容',
   '設計書概要',
   '処理ステップ数',
   '手順書本文',
@@ -97,9 +107,13 @@ function buildCleanRow(row, idx) {
   const get = (k) => idx[k] !== undefined ? (row[idx[k]] || '') : '';
   const rawMode = String(get('mode'));
   const stage = MODE_LABELS[rawMode] !== undefined ? MODE_LABELS[rawMode] : rawMode;
+  const rawEval = String(get('evaluation'));
+  const evalLabel = EVAL_LABELS[rawEval] !== undefined ? EVAL_LABELS[rawEval] : rawEval;
   return [
     get('session_id'),
     stage,
+    evalLabel,
+    get('evaluation_correction'),
     get('first_user_message'),
     get('strategy_name'),
     get('strategy_summary'),
@@ -129,6 +143,8 @@ function filterFinalOutputs(cleanRows) {
   const stageIdx = CLEAN_HEADERS.indexOf('段階');
   const procIdx = CLEAN_HEADERS.indexOf('手順書本文');
   const sidIdx = CLEAN_HEADERS.indexOf('セッションID');
+  const evalIdx = CLEAN_HEADERS.indexOf('ユーザー評価');
+  const corrIdx = CLEAN_HEADERS.indexOf('修正内容');
   const sumIdx = CLEAN_HEADERS.indexOf('設計書概要');
   const stepsIdx = CLEAN_HEADERS.indexOf('処理ステップ数');
   const linkIdx = CLEAN_HEADERS.indexOf('Excelダウンロード');
@@ -137,6 +153,8 @@ function filterFinalOutputs(cleanRows) {
     .filter(r => r[stageIdx] === 'Phase 3: 設計書・手順書生成' && r[procIdx])
     .map(r => [
       r[sidIdx],
+      r[evalIdx],
+      r[corrIdx],
       r[sumIdx],
       r[stepsIdx],
       r[procIdx],

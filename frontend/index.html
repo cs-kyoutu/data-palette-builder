@@ -2494,24 +2494,24 @@
 
   async function sendConsultationFb(isCorrect, btn) {
     const fbResult = document.getElementById('consultationFbResult');
+    // 評価は ✓ / ✗ どちらも先に記録（バックエンドのセッションに保存される）
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: consultationSessionId,
+          is_correct: isCorrect,
+          correction: null,
+        }),
+      });
+    } catch(e) {}
     if (isCorrect) {
-      // 正しい → ナレッジに保存
-      try {
-        await fetch('/api/feedback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: consultationSessionId || 'consultation-fb',
-            result: 'ok',
-            fix_description: '',
-          }),
-        });
-      } catch(e) {}
       fbResult.innerHTML = '<span style="color:#4CAF50;">✓ フィードバックを保存しました</span>';
     } else {
       // 修正が必要 → 編集エリアを表示
       toggleConsultationEdit();
-      fbResult.innerHTML = '<span style="color:var(--text-muted);">上の編集エリアで修正してください</span>';
+      fbResult.innerHTML = '<span style="color:var(--text-muted);">評価を記録しました。上の編集エリアで修正してください</span>';
     }
     // ボタンを無効化
     btn.parentElement.querySelectorAll('button').forEach(b => {

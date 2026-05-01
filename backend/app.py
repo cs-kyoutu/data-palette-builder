@@ -1864,33 +1864,54 @@ class FeedbackRequest(BaseModel):
 
 @app.post("/api/feedback", dependencies=[Depends(verify_token)])
 async def feedback(req: FeedbackRequest):
-    """手順書生成後のフィードバック → ナレッジに自動蓄積"""
+    """ユーザーフィードバック → セッションに評価を保存し、可能ならナレッジにも蓄積。
+
+    Phase 1（consultation）/ Phase 3（design）のどちらでも動作する。
+    評価は常にセッション本体に書き戻すので CSV エクスポートからも見える。
+    """
     session = sessions.get(req.session_id)
     if not session:
         raise HTTPException(404, "セッションが見つかりません")
 
-    design_doc = session.get("design_doc")
-    if not design_doc:
-        return {"status": "no_design_doc"}
+    # まずセッションに評価を記録（必ず保存）
+    session["evaluation"] = "good" if req.is_correct else "bad"
+    session["evaluation_correction"] = req.correction or ""
+    session["evaluation_at"] = datetime.now().isoformat()
+    sessions.save(req.session_id, session)
 
-    if req.is_correct:
-        # 正しかった → ナレッジに保存
+    design_doc = session.get("design_doc")
+    consult = session.get("consultation_result")
+
+    # Phase 3: 設計書フィードバック → ナレッジ蓄積
+    if design_doc:
+        if req.is_correct:
+            _save_knowledge({
+                "type": "successful_design",
+                "summary": design_doc.get("summary", ""),
+                "processing_steps": design_doc.get("processing_steps", []),
+                "processing_groups": design_doc.get("processing_groups", []),
+            })
+            return {"status": "saved", "phase": "design", "message": "ナレッジに保存しました"}
+        else:
+            _save_knowledge({
+                "type": "correction",
+                "summary": design_doc.get("summary", ""),
+                "correction": req.correction or "",
+                "original_steps": design_doc.get("processing_steps", []),
+            })
+            return {"status": "saved", "phase": "design", "message": "修正内容をナレッジに保存しました"}
+
+    # Phase 1: 施策相談フィードバック → 修正があればナレッジに蓄積
+    if consult and not req.is_correct and req.correction:
         _save_knowledge({
-            "type": "successful_design",
-            "summary": design_doc.get("summary", ""),
-            "processing_steps": design_doc.get("processing_steps", []),
-            "processing_groups": design_doc.get("processing_groups", []),
-        })
-        return {"status": "saved", "message": "ナレッジに保存しました"}
-    else:
-        # 間違ってた → 修正内容を保存
-        _save_knowledge({
-            "type": "correction",
-            "summary": design_doc.get("summary", ""),
+            "type": "consultation_correction",
+            "strategy_name": consult.get("strategy_name", ""),
+            "strategy_summary": consult.get("strategy_summary", ""),
             "correction": req.correction,
-            "original_steps": design_doc.get("processing_steps", []),
         })
-        return {"status": "saved", "message": "修正内容をナレッジに保存しました"}
+        return {"status": "saved", "phase": "consultation", "message": "修正内容をナレッジに保存しました"}
+
+    return {"status": "saved", "phase": "session_only", "message": "評価を記録しました"}
 
 
 # --- 施策相談エンドポイント ---
@@ -2321,6 +2342,7 @@ async def export_sessions_csv():
     header = [
         "session_id", "mode", "industry",
         "created_at", "updated_at", "finalized",
+        "evaluation", "evaluation_correction", "evaluation_at",
         "first_user_message",
         "strategy_name", "strategy_summary",
         "output_columns", "input_table_names",
@@ -2364,6 +2386,9 @@ async def export_sessions_csv():
             r["created_at"].isoformat() if r.get("created_at") else "",
             r["updated_at"].isoformat() if r.get("updated_at") else "",
             "yes" if data.get("finalized") else "no",
+            data.get("evaluation", ""),
+            data.get("evaluation_correction", ""),
+            data.get("evaluation_at", ""),
             first_user,
             consult.get("strategy_name", "") if isinstance(consult, dict) else "",
             consult.get("strategy_summary", "") if isinstance(consult, dict) else "",
