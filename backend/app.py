@@ -149,6 +149,16 @@ _DDL_STATEMENTS = [
         raw_data JSONB
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        mode TEXT,
+        data JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at)",
 ]
 
 
@@ -271,16 +281,102 @@ def _load_industries() -> dict:
 # 起動時の初期値（API呼び出し時に毎回DBから読む）
 INDUSTRIES = _INDUSTRIES_FILE
 
-# --- セッション管理 ---
-sessions: dict[str, dict] = {}
-
-# --- ファイル自動クリーンアップ ---
+# --- セッション管理（RDS バックエンド） ---
 import threading
 import time as _time
 
 
+class SessionStore:
+    """RDS-backed session store with dict-like API.
+
+    Use `with sessions.transaction(sid) as session:` for read+mutate flows
+    so the dict is auto-saved on context exit.
+    """
+
+    def __contains__(self, sid: str) -> bool:
+        with _db_conn() as conn:
+            if conn is None:
+                return False
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM sessions WHERE id = %s", (sid,))
+                return cur.fetchone() is not None
+
+    def __getitem__(self, sid: str) -> dict:
+        data = self.get(sid)
+        if data is None:
+            raise KeyError(sid)
+        return data
+
+    def __setitem__(self, sid: str, data: dict) -> None:
+        self.save(sid, data)
+
+    def get(self, sid: str, default=None):
+        with _db_conn() as conn:
+            if conn is None:
+                return default
+            with conn.cursor() as cur:
+                cur.execute("SELECT data FROM sessions WHERE id = %s", (sid,))
+                row = cur.fetchone()
+                if row is None:
+                    return default
+                return row[0]
+
+    def save(self, sid: str, data: dict) -> None:
+        mode = data.get("mode") if isinstance(data, dict) else None
+        with _db_conn() as conn:
+            if conn is None:
+                raise RuntimeError("DB未設定")
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO sessions (id, mode, data, updated_at)
+                    VALUES (%s, %s, %s, NOW())
+                    ON CONFLICT (id) DO UPDATE SET
+                        mode = EXCLUDED.mode,
+                        data = EXCLUDED.data,
+                        updated_at = NOW()
+                    """,
+                    (sid, mode, Json(data)),
+                )
+
+    def pop(self, sid: str, default=None):
+        with _db_conn() as conn:
+            if conn is None:
+                return default
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM sessions WHERE id = %s RETURNING data", (sid,))
+                row = cur.fetchone()
+                return row[0] if row else default
+
+    @contextmanager
+    def transaction(self, sid: str):
+        """Load session, yield it, save on exit. Yields None if not found."""
+        data = self.get(sid)
+        if data is None:
+            yield None
+            return
+        yield data
+        self.save(sid, data)
+
+    def cleanup_older_than(self, hours: int) -> int:
+        with _db_conn() as conn:
+            if conn is None:
+                return 0
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM sessions WHERE created_at < NOW() - make_interval(hours => %s)",
+                    (hours,),
+                )
+                return cur.rowcount
+
+
+sessions = SessionStore()
+
+# --- ファイル自動クリーンアップ ---
+
+
 def _cleanup_old_files():
-    """1時間ごとにアップロード/出力ファイルをクリーンアップ"""
+    """1時間ごとにアップロード/出力ファイル + 古いセッションをクリーンアップ"""
     MAX_AGE_HOURS = 24
     while True:
         _time.sleep(3600)  # 1時間ごとに実行
@@ -292,11 +388,10 @@ def _cleanup_old_files():
                         f.unlink()
                     except OSError:
                         pass
-        # 古いセッションも掃除（24時間以上前のセッション）
-        stale = [k for k, v in sessions.items()
-                 if v.get("created_at", now) < now - MAX_AGE_HOURS * 3600]
-        for k in stale:
-            sessions.pop(k, None)
+        try:
+            sessions.cleanup_older_than(MAX_AGE_HOURS)
+        except Exception as e:
+            print(f"session cleanup failed: {e}")
 
 
 _cleanup_thread = threading.Thread(target=_cleanup_old_files, daemon=True)
@@ -1332,8 +1427,9 @@ async def _generate_impl(req: GenerateRequest):
     """設計書を生成する（2段階API）"""
     session_id = req.session_id or str(uuid.uuid4())
 
-    if session_id not in sessions:
-        sessions[session_id] = {
+    session = sessions.get(session_id)
+    if session is None:
+        session = {
             "messages": [],
             "messages_step2": [],
             "input_tables": req.input_tables,
@@ -1343,8 +1439,13 @@ async def _generate_impl(req: GenerateRequest):
             "created_at": _time.time(),
         }
 
-    session = sessions[session_id]
+    try:
+        return await _generate_impl_body(req, session_id, session)
+    finally:
+        sessions.save(session_id, session)
 
+
+async def _generate_impl_body(req: GenerateRequest, session_id: str, session: dict):
     # デバッグログ
     print(f"[DEBUG] input_tables: {len(req.input_tables)} tables")
     for t in req.input_tables[:3]:
@@ -1553,7 +1654,13 @@ async def chat(request: Request, req: ChatRequest):
     session = sessions.get(req.session_id)
     if not session:
         raise HTTPException(404, "セッションが見つかりません")
+    try:
+        return await _chat_body(req, session)
+    finally:
+        sessions.save(req.session_id, session)
 
+
+async def _chat_body(req: ChatRequest, session: dict):
     # 施策相談モードの場合
     if session.get("mode") == "consultation":
         return await _handle_consultation_chat(req, session)
@@ -1790,7 +1897,7 @@ async def feedback(req: FeedbackRequest):
 async def consultation_start(request: Request, req: ConsultationStartRequest):
     """施策相談セッションを開始"""
     session_id = str(uuid.uuid4())
-    sessions[session_id] = {
+    session = {
         "mode": "consultation",
         "messages": [],
         "industry": req.industry,
@@ -1798,8 +1905,13 @@ async def consultation_start(request: Request, req: ConsultationStartRequest):
         "question_count": 0,
         "created_at": _time.time(),
     }
-    session = sessions[session_id]
+    try:
+        return await _consultation_start_body(req, session_id, session)
+    finally:
+        sessions.save(session_id, session)
 
+
+async def _consultation_start_body(req: ConsultationStartRequest, session_id: str, session: dict):
     industries = _load_industries()
     system_prompt = get_consultation_system_prompt(req.industry)
     user_message = req.message
@@ -1940,7 +2052,7 @@ async def organization_start(request: Request, req: OrganizationStartRequest):
         raise HTTPException(400, "施策相談が完了していません")
 
     org_id = str(uuid.uuid4())
-    sessions[org_id] = {
+    org_session = {
         "mode": "organization",
         "consultation_session_id": req.consultation_session_id,
         "consultation_result": consult["consultation_result"],
@@ -1949,8 +2061,12 @@ async def organization_start(request: Request, req: OrganizationStartRequest):
         "messages": [],
         "review_state": None,
         "finalized": False,
+        "created_at": _time.time(),
     }
-    return await _run_organization_initial_mapping(sessions[org_id], org_id, req.additional_hint)
+    try:
+        return await _run_organization_initial_mapping(org_session, org_id, req.additional_hint)
+    finally:
+        sessions.save(org_id, org_session)
 
 
 @app.post("/api/organization/chat", response_model=ChatResponse, dependencies=[Depends(verify_token)])
@@ -1961,22 +2077,25 @@ async def organization_chat(request: Request, req: OrganizationChatRequest):
     if not session or session.get("mode") != "organization":
         raise HTTPException(404, "organizationセッションが見つかりません")
 
-    session["messages"].append({"role": "user", "content": req.message})
-
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
-            max_tokens=8000,
-            system=get_organization_system_prompt(session),
-            messages=session["messages"],
-        )
-        reply_text = response.content[0].text
-    except Exception as e:
-        session["messages"].pop()
-        return ChatResponse(session_id=req.session_id, reply=f"エラーが発生しました。しばらく待ってから再度お試しください。", status="asking")
+        session["messages"].append({"role": "user", "content": req.message})
 
-    session["messages"].append({"role": "assistant", "content": reply_text})
-    return _parse_organization_reply(req.session_id, reply_text, session)
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=8000,
+                system=get_organization_system_prompt(session),
+                messages=session["messages"],
+            )
+            reply_text = response.content[0].text
+        except Exception as e:
+            session["messages"].pop()
+            return ChatResponse(session_id=req.session_id, reply=f"エラーが発生しました。しばらく待ってから再度お試しください。", status="asking")
+
+        session["messages"].append({"role": "assistant", "content": reply_text})
+        return _parse_organization_reply(req.session_id, reply_text, session)
+    finally:
+        sessions.save(req.session_id, session)
 
 
 @app.post("/api/organization/update-tables", response_model=ChatResponse, dependencies=[Depends(verify_token)])
@@ -1986,11 +2105,14 @@ async def organization_update_tables(req: OrganizationUpdateTablesRequest):
     if not session or session.get("mode") != "organization":
         raise HTTPException(404, "organizationセッションが見つかりません")
 
-    session["input_tables"] = req.input_tables
-    session["output_mapping"] = None
-    session["review_state"] = None
-    session["finalized"] = False
-    return await _run_organization_initial_mapping(session, req.session_id)
+    try:
+        session["input_tables"] = req.input_tables
+        session["output_mapping"] = None
+        session["review_state"] = None
+        session["finalized"] = False
+        return await _run_organization_initial_mapping(session, req.session_id)
+    finally:
+        sessions.save(req.session_id, session)
 
 
 @app.post("/api/organization/finalize", response_model=ChatResponse, dependencies=[Depends(verify_token)])
