@@ -398,7 +398,7 @@ _cleanup_thread = threading.Thread(target=_cleanup_old_files, daemon=True)
 _cleanup_thread.start()
 
 # --- Claude APIクライアント ---
-client = anthropic.Anthropic(max_retries=3, timeout=20.0)
+client = anthropic.Anthropic(max_retries=1, timeout=60.0)
 
 # --- データモデル ---
 class GenerateRequest(BaseModel):
