@@ -2880,8 +2880,75 @@
       document.getElementById('orgNextBtnWrap').classList.remove('hidden');
       // 次へボタンを有効化: Phase3 モードボタンも有効（既に常時可能）
     } else {
-      showConsultationMessage('ai', data.reply, msgContainer, true);
+      // status='asking' などフォールバック: AIがJSONを付け忘れた応答。
+      // Phase1のshowConsultationMessage(...,true)を使うとカードがPhase1の/api/chatに飛ぶので
+      // Phase2用に独自の質問パーサ＋カードUIを使う
+      showOrganizationParsedMessage(data.reply);
     }
+  }
+
+  // AIが本文中に "A) ... B) ..." 形式で選択肢を書いた場合に Phase2 用カードUIで描画する。
+  // 選択肢パターンが取れなければ通常のテキストとして表示する。
+  function showOrganizationParsedMessage(text) {
+    const msgContainer = document.getElementById('organizationMessages');
+    const parsed = parseAiQuestions(text);
+    if (!parsed) {
+      showConsultationMessage('ai', text, msgContainer);
+      return;
+    }
+    const msg = document.createElement('div');
+    msg.className = 'ai-msg ai';
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    const img = document.createElement('img');
+    img.src = '/bdash_hakase.png';
+    img.alt = 'AI';
+    avatar.appendChild(img);
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    const textSpan = document.createElement('span');
+    textSpan.textContent = parsed.intro;
+    bubble.appendChild(textSpan);
+    const cards = document.createElement('div');
+    cards.className = 'question-cards';
+    parsed.options.forEach(opt => {
+      const card = document.createElement('div');
+      card.className = 'question-card';
+      card.innerHTML = `<div class="card-label">${escapeHtml(opt.label)}</div>${opt.desc ? `<div class="card-desc">${escapeHtml(opt.desc)}</div>` : ''}`;
+      card.onclick = () => {
+        removeOrgQuestionUI();
+        sendOrganizationAnswer(opt.label);
+      };
+      cards.appendChild(card);
+    });
+    bubble.appendChild(cards);
+    const otherRow = document.createElement('div');
+    otherRow.className = 'question-other';
+    const otherInput = document.createElement('input');
+    otherInput.type = 'text';
+    otherInput.placeholder = 'その他（自由入力）';
+    otherInput.onkeydown = (e) => {
+      if (e.key === 'Enter' && otherInput.value.trim()) {
+        removeOrgQuestionUI();
+        sendOrganizationAnswer(otherInput.value.trim());
+      }
+    };
+    const otherBtn = document.createElement('button');
+    otherBtn.className = 'send-card-btn';
+    otherBtn.textContent = '送信';
+    otherBtn.onclick = () => {
+      if (otherInput.value.trim()) {
+        removeOrgQuestionUI();
+        sendOrganizationAnswer(otherInput.value.trim());
+      }
+    };
+    otherRow.appendChild(otherInput);
+    otherRow.appendChild(otherBtn);
+    bubble.appendChild(otherRow);
+    msg.appendChild(avatar);
+    msg.appendChild(bubble);
+    msgContainer.appendChild(msg);
+    msgContainer.scrollTop = msgContainer.scrollHeight;
   }
 
   function showOrganizationMessageWithQuestions(introText, questions) {
