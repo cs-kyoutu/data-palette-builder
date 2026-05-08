@@ -1948,11 +1948,13 @@ async def _consultation_start_body(req: ConsultationStartRequest, session_id: st
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=4000,
+            max_tokens=16000,
             system=system_prompt,
             messages=session["messages"],
         )
         reply_text = response.content[0].text
+        if response.stop_reason == "max_tokens":
+            print(f"[WARN] consultation reply truncated at max_tokens (start endpoint)", flush=True)
     except Exception as e:
         session["messages"].pop()
         print(f"[ERROR] Anthropic API failure: {type(e).__name__}: {e}", flush=True)
@@ -2197,11 +2199,13 @@ async def _handle_consultation_chat(req: ChatRequest, session: dict) -> ChatResp
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=4000,
+            max_tokens=16000,
             system=system_prompt,
             messages=session["messages"],
         )
         reply_text = response.content[0].text
+        if response.stop_reason == "max_tokens":
+            print(f"[WARN] consultation reply truncated at max_tokens (chat endpoint)", flush=True)
     except Exception as e:
         session["messages"].pop()
         print(f"[ERROR] Anthropic API failure: {type(e).__name__}: {e}", flush=True)
