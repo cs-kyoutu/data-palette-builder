@@ -12,6 +12,7 @@ import csv
 import io
 import json
 import os
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -1964,7 +1965,7 @@ async def _consultation_start_body(req: ConsultationStartRequest, session_id: st
     if result:
         return ChatResponse(
             session_id=session_id,
-            reply=reply_text.split("```json")[0].strip() or "施策設計が完了しました！",
+            reply=_CONSULT_RESULT_BLOCK_RE.sub("", reply_text).strip() or "施策設計が完了しました！",
             status="consultation_complete",
             consultation_result=result,
         )
@@ -2212,7 +2213,7 @@ async def _handle_consultation_chat(req: ChatRequest, session: dict) -> ChatResp
     if result:
         return ChatResponse(
             session_id=req.session_id,
-            reply=reply_text.split("```json")[0].strip() or "施策設計が完了しました！",
+            reply=_CONSULT_RESULT_BLOCK_RE.sub("", reply_text).strip() or "施策設計が完了しました！",
             status="consultation_complete",
             consultation_result=result,
         )
@@ -2220,18 +2221,36 @@ async def _handle_consultation_chat(req: ChatRequest, session: dict) -> ChatResp
     return ChatResponse(session_id=req.session_id, reply=reply_text, status="asking")
 
 
+_CONSULT_RESULT_BLOCK_RE = re.compile(r"```\s*(?:json|JSON)?\s*(\{.*?\})\s*```", re.DOTALL)
+
+
 def _check_consultation_result(text: str, session: dict) -> dict | None:
-    """AIレスポンスからconsultation_result JSONを抽出"""
-    if "```json" not in text:
-        return None
-    try:
-        json_str = text.split("```json")[1].split("```")[0].strip()
-        data = json.loads(json_str)
-        if data.get("action") == "consultation_result":
+    """AIレスポンスからconsultation_result JSONを抽出。
+    フェンス言語タグの大小・空白ゆらぎ、複数ブロック、フェンス無しのraw JSONにも耐える。"""
+    candidates: list[str] = [m.group(1) for m in _CONSULT_RESULT_BLOCK_RE.finditer(text)]
+
+    if not candidates and '"consultation_result"' in text:
+        # フェンス無しでJSONをそのまま吐いたケース: 一番外側の {...} をざっくり拾う
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end > start:
+            candidates.append(text[start:end + 1])
+
+    for js in candidates:
+        try:
+            data = json.loads(js)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict) and data.get("action") == "consultation_result":
             session["consultation_result"] = data
             return data
-    except (json.JSONDecodeError, IndexError):
-        pass
+
+    if "consultation_result" in text:
+        # action=consultation_result を意図したが取り出せなかった: 原因調査用に先頭400字を残す
+        print(
+            f"[WARN] consultation_result mentioned but not parseable. preview={text[:400]!r}",
+            flush=True,
+        )
     return None
 
 
