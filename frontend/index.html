@@ -2330,22 +2330,14 @@
   }
 
   // Phase2 SSEストリーミング消費者。
-  // POST → fetch().body から SSE イベント (data: {type:token|final|error}) を読み、
-  // tokenはライティングバブルに即時表示、finalで構造化UIに引き渡し。
+  // 内部的にSSEで受信してALB idle timeoutを回避するが、画面表示はtypingスピナーのみ。
+  // tokenイベントは破棄、finalイベントで構造化UIに引き渡す。
   async function streamOrgRequest(url, body, msgContainer, onFinal, onError) {
-    // 既存のtypingインジケータが残っていたら除去
-    removeConsultationTyping(msgContainer);
+    // typingスピナーが既にあるならそのまま使う。なければ新規追加。
+    if (!document.getElementById('consultationTyping')) {
+      showConsultationTyping(msgContainer);
+    }
 
-    // ライティングバブル作成
-    const bubbleWrap = document.createElement('div');
-    bubbleWrap.className = 'ai-msg ai';
-    bubbleWrap.innerHTML = `<div class="avatar"><img src="/bdash_hakase.png" alt="AI"></div><div class="bubble"><span class="streaming-text"></span><span class="streaming-cursor">▍</span></div>`;
-    msgContainer.appendChild(bubbleWrap);
-    msgContainer.scrollTop = msgContainer.scrollHeight;
-    const textEl = bubbleWrap.querySelector('.streaming-text');
-    const cursorEl = bubbleWrap.querySelector('.streaming-cursor');
-
-    let accumulated = '';
     let finalData = null;
     try {
       const res = await fetch(url, {
@@ -2362,7 +2354,6 @@
         const { value, done } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
-        // SSEイベントは \n\n 区切り
         let idx;
         while ((idx = buf.indexOf('\n\n')) !== -1) {
           const evt = buf.slice(0, idx);
@@ -2371,28 +2362,21 @@
           if (!dataLine) continue;
           let payload;
           try { payload = JSON.parse(dataLine.slice(6)); } catch { continue; }
-          if (payload.type === 'token') {
-            accumulated += payload.text;
-            // ```json ブロック以降は表示しない (構造化UIでレンダー予定)
-            const fenceIdx = accumulated.indexOf('```');
-            const visible = fenceIdx === -1 ? accumulated : accumulated.slice(0, fenceIdx).trimEnd();
-            textEl.textContent = visible;
-            if (fenceIdx !== -1) cursorEl.textContent = ' ⏳ 結果生成中…';
-            msgContainer.scrollTop = msgContainer.scrollHeight;
-          } else if (payload.type === 'final') {
+          if (payload.type === 'final') {
             finalData = payload;
           } else if (payload.type === 'error') {
             throw new Error(payload.error || 'stream error');
           }
+          // type === 'token' は無視 (UIは静止スピナー)
         }
       }
     } catch (e) {
-      bubbleWrap.remove();
+      removeConsultationTyping(msgContainer);
       onError(e);
       return;
     }
 
-    bubbleWrap.remove();
+    removeConsultationTyping(msgContainer);
     if (finalData) {
       onFinal(finalData);
     } else {

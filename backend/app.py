@@ -2012,20 +2012,41 @@ async def consultation_apply(req: ConsultationApplyRequest):
 
 # ========== テーブル定義整理フェーズ (Phase2) ==========
 
-def _build_org_payload(session_id: str, text: str, session: dict) -> dict:
-    """テーブル定義整理エージェントの返信をパースしてSSE final/ChatResponse共通のdictを返す。
-    session を mutate する副作用あり (review_state / output_mapping / finalized)。"""
-    if "```json" not in text:
-        return {"session_id": session_id, "reply": text, "status": "asking"}
+_ORG_BLOCK_RE = re.compile(r"```\s*(?:json|JSON)?\s*(\{.*?\})\s*```", re.DOTALL)
 
-    try:
-        json_str = text.split("```json", 1)[1].split("```", 1)[0].strip()
-        payload = json.loads(json_str)
-    except (json.JSONDecodeError, IndexError):
+
+def _build_org_payload(session_id: str, text: str, session: dict) -> dict:
+    """テーブル定義整理エージェントの返信をパース。Phase1と同じく
+    フェンス変形・複数ブロック・raw fallback に耐え、抽出失敗時は [WARN] preview を残す。
+    session を mutate する副作用あり (review_state / output_mapping / finalized)。"""
+    candidates: list[str] = [m.group(1) for m in _ORG_BLOCK_RE.finditer(text)]
+
+    if not candidates and ('"organization_review"' in text or '"organization_complete"' in text):
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end > start:
+            candidates.append(text[start:end + 1])
+
+    payload = None
+    for js in candidates:
+        try:
+            data = json.loads(js)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict) and data.get("action") in ("organization_review", "organization_complete"):
+            payload = data
+            break
+
+    if payload is None:
+        if "organization_review" in text or "organization_complete" in text:
+            print(
+                f"[WARN] organization payload mentioned but not parseable. len={len(text)} head={text[:300]!r} tail={text[-300:]!r}",
+                flush=True,
+            )
         return {"session_id": session_id, "reply": text, "status": "asking"}
 
     action = payload.get("action")
-    display_text = text.split("```json")[0].strip() or "マッピング候補を作成しました。"
+    display_text = _ORG_BLOCK_RE.sub("", text).strip() or "マッピング候補を作成しました。"
 
     if action == "organization_review":
         session["review_state"] = payload
@@ -2035,18 +2056,17 @@ def _build_org_payload(session_id: str, text: str, session: dict) -> dict:
             "status": "organization_review",
             "consultation_result": payload,
         }
-    if action == "organization_complete":
-        session["input_tables"] = payload.get("input_tables", session.get("input_tables", []))
-        session["output_mapping"] = payload.get("output_mapping")
-        session["finalized"] = True
-        return {
-            "session_id": session_id,
-            "reply": display_text or "マッピングが確定しました。",
-            "status": "organization_complete",
-            "consultation_result": payload,
-        }
 
-    return {"session_id": session_id, "reply": text, "status": "asking"}
+    # organization_complete
+    session["input_tables"] = payload.get("input_tables", session.get("input_tables", []))
+    session["output_mapping"] = payload.get("output_mapping")
+    session["finalized"] = True
+    return {
+        "session_id": session_id,
+        "reply": display_text or "マッピングが確定しました。",
+        "status": "organization_complete",
+        "consultation_result": payload,
+    }
 
 
 def _sse_pack(payload: dict) -> str:
@@ -2074,7 +2094,7 @@ async def _stream_org_mapping(
     try:
         async with async_client.messages.stream(
             model="claude-sonnet-4-6",
-            max_tokens=8000,
+            max_tokens=16000,
             system=get_organization_system_prompt(session),
             messages=session["messages"],
         ) as stream:
