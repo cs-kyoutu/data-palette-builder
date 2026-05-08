@@ -26,7 +26,7 @@ except ImportError:
 import anthropic
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
@@ -402,6 +402,7 @@ _cleanup_thread.start()
 
 # --- Claude APIクライアント ---
 client = anthropic.Anthropic(max_retries=1, timeout=60.0)
+async_client = anthropic.AsyncAnthropic(max_retries=1, timeout=180.0)
 
 # --- データモデル ---
 class GenerateRequest(BaseModel):
@@ -2011,69 +2012,102 @@ async def consultation_apply(req: ConsultationApplyRequest):
 
 # ========== テーブル定義整理フェーズ (Phase2) ==========
 
-def _parse_organization_reply(session_id: str, text: str, session: dict) -> ChatResponse:
-    """テーブル定義整理エージェントの返信をパースする"""
+def _build_org_payload(session_id: str, text: str, session: dict) -> dict:
+    """テーブル定義整理エージェントの返信をパースしてSSE final/ChatResponse共通のdictを返す。
+    session を mutate する副作用あり (review_state / output_mapping / finalized)。"""
     if "```json" not in text:
-        return ChatResponse(session_id=session_id, reply=text, status="asking")
+        return {"session_id": session_id, "reply": text, "status": "asking"}
 
     try:
         json_str = text.split("```json", 1)[1].split("```", 1)[0].strip()
         payload = json.loads(json_str)
     except (json.JSONDecodeError, IndexError):
-        return ChatResponse(session_id=session_id, reply=text, status="asking")
+        return {"session_id": session_id, "reply": text, "status": "asking"}
 
     action = payload.get("action")
     display_text = text.split("```json")[0].strip() or "マッピング候補を作成しました。"
 
     if action == "organization_review":
         session["review_state"] = payload
-        return ChatResponse(
-            session_id=session_id,
-            reply=display_text,
-            status="organization_review",
-            consultation_result=payload,
-        )
+        return {
+            "session_id": session_id,
+            "reply": display_text,
+            "status": "organization_review",
+            "consultation_result": payload,
+        }
     if action == "organization_complete":
         session["input_tables"] = payload.get("input_tables", session.get("input_tables", []))
         session["output_mapping"] = payload.get("output_mapping")
         session["finalized"] = True
-        return ChatResponse(
-            session_id=session_id,
-            reply=display_text or "マッピングが確定しました。",
-            status="organization_complete",
-            consultation_result=payload,
-        )
+        return {
+            "session_id": session_id,
+            "reply": display_text or "マッピングが確定しました。",
+            "status": "organization_complete",
+            "consultation_result": payload,
+        }
 
-    return ChatResponse(session_id=session_id, reply=text, status="asking")
+    return {"session_id": session_id, "reply": text, "status": "asking"}
 
 
-async def _run_organization_initial_mapping(session: dict, session_id: str, hint: str | None = None) -> ChatResponse:
-    """実テーブルに対する初回マッピングをAIに要求"""
-    user_msg = "上記の実テーブルに基づいて、施策要件をマッピングしてください。"
-    if hint:
-        user_msg += f"\n\n補足: {hint}"
-    session["messages"] = [{"role": "user", "content": user_msg}]
+def _sse_pack(payload: dict) -> str:
+    """1つのSSEイベントをエンコード。data行は1行に収める (JSON内の改行は\\nにエスケープ)。"""
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
+
+async def _stream_org_mapping(
+    session: dict,
+    session_id: str,
+    *,
+    initial_user_msg: str | None = None,
+    appended_user_msg: str | None = None,
+):
+    """SSE async generator. type=token (delta), type=final (parsed payload), type=error.
+    完了時 (success/error両方) に sessions.save を呼ぶ。"""
+    rollback_pop = False
+    if initial_user_msg is not None:
+        session["messages"] = [{"role": "user", "content": initial_user_msg}]
+    elif appended_user_msg is not None:
+        session["messages"].append({"role": "user", "content": appended_user_msg})
+        rollback_pop = True
+
+    chunks: list[str] = []
     try:
-        response = client.messages.create(
+        async with async_client.messages.stream(
             model="claude-sonnet-4-6",
             max_tokens=8000,
             system=get_organization_system_prompt(session),
             messages=session["messages"],
-        )
-        reply_text = response.content[0].text
+        ) as stream:
+            async for delta in stream.text_stream:
+                chunks.append(delta)
+                yield _sse_pack({"type": "token", "text": delta})
+            final_message = await stream.get_final_message()
+            if final_message.stop_reason == "max_tokens":
+                print("[WARN] organization reply truncated at max_tokens", flush=True)
     except Exception as e:
-        print(f"[ERROR] Anthropic API failure: {type(e).__name__}: {e}", flush=True)
-        return ChatResponse(session_id=session_id, reply=f"エラー: {type(e).__name__}: {e}", status="asking")
+        if rollback_pop and session["messages"] and session["messages"][-1].get("role") == "user":
+            session["messages"].pop()
+        sessions.save(session_id, session)
+        print(f"[ERROR] Anthropic stream failure: {type(e).__name__}: {e}", flush=True)
+        yield _sse_pack({"type": "error", "error": f"{type(e).__name__}: {e}"})
+        return
 
+    reply_text = "".join(chunks)
     session["messages"].append({"role": "assistant", "content": reply_text})
-    return _parse_organization_reply(session_id, reply_text, session)
+
+    payload = _build_org_payload(session_id, reply_text, session)
+    sessions.save(session_id, session)
+
+    yield _sse_pack({"type": "final", **payload})
 
 
-@app.post("/api/organization/start", response_model=ChatResponse, dependencies=[Depends(verify_token)])
+_SSE_HEADERS = {"X-Accel-Buffering": "no", "Cache-Control": "no-cache"}
+
+
+@app.post("/api/organization/start", dependencies=[Depends(verify_token)])
 @limiter.limit("10/minute")
 async def organization_start(request: Request, req: OrganizationStartRequest):
-    """Phase1完了後にテーブル定義整理フェーズを開始"""
+    """Phase1完了後にテーブル定義整理フェーズを開始 (SSEストリーミング)"""
     consult = sessions.get(req.consultation_session_id)
     if not consult:
         raise HTTPException(404, "施策相談セッションが見つかりません")
@@ -2092,57 +2126,51 @@ async def organization_start(request: Request, req: OrganizationStartRequest):
         "finalized": False,
         "created_at": _time.time(),
     }
-    try:
-        return await _run_organization_initial_mapping(org_session, org_id, req.additional_hint)
-    finally:
-        sessions.save(org_id, org_session)
+
+    user_msg = "上記の実テーブルに基づいて、施策要件をマッピングしてください。"
+    if req.additional_hint:
+        user_msg += f"\n\n補足: {req.additional_hint}"
+
+    return StreamingResponse(
+        _stream_org_mapping(org_session, org_id, initial_user_msg=user_msg),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
 
 
-@app.post("/api/organization/chat", response_model=ChatResponse, dependencies=[Depends(verify_token)])
+@app.post("/api/organization/chat", dependencies=[Depends(verify_token)])
 @limiter.limit("20/minute")
 async def organization_chat(request: Request, req: OrganizationChatRequest):
-    """テーブル定義整理フェーズのチャット（質問への回答）"""
+    """テーブル定義整理フェーズのチャット (SSEストリーミング)"""
     session = sessions.get(req.session_id)
     if not session or session.get("mode") != "organization":
         raise HTTPException(404, "organizationセッションが見つかりません")
 
-    try:
-        session["messages"].append({"role": "user", "content": req.message})
-
-        try:
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=8000,
-                system=get_organization_system_prompt(session),
-                messages=session["messages"],
-            )
-            reply_text = response.content[0].text
-        except Exception as e:
-            session["messages"].pop()
-            print(f"[ERROR] Anthropic API failure: {type(e).__name__}: {e}", flush=True)
-            return ChatResponse(session_id=req.session_id, reply=f"エラー: {type(e).__name__}: {e}", status="asking")
-
-        session["messages"].append({"role": "assistant", "content": reply_text})
-        return _parse_organization_reply(req.session_id, reply_text, session)
-    finally:
-        sessions.save(req.session_id, session)
+    return StreamingResponse(
+        _stream_org_mapping(session, req.session_id, appended_user_msg=req.message),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
 
 
-@app.post("/api/organization/update-tables", response_model=ChatResponse, dependencies=[Depends(verify_token)])
+@app.post("/api/organization/update-tables", dependencies=[Depends(verify_token)])
 async def organization_update_tables(req: OrganizationUpdateTablesRequest):
-    """実テーブルを差し替えて再マッピング"""
+    """実テーブルを差し替えて再マッピング (SSEストリーミング)"""
     session = sessions.get(req.session_id)
     if not session or session.get("mode") != "organization":
         raise HTTPException(404, "organizationセッションが見つかりません")
 
-    try:
-        session["input_tables"] = req.input_tables
-        session["output_mapping"] = None
-        session["review_state"] = None
-        session["finalized"] = False
-        return await _run_organization_initial_mapping(session, req.session_id)
-    finally:
-        sessions.save(req.session_id, session)
+    session["input_tables"] = req.input_tables
+    session["output_mapping"] = None
+    session["review_state"] = None
+    session["finalized"] = False
+
+    user_msg = "上記の実テーブルに基づいて、施策要件をマッピングしてください。"
+    return StreamingResponse(
+        _stream_org_mapping(session, req.session_id, initial_user_msg=user_msg),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
 
 
 @app.post("/api/organization/finalize", response_model=ChatResponse, dependencies=[Depends(verify_token)])

@@ -2329,6 +2329,77 @@
     if (el) el.remove();
   }
 
+  // Phase2 SSEストリーミング消費者。
+  // POST → fetch().body から SSE イベント (data: {type:token|final|error}) を読み、
+  // tokenはライティングバブルに即時表示、finalで構造化UIに引き渡し。
+  async function streamOrgRequest(url, body, msgContainer, onFinal, onError) {
+    // 既存のtypingインジケータが残っていたら除去
+    removeConsultationTyping(msgContainer);
+
+    // ライティングバブル作成
+    const bubbleWrap = document.createElement('div');
+    bubbleWrap.className = 'ai-msg ai';
+    bubbleWrap.innerHTML = `<div class="avatar"><img src="/bdash_hakase.png" alt="AI"></div><div class="bubble"><span class="streaming-text"></span><span class="streaming-cursor">▍</span></div>`;
+    msgContainer.appendChild(bubbleWrap);
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+    const textEl = bubbleWrap.querySelector('.streaming-text');
+    const cursorEl = bubbleWrap.querySelector('.streaming-cursor');
+
+    let accumulated = '';
+    let finalData = null;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        // SSEイベントは \n\n 区切り
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) !== -1) {
+          const evt = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          const dataLine = evt.split('\n').find(l => l.startsWith('data: '));
+          if (!dataLine) continue;
+          let payload;
+          try { payload = JSON.parse(dataLine.slice(6)); } catch { continue; }
+          if (payload.type === 'token') {
+            accumulated += payload.text;
+            // ```json ブロック以降は表示しない (構造化UIでレンダー予定)
+            const fenceIdx = accumulated.indexOf('```');
+            const visible = fenceIdx === -1 ? accumulated : accumulated.slice(0, fenceIdx).trimEnd();
+            textEl.textContent = visible;
+            if (fenceIdx !== -1) cursorEl.textContent = ' ⏳ 結果生成中…';
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+          } else if (payload.type === 'final') {
+            finalData = payload;
+          } else if (payload.type === 'error') {
+            throw new Error(payload.error || 'stream error');
+          }
+        }
+      }
+    } catch (e) {
+      bubbleWrap.remove();
+      onError(e);
+      return;
+    }
+
+    bubbleWrap.remove();
+    if (finalData) {
+      onFinal(finalData);
+    } else {
+      onError(new Error('ストリーム終了したが最終結果が届きませんでした'));
+    }
+  }
+
   function removeConsultationQuestionUI() {
     const area = document.getElementById('consultationMessages');
     area.querySelectorAll('.question-cards').forEach(el => {
@@ -2568,39 +2639,22 @@
     msgContainer.innerHTML = '';
     showConsultationTyping(msgContainer);
 
-    try {
-      let data;
-      if (!organizationSessionId) {
-        // 初回: /api/organization/start
-        const res = await fetch('/api/organization/start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            consultation_session_id: consultationSessionId,
-            input_tables: organizationInputTables,
-          }),
-        });
-        data = await res.json();
-        organizationSessionId = data.session_id;
-      } else {
-        // 再マッピング: /api/organization/update-tables
-        const res = await fetch('/api/organization/update-tables', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: organizationSessionId,
-            input_tables: organizationInputTables,
-          }),
-        });
-        data = await res.json();
-      }
-      removeConsultationTyping(msgContainer);
-      handleOrganizationResponse(data);
-    } catch(e) {
-      removeConsultationTyping(msgContainer);
-      showConsultationMessage('ai', 'マッピング中にエラーが発生しました。', msgContainer);
-      showErrorWithRetry(msgContainer, () => runOrgMapping());
-    }
+    const isInitial = !organizationSessionId;
+    const url = isInitial ? '/api/organization/start' : '/api/organization/update-tables';
+    const body = isInitial
+      ? { consultation_session_id: consultationSessionId, input_tables: organizationInputTables }
+      : { session_id: organizationSessionId, input_tables: organizationInputTables };
+
+    await streamOrgRequest(url, body, msgContainer,
+      (data) => {
+        if (data.session_id) organizationSessionId = data.session_id;
+        handleOrganizationResponse(data);
+      },
+      (e) => {
+        showConsultationMessage('ai', 'マッピング中にエラーが発生しました。', msgContainer);
+        showErrorWithRetry(msgContainer, () => runOrgMapping());
+      },
+    );
     isLoading = false;
   }
 
@@ -2802,24 +2856,19 @@
     showConsultationMessage('user', text, msgContainer);
     showConsultationTyping(msgContainer);
 
-    try {
-      const res = await fetch('/api/organization/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: organizationSessionId, message: text }),
-      });
-      const data = await res.json();
-      removeConsultationTyping(msgContainer);
-      handleOrganizationResponse(data);
-    } catch(e) {
-      removeConsultationTyping(msgContainer);
-      showConsultationMessage('ai', 'エラーが発生しました。', msgContainer);
-      const _lastText = text;
-      showErrorWithRetry(msgContainer, () => {
-        document.getElementById('organizationInput').value = _lastText;
-        sendOrganization();
-      });
-    }
+    await streamOrgRequest('/api/organization/chat',
+      { session_id: organizationSessionId, message: text },
+      msgContainer,
+      (data) => handleOrganizationResponse(data),
+      (e) => {
+        showConsultationMessage('ai', 'エラーが発生しました。', msgContainer);
+        const _lastText = text;
+        showErrorWithRetry(msgContainer, () => {
+          document.getElementById('organizationInput').value = _lastText;
+          sendOrganization();
+        });
+      },
+    );
     isLoading = false;
   }
 
@@ -2830,21 +2879,17 @@
     removeOrgQuestionUI();
     showConsultationMessage('user', answer, msgContainer);
     showConsultationTyping(msgContainer);
-    try {
-      const res = await fetch('/api/organization/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: organizationSessionId, message: answer }),
-      });
-      const data = await res.json();
-      removeConsultationTyping(msgContainer);
-      handleOrganizationResponse(data);
-    } catch(e) {
-      removeConsultationTyping(msgContainer);
-      showConsultationMessage('ai', 'エラーが発生しました。', msgContainer);
-      const _lastAnswer = answer;
-      showErrorWithRetry(msgContainer, () => sendOrganizationAnswer(_lastAnswer));
-    }
+
+    await streamOrgRequest('/api/organization/chat',
+      { session_id: organizationSessionId, message: answer },
+      msgContainer,
+      (data) => handleOrganizationResponse(data),
+      (e) => {
+        showConsultationMessage('ai', 'エラーが発生しました。', msgContainer);
+        const _lastAnswer = answer;
+        showErrorWithRetry(msgContainer, () => sendOrganizationAnswer(_lastAnswer));
+      },
+    );
     isLoading = false;
   }
 
