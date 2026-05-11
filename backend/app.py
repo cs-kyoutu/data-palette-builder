@@ -162,6 +162,20 @@ _DDL_STATEMENTS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at)",
+    """
+    CREATE TABLE IF NOT EXISTS feedback_log (
+        id BIGSERIAL PRIMARY KEY,
+        session_id TEXT,
+        phase TEXT,
+        aspect TEXT,
+        comment TEXT,
+        card_context JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+    """,
+    "ALTER TABLE feedback_log ADD COLUMN IF NOT EXISTS aspect TEXT",
+    "CREATE INDEX IF NOT EXISTS idx_feedback_log_created_at ON feedback_log(created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_feedback_log_session_id ON feedback_log(session_id)",
 ]
 
 
@@ -1914,6 +1928,103 @@ async def feedback(req: FeedbackRequest):
         return {"status": "saved", "phase": "consultation", "message": "修正内容をナレッジに保存しました"}
 
     return {"status": "saved", "phase": "session_only", "message": "評価を記録しました"}
+
+
+# --- 自由コメント型フィードバック ---
+class FeedbackCommentRequest(BaseModel):
+    session_id: str | None = None
+    phase: str  # 'consultation' | 'organization' | 'design'
+    comment: str | None = None  # 単一コメント（後方互換）
+    aspects: dict[str, str] | None = None  # {aspect_key: text} — 観点別コメント
+    card_context: dict | None = None
+
+
+@app.post("/api/feedback/comment", dependencies=[Depends(verify_token)])
+async def feedback_comment(req: FeedbackCommentRequest):
+    """各フェーズのカードから自由テキストFBを受け取り、feedback_log に永続化する。
+
+    aspects が指定された場合は観点ごとに1行ずつ insert する（空文字は無視）。
+    aspects 未指定で comment のみあれば、aspect=null で1行 insert する。
+    """
+    phase = (req.phase or "").strip() or "unknown"
+    ctx_json = Json(req.card_context) if req.card_context else None
+
+    # 挿入対象を (aspect, text) のリストにまとめる
+    entries: list[tuple[str | None, str]] = []
+    if req.aspects:
+        for aspect, text in req.aspects.items():
+            t = (text or "").strip()
+            if t:
+                entries.append((aspect, t))
+    if not entries and req.comment:
+        c = req.comment.strip()
+        if c:
+            entries.append((None, c))
+
+    if not entries:
+        raise HTTPException(400, "コメントが空です")
+
+    inserted: list[dict] = []
+    with _db_conn() as conn:
+        if conn is None:
+            raise HTTPException(503, "DB未設定")
+        with conn.cursor() as cur:
+            for aspect, text in entries:
+                cur.execute(
+                    "INSERT INTO feedback_log (session_id, phase, aspect, comment, card_context) "
+                    "VALUES (%s, %s, %s, %s, %s) RETURNING id, created_at",
+                    (req.session_id, phase, aspect, text, ctx_json),
+                )
+                row = cur.fetchone()
+                inserted.append({
+                    "id": row[0] if row else None,
+                    "aspect": aspect,
+                    "created_at": row[1].isoformat() if row and row[1] else None,
+                })
+
+    return {"status": "saved", "count": len(inserted), "entries": inserted}
+
+
+@app.get("/api/feedback/export", dependencies=[Depends(verify_token)])
+async def export_feedback_csv():
+    """feedback_log を CSV で出力（Excel互換のUTF-8 BOM付き）。"""
+    header = ["id", "created_at", "session_id", "phase", "aspect", "comment", "card_context"]
+    rows: list[list[str]] = [header]
+
+    with _db_conn() as conn:
+        if conn is None:
+            raise HTTPException(503, "DB未設定")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, created_at, session_id, phase, aspect, comment, card_context "
+                "FROM feedback_log ORDER BY created_at DESC"
+            )
+            db_rows = cur.fetchall()
+
+    for r in db_rows:
+        ctx = r.get("card_context")
+        ctx_str = json.dumps(ctx, ensure_ascii=False) if ctx else ""
+        rows.append([
+            str(r.get("id", "")),
+            r["created_at"].isoformat() if r.get("created_at") else "",
+            r.get("session_id") or "",
+            r.get("phase") or "",
+            r.get("aspect") or "",
+            r.get("comment") or "",
+            ctx_str,
+        ])
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_ALL)
+    for row in rows:
+        writer.writerow(row)
+    body = "﻿" + buf.getvalue()
+    filename = f"feedback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # --- 施策相談エンドポイント ---

@@ -860,6 +860,7 @@
   </div>
   <div style="display:flex; gap:8px;">
     <a href="/api/sessions/export" download style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;text-decoration:none;display:inline-block;">📥 セッション履歴CSV</a>
+    <button onclick="downloadWithAuth('/api/feedback/export')" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;">💬 FBコメントCSV</button>
     <button onclick="toggleKnowledgePanel()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;">📚 ナレッジ管理</button>
   </div>
 </div>
@@ -984,6 +985,7 @@
             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendOrganization();}"></textarea>
           <button class="send-btn" onclick="sendOrganization()">&#10148;</button>
         </div>
+        <div class="hidden" id="orgFbWrap" style="padding:10px 14px;border-top:1px solid var(--border);font-size:12px;"></div>
         <div class="org-next-btn-wrap hidden" id="orgNextBtnWrap">
           <button class="org-next-btn" onclick="finalizeOrganization()">次へ: 手順書を生成する</button>
         </div>
@@ -1360,6 +1362,80 @@
     if (!str) return '';
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
+
+  // --- 自由コメント型FB送信（各フェーズ共通） ---
+  // phase: 'consultation' | 'organization' | 'design'
+  // host: 観点別の textarea (data-aspect) + 送信ボタン + 結果表示を含む親要素
+  async function sendFreeFeedback(phase, sessionId, contextFn, host) {
+    const btn = host.querySelector('button.fb-send');
+    const result = host.querySelector('.fb-result');
+    const textareas = Array.from(host.querySelectorAll('textarea.fb-comment'));
+    const aspects = {};
+    let any = false;
+    for (const ta of textareas) {
+      const key = ta.dataset.aspect || 'comment';
+      const v = (ta.value || '').trim();
+      if (v) { aspects[key] = v; any = true; }
+    }
+    if (!any) {
+      if (result) result.innerHTML = '<span style="color:var(--text-muted);">コメントを入力してください</span>';
+      return;
+    }
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+    try {
+      let card_context = null;
+      try { card_context = typeof contextFn === 'function' ? contextFn() : null; } catch(e) {}
+      const res = await fetch('/api/feedback/comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId || null,
+          phase: phase,
+          aspects: aspects,
+          card_context: card_context,
+        }),
+      });
+      if (!res.ok) throw new Error('送信失敗');
+      for (const ta of textareas) { ta.value = ''; ta.disabled = true; }
+      if (result) result.innerHTML = '<span style="color:#4CAF50;">✓ コメントを保存しました</span>';
+    } catch(e) {
+      if (result) result.innerHTML = '<span style="color:#ef4444;">✗ 送信に失敗しました</span>';
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    }
+  }
+
+  // FBエリアの共通HTML。観点ごとの textarea を並べる。
+  // aspects = [{key, label, placeholder?}]
+  function feedbackCommentBlock(aspects) {
+    const items = (aspects || []).map(a => `
+      <div style="margin-top:10px;">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">${escapeHtml(a.label)}</div>
+        <textarea class="fb-comment" data-aspect="${escapeHtml(a.key)}" rows="2" placeholder="${escapeHtml(a.placeholder || '気になった点があればご記入ください（任意）')}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>
+      </div>
+    `).join('');
+    return `
+      ${items}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+        <button class="fb-send" style="padding:4px 12px;border:none;border-radius:4px;background:var(--primary);color:white;cursor:pointer;font-size:12px;">コメントを送る</button>
+        <span class="fb-result" style="font-size:12px;"></span>
+      </div>
+    `;
+  }
+
+  // フェーズごとの観点定義（정중한 일본어）
+  const FB_ASPECTS = {
+    consultation: [
+      { key: 'output_error',       label: 'アウトプットに誤りはございませんでしたか？' },
+      { key: 'question_missing',   label: 'チャットでのご質問に漏れはございませんでしたか？' },
+      { key: 'question_redundant', label: 'チャットでのご質問に余計なものはございませんでしたか？' },
+    ],
+    organization: [
+      { key: 'output_error', label: 'アウトプットに誤りはございませんでしたか？' },
+    ],
+    design: [
+      { key: 'output_error', label: 'アウトプットに誤りはございませんでしたか？' },
+    ],
+  };
 
   // --- State ---
   let inputTables = [];       // [{table_name, columns: [{name, type, description}]}]
@@ -1904,7 +1980,7 @@
       fbArea.style.cssText = "margin-top:12px; padding-top:10px; border-top:1px solid var(--border);";
       fbArea.innerHTML = `
         <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">この手順書は正しいですか？</div>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <div class="fb-eval-row" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <button onclick="sendFeedback(true, this)" style="padding:4px 12px; border:1px solid #4CAF50; border-radius:4px; background:white; color:#4CAF50; cursor:pointer; font-size:12px;">✓ 正しい</button>
           <button onclick="showCorrectionInput(this)" style="padding:4px 12px; border:1px solid #f44336; border-radius:4px; background:white; color:#f44336; cursor:pointer; font-size:12px;">✗ 修正が必要</button>
         </div>
@@ -1912,7 +1988,14 @@
           <textarea placeholder="修正内容を入力..." style="width:100%; height:60px; border:1px solid var(--border); border-radius:6px; padding:6px; font-size:12px; resize:vertical;"></textarea>
           <button onclick="sendFeedback(false, this)" style="margin-top:4px; padding:4px 12px; border:none; border-radius:4px; background:var(--primary); color:white; cursor:pointer; font-size:12px;">送信</button>
         </div>
+        ${feedbackCommentBlock(FB_ASPECTS.design)}
       `;
+      fbArea.querySelector('button.fb-send').onclick = () => {
+        sendFreeFeedback('design', sessionId, () => ({
+          message_preview: (text || '').slice(0, 200),
+          download_url: downloadUrl || '',
+        }), fbArea);
+      };
       bubble.appendChild(fbArea);
     }
 
@@ -1929,13 +2012,20 @@
 
   function sendFeedback(isCorrect, btn) {
     const correction = isCorrect ? null : btn.closest(".correction-area")?.querySelector("textarea")?.value;
+    const fbArea = btn.closest("div[style*='border-top']") || btn.closest("div").parentElement;
     fetch("/api/feedback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId, is_correct: isCorrect, correction: correction })
     }).then(r => r.json()).then(d => {
-      const fbArea = btn.closest("div[style*='border-top']") || btn.closest("div").parentElement;
-      fbArea.innerHTML = `<div style="font-size:12px; color:var(--text-muted); margin-top:8px;">${isCorrect ? "✓ フィードバックを保存しました" : "✗ 修正内容を保存しました"}</div>`;
+      // ✓/✗ ボタン行 + correction-area を結果メッセージで置き換え（コメント欄は残す）
+      const btnRow = fbArea.querySelector('.fb-eval-row');
+      const corrArea = fbArea.querySelector('.correction-area');
+      const status = document.createElement('div');
+      status.style.cssText = 'font-size:12px; color:var(--text-muted); margin-top:4px;';
+      status.textContent = isCorrect ? "✓ フィードバックを保存しました" : "✗ 修正内容を保存しました";
+      if (btnRow) btnRow.replaceWith(status);
+      if (corrArea) corrArea.remove();
     }).catch(e => console.error("FB error:", e));
   }
 
@@ -2506,7 +2596,18 @@
         <button onclick="toggleConsultationEdit()" style="padding:4px 12px;border:1px solid var(--primary);border-radius:4px;background:white;color:var(--primary);cursor:pointer;font-size:12px;">✏️ 手動で編集</button>
       </div>
       <div id="consultationFbResult" style="margin-top:6px;"></div>
+      ${feedbackCommentBlock(FB_ASPECTS.consultation)}
     `;
+    fbArea.querySelector('button.fb-send').onclick = () => {
+      sendFreeFeedback('consultation', consultationSessionId, () => {
+        const c = consultationResult || {};
+        return {
+          strategy_name: c.strategy_name || '',
+          strategy_summary: c.strategy_summary || '',
+          requirements: c.requirements || null,
+        };
+      }, fbArea);
+    };
     card.appendChild(fbArea);
 
     // アクションボタン
@@ -2597,11 +2698,29 @@
     reviewEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">左側でテーブル定義を投入し、「AIマッピングを実行」ボタンを押してください</div>';
     document.getElementById('orgMappingBadge').textContent = '未実行';
     document.getElementById('orgNextBtnWrap').classList.add('hidden');
+    const fbWrap = document.getElementById('orgFbWrap');
+    fbWrap.classList.add('hidden');
+    fbWrap.innerHTML = '';
 
     const msgContainer = document.getElementById('organizationMessages');
     msgContainer.innerHTML = '';
 
     updateRunMappingBtn();
+  }
+
+  function showOrganizationFb() {
+    const fbWrap = document.getElementById('orgFbWrap');
+    if (!fbWrap || !fbWrap.classList.contains('hidden')) return; // 既に表示済みなら描画しない
+    fbWrap.innerHTML = `
+      ${feedbackCommentBlock(FB_ASPECTS.organization)}
+    `;
+    fbWrap.classList.remove('hidden');
+    fbWrap.querySelector('button.fb-send').onclick = () => {
+      sendFreeFeedback('organization', organizationSessionId, () => ({
+        input_table_count: (organizationInputTables || []).length,
+        mapping: organizationReviewState || null,
+      }), fbWrap);
+    };
   }
 
   function updateRunMappingBtn() {
@@ -2618,6 +2737,9 @@
     reviewEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">AIがマッピング中です…</div>';
     document.getElementById('orgMappingBadge').textContent = '処理中';
     document.getElementById('orgNextBtnWrap').classList.add('hidden');
+    const fbWrap = document.getElementById('orgFbWrap');
+    fbWrap.classList.add('hidden');
+    fbWrap.innerHTML = '';
 
     const msgContainer = document.getElementById('organizationMessages');
     msgContainer.innerHTML = '';
@@ -2907,6 +3029,7 @@
       document.getElementById('orgMappingBadge').style.background = '#22c55e';
       document.getElementById('orgMappingBadge').style.color = '#fff';
       document.getElementById('orgNextBtnWrap').classList.remove('hidden');
+      showOrganizationFb();
       // 次へボタンを有効化: Phase3 モードボタンも有効（既に常時可能）
     } else {
       // status='asking' などフォールバック: AIがJSONを付け忘れた応答。
