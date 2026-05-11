@@ -169,11 +169,13 @@ _DDL_STATEMENTS = [
         phase TEXT,
         aspect TEXT,
         comment TEXT,
+        output_text TEXT,
         card_context JSONB,
         created_at TIMESTAMPTZ DEFAULT NOW()
     )
     """,
     "ALTER TABLE feedback_log ADD COLUMN IF NOT EXISTS aspect TEXT",
+    "ALTER TABLE feedback_log ADD COLUMN IF NOT EXISTS output_text TEXT",
     "CREATE INDEX IF NOT EXISTS idx_feedback_log_created_at ON feedback_log(created_at)",
     "CREATE INDEX IF NOT EXISTS idx_feedback_log_session_id ON feedback_log(session_id)",
 ]
@@ -1939,15 +1941,120 @@ class FeedbackCommentRequest(BaseModel):
     card_context: dict | None = None
 
 
+def _build_feedback_output(session: dict | None, phase: str) -> tuple[dict | None, str]:
+    """セッションとフェーズから、FB保存用の (output_dict, output_text) を作る。
+
+    output_text: 分析者がCSV内で直読できるテキスト
+    output_dict: card_context に同梱する生データ
+    """
+    if not session:
+        return None, ""
+
+    if phase == "consultation":
+        cr = session.get("consultation_result") or {}
+        if not cr:
+            return None, ""
+        req = cr.get("requirements") or {}
+        lines = [
+            f"戦略名: {cr.get('strategy_name', '')}",
+            f"概要: {cr.get('strategy_summary', '')}",
+            f"① 誰に: {req.get('who', '')}",
+            f"② 何を: {req.get('what', '')}",
+            f"③ いつ: {req.get('when', '')}",
+            f"④ 除外: {req.get('exclude', '')}",
+        ]
+        out_cols = cr.get("output_columns") or []
+        if out_cols:
+            lines.append("アウトプット項目:")
+            for c in out_cols:
+                if isinstance(c, dict):
+                    src = c.get("source_column") or c.get("definition", "")
+                    lines.append(f"  - {c.get('name', '')}: {src}")
+                else:
+                    lines.append(f"  - {c}")
+        in_tabs = cr.get("input_tables") or []
+        if in_tabs:
+            names = [t.get("table_name", "") if isinstance(t, dict) else str(t) for t in in_tabs]
+            lines.append(f"インプットテーブル: {', '.join(names)}")
+        return cr, "\n".join(lines)
+
+    if phase == "organization":
+        cr = session.get("consultation_result") or {}
+        input_tables = session.get("input_tables") or []
+        output_mapping = session.get("output_mapping") or {}
+        lines: list[str] = []
+        if input_tables:
+            lines.append("【インプットテーブル】")
+            for t in input_tables:
+                if not isinstance(t, dict):
+                    continue
+                tn = t.get("table_name", "")
+                cols = t.get("columns") or []
+                col_names = [c.get("name", "") if isinstance(c, dict) else str(c) for c in cols]
+                lines.append(f"- {tn}: {', '.join(col_names)}")
+        if output_mapping.get("columns"):
+            lines.append("【アウトプットマッピング】")
+            for col in output_mapping["columns"]:
+                if not isinstance(col, dict):
+                    continue
+                src_tbl = col.get("source_table", "") or ""
+                src_col = col.get("source_column", "") or "（加工生成）"
+                lines.append(f"- {col.get('name', '')}: {col.get('definition', '')} ← {src_tbl}.{src_col}")
+        if not lines and cr:
+            lines.append(f"戦略名: {cr.get('strategy_name', '')}")
+            lines.append(f"概要: {cr.get('strategy_summary', '')}")
+        snapshot = {
+            "consultation_result": cr,
+            "input_tables": input_tables,
+            "output_mapping": output_mapping,
+        }
+        return snapshot, "\n".join(lines)
+
+    if phase == "design":
+        dd = session.get("design_doc") or {}
+        if not dd:
+            return None, ""
+        lines = [f"概要: {dd.get('summary', '')}"]
+        steps = dd.get("processing_steps") or []
+        if steps:
+            lines.append("【処理ステップ】")
+            for s in steps:
+                if isinstance(s, dict):
+                    n = s.get("step", "")
+                    op = s.get("operation", "")
+                    result = s.get("result", "") or s.get("save_as", "")
+                    lines.append(f"  {n}. {op}: {result}".rstrip(": "))
+                else:
+                    lines.append(f"  - {s}")
+        notes = dd.get("special_notes") or []
+        if notes:
+            lines.append("【注意事項】")
+            for n in notes:
+                lines.append(f"  - {n}")
+        return dd, "\n".join(lines)
+
+    return None, ""
+
+
 @app.post("/api/feedback/comment", dependencies=[Depends(verify_token)])
 async def feedback_comment(req: FeedbackCommentRequest):
     """各フェーズのカードから自由テキストFBを受け取り、feedback_log に永続化する。
 
     aspects が指定された場合は観点ごとに1行ずつ insert する（空文字は無視）。
     aspects 未指定で comment のみあれば、aspect=null で1行 insert する。
+    保存時、session_id+phase からその時点のアウトプットを引いて output_text に格納する。
     """
     phase = (req.phase or "").strip() or "unknown"
-    ctx_json = Json(req.card_context) if req.card_context else None
+
+    # セッションからアウトプットスナップショットを取り出す
+    session = sessions.get(req.session_id) if req.session_id else None
+    output_dict, output_text = _build_feedback_output(session, phase)
+
+    # card_context: フロント送信分 + アウトプット生データをマージ
+    ctx: dict = dict(req.card_context or {})
+    if output_dict:
+        ctx["output"] = output_dict
+    ctx_json = Json(ctx) if ctx else None
 
     # 挿入対象を (aspect, text) のリストにまとめる
     entries: list[tuple[str | None, str]] = []
@@ -1971,9 +2078,10 @@ async def feedback_comment(req: FeedbackCommentRequest):
         with conn.cursor() as cur:
             for aspect, text in entries:
                 cur.execute(
-                    "INSERT INTO feedback_log (session_id, phase, aspect, comment, card_context) "
-                    "VALUES (%s, %s, %s, %s, %s) RETURNING id, created_at",
-                    (req.session_id, phase, aspect, text, ctx_json),
+                    "INSERT INTO feedback_log "
+                    "(session_id, phase, aspect, comment, output_text, card_context) "
+                    "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, created_at",
+                    (req.session_id, phase, aspect, text, output_text or None, ctx_json),
                 )
                 row = cur.fetchone()
                 inserted.append({
@@ -1988,7 +2096,10 @@ async def feedback_comment(req: FeedbackCommentRequest):
 @app.get("/api/feedback/export", dependencies=[Depends(verify_token)])
 async def export_feedback_csv():
     """feedback_log を CSV で出力（Excel互換のUTF-8 BOM付き）。"""
-    header = ["id", "created_at", "session_id", "phase", "aspect", "comment", "card_context"]
+    header = [
+        "id", "created_at", "session_id", "phase", "aspect", "comment",
+        "output_text", "card_context",
+    ]
     rows: list[list[str]] = [header]
 
     with _db_conn() as conn:
@@ -1996,7 +2107,8 @@ async def export_feedback_csv():
             raise HTTPException(503, "DB未設定")
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                "SELECT id, created_at, session_id, phase, aspect, comment, card_context "
+                "SELECT id, created_at, session_id, phase, aspect, comment, "
+                "output_text, card_context "
                 "FROM feedback_log ORDER BY created_at DESC"
             )
             db_rows = cur.fetchall()
@@ -2011,6 +2123,7 @@ async def export_feedback_csv():
             r.get("phase") or "",
             r.get("aspect") or "",
             r.get("comment") or "",
+            r.get("output_text") or "",
             ctx_str,
         ])
 
