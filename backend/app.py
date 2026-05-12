@@ -1113,8 +1113,16 @@ C) 選択肢3の具体的な内容
 ## 出力形式
 技術確認が不要な場合、以下のJSON形式で出力：
 ```json
-{{"action": "plan", "operations": ["横統合", "絞込み", "名寄せ", "テンプレート 縦持ちを横持ちに変換"], "flow": "簡潔な処理フロー説明", "needs_web_hearing": false}}
+{{"action": "plan", "operations": ["横統合", "絞込み", "名寄せ", "テンプレート 縦持ちを横持ちに変換"], "flow": "受注テーブルと商品テーブルを横統合 → 顧客IDで絞込み → 名寄せ → 商品ランキングを横持ち変換", "needs_web_hearing": false}}
 ```
+
+### flow フィールドのルール（厳守）
+- **1〜3行以内、最大200文字**。`operations` の順序を矢印 (→) で繋いだ骨子のみ書く
+- STEP-by-STEPの詳細（条件式・結合キー・フィルタ値・カラム名のリスト等）は **絶対に書かない**。詳細はStep2（設計書生成）の役割
+- マークダウン見出し (`###`/`##`)・箇条書き・表・コードブロックは禁止
+- `要確認事項`・`注釈`・`最終アウトプットカラム` 等の補足セクションも禁止（必要ならStep2の `special_notes` で扱う）
+- flowが長くなると max_tokens に達して JSON が途中で切れ、Step2が起動しなくなる。**簡潔に書くことが必須**
+
 技術確認が必要な場合はテキストで質問（1回のみ、回答後は即plan JSON出力）。
 **回答を受け取ったら、その回答を反映して必ずplan JSONを出力すること。追加質問は禁止。**
 """
@@ -1487,11 +1495,13 @@ async def _generate_impl_body(req: GenerateRequest, session_id: str, session: di
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=2000,
+            max_tokens=4000,
             system=get_system_prompt_step1(req.input_tables, req.output_mapping),
             messages=session["messages"],
         )
         step1_text = response.content[0].text
+        if response.stop_reason == "max_tokens":
+            print(f"[WARN] generate Step1 truncated at max_tokens (session={session_id})", flush=True)
     except Exception as e:
         session["messages"].pop()
         return ChatResponse(session_id=session_id, reply=f"API呼び出しエラー: {e}", status="asking")
