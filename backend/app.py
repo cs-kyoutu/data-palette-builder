@@ -2637,6 +2637,225 @@ async def delete_knowledge_entry(entry_id: str):
     return {"status": "deleted"}
 
 
+@app.get("/api/usage/export", dependencies=[Depends(verify_token)])
+async def export_usage_xlsx():
+    """利用状況集計をExcel(.xlsx)で出力。要約/日別/Mode別/FB集計の4シート。"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    P1_DONE_SQL = "(mode = 'consultation' AND data->'consultation_result' IS NOT NULL)"
+    P2_DONE_SQL = "(mode = 'organization' AND data->'output_mapping' IS NOT NULL)"
+    P3_DONE_SQL = "(mode = 'procedure' AND data->>'last_file' IS NOT NULL)"
+    DONE_ANY = f"({P1_DONE_SQL} OR {P2_DONE_SQL} OR {P3_DONE_SQL})"
+
+    with _db_conn() as conn:
+        if conn is None:
+            raise HTTPException(503, "DB未設定")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # --- Mode別集計（要約・Mode別 共通の素データ）---
+            cur.execute(f"""
+                SELECT
+                    mode,
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN {DONE_ANY} THEN 1 ELSE 0 END) AS done,
+                    AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/60.0) AS avg_min,
+                    percentile_cont(0.5) WITHIN GROUP (
+                        ORDER BY EXTRACT(EPOCH FROM (updated_at - created_at))/60.0
+                    ) AS median_min,
+                    MAX(EXTRACT(EPOCH FROM (updated_at - created_at))/60.0) AS max_min,
+                    AVG(jsonb_array_length(COALESCE(data->'messages', '[]'::jsonb))) AS avg_msgs,
+                    SUM(CASE WHEN data->>'evaluation' = 'good' THEN 1 ELSE 0 END) AS eval_good,
+                    SUM(CASE WHEN data->>'evaluation' = 'bad'  THEN 1 ELSE 0 END) AS eval_bad
+                FROM sessions
+                GROUP BY mode
+                ORDER BY mode
+            """)
+            mode_rows = cur.fetchall()
+
+            # --- 全期間トータル ---
+            cur.execute(f"""
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN {DONE_ANY} THEN 1 ELSE 0 END) AS done,
+                    MIN(created_at) AS first_at,
+                    MAX(created_at) AS last_at
+                FROM sessions
+            """)
+            overall = cur.fetchone() or {}
+
+            # --- 日別集計（直近90日, JST）---
+            cur.execute(f"""
+                SELECT
+                    DATE(created_at AT TIME ZONE 'Asia/Tokyo') AS day,
+                    COUNT(*) FILTER (WHERE mode = 'consultation') AS p1_total,
+                    COUNT(*) FILTER (WHERE {P1_DONE_SQL}) AS p1_done,
+                    COUNT(*) FILTER (WHERE mode = 'organization') AS p2_total,
+                    COUNT(*) FILTER (WHERE {P2_DONE_SQL}) AS p2_done,
+                    COUNT(*) FILTER (WHERE mode = 'procedure') AS p3_total,
+                    COUNT(*) FILTER (WHERE {P3_DONE_SQL}) AS p3_done,
+                    AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/60.0) AS avg_min
+                FROM sessions
+                WHERE created_at >= NOW() - INTERVAL '90 days'
+                GROUP BY day
+                ORDER BY day DESC
+            """)
+            daily_rows = cur.fetchall()
+
+            # --- FB集計 (feedback_log: aspect別コメント件数) ---
+            cur.execute("""
+                SELECT
+                    COALESCE(phase, '') AS phase,
+                    COALESCE(aspect, '') AS aspect,
+                    COUNT(*) AS total,
+                    COUNT(*) FILTER (WHERE COALESCE(TRIM(comment), '') <> '') AS non_empty
+                FROM feedback_log
+                GROUP BY phase, aspect
+                ORDER BY phase, aspect
+            """)
+            fb_rows = cur.fetchall()
+
+    def _r(v, ndigits=1):
+        if v is None:
+            return ""
+        try:
+            return round(float(v), ndigits)
+        except (TypeError, ValueError):
+            return ""
+
+    def _rate(num, denom):
+        try:
+            n = float(num or 0)
+            d = float(denom or 0)
+            if d <= 0:
+                return ""
+            return round(n / d * 100, 1)
+        except (TypeError, ValueError):
+            return ""
+
+    # --- Workbook作成 ---
+    wb = Workbook()
+    HEADER_FILL = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    HEADER_FONT = Font(bold=True)
+    WRAP = Alignment(wrap_text=True, vertical="top")
+
+    def _write_header(ws, headers: list[str]):
+        for col_idx, label in enumerate(headers, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=label)
+            cell.fill = HEADER_FILL
+            cell.font = HEADER_FONT
+            cell.alignment = WRAP
+
+    def _autofit(ws, widths: list[int]):
+        from openpyxl.utils import get_column_letter
+        for i, w in enumerate(widths, start=1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+    MODE_LABEL = {
+        "consultation": "Phase1 (施策相談)",
+        "organization": "Phase2 (テーブル整理)",
+        "procedure":    "Phase3 (手順書生成)",
+    }
+
+    # ----- Sheet 1: 要約 -----
+    ws = wb.active
+    ws.title = "要約"
+    _write_header(ws, ["項目", "値"])
+    total_all = overall.get("total") or 0
+    done_all = overall.get("done") or 0
+    first_at = overall.get("first_at")
+    last_at = overall.get("last_at")
+    summary_pairs = [
+        ("集計期間 (最古)", first_at.isoformat() if first_at else ""),
+        ("集計期間 (最新)", last_at.isoformat() if last_at else ""),
+        ("総セッション数", total_all),
+        ("完了セッション数", done_all),
+        ("完了率(%)", _rate(done_all, total_all)),
+        ("", ""),
+        ("--- Mode別 ---", ""),
+    ]
+    for mr in mode_rows:
+        label = MODE_LABEL.get(mr["mode"] or "", mr["mode"] or "(不明)")
+        summary_pairs.append((f"{label} セッション数", mr["total"]))
+        summary_pairs.append((f"{label} 完了数", mr["done"]))
+        summary_pairs.append((f"{label} 完了率(%)", _rate(mr["done"], mr["total"])))
+        summary_pairs.append((f"{label} 平均所要時間(分)", _r(mr["avg_min"])))
+    summary_pairs.append(("", ""))
+    summary_pairs.append(("--- 評価 (✓/✗) ---", ""))
+    tot_good = sum((mr["eval_good"] or 0) for mr in mode_rows)
+    tot_bad = sum((mr["eval_bad"] or 0) for mr in mode_rows)
+    summary_pairs.append(("✓ 正しい 件数", tot_good))
+    summary_pairs.append(("✗ 修正が必要 件数", tot_bad))
+    summary_pairs.append(("✓ 比率(%)", _rate(tot_good, tot_good + tot_bad)))
+
+    for i, (k, v) in enumerate(summary_pairs, start=2):
+        ws.cell(row=i, column=1, value=k)
+        ws.cell(row=i, column=2, value=v)
+    _autofit(ws, [32, 30])
+
+    # ----- Sheet 2: 日別 -----
+    ws2 = wb.create_sheet("日別")
+    _write_header(ws2, [
+        "日付", "P1 開始", "P1 完了", "P1 完了率(%)",
+        "P2 開始", "P2 完了", "P2 完了率(%)",
+        "P3 開始", "P3 完了", "P3 完了率(%)",
+        "平均所要時間(分)",
+    ])
+    for i, dr in enumerate(daily_rows, start=2):
+        ws2.cell(row=i, column=1, value=dr["day"].isoformat() if dr.get("day") else "")
+        ws2.cell(row=i, column=2, value=dr["p1_total"])
+        ws2.cell(row=i, column=3, value=dr["p1_done"])
+        ws2.cell(row=i, column=4, value=_rate(dr["p1_done"], dr["p1_total"]))
+        ws2.cell(row=i, column=5, value=dr["p2_total"])
+        ws2.cell(row=i, column=6, value=dr["p2_done"])
+        ws2.cell(row=i, column=7, value=_rate(dr["p2_done"], dr["p2_total"]))
+        ws2.cell(row=i, column=8, value=dr["p3_total"])
+        ws2.cell(row=i, column=9, value=dr["p3_done"])
+        ws2.cell(row=i, column=10, value=_rate(dr["p3_done"], dr["p3_total"]))
+        ws2.cell(row=i, column=11, value=_r(dr["avg_min"]))
+    _autofit(ws2, [12, 8, 8, 12, 8, 8, 12, 8, 8, 12, 16])
+
+    # ----- Sheet 3: Mode別 -----
+    ws3 = wb.create_sheet("Mode別")
+    _write_header(ws3, [
+        "Mode", "開始数", "完了数", "完了率(%)",
+        "平均所要時間(分)", "中央値(分)", "最大(分)", "平均メッセージ数",
+        "✓ 件数", "✗ 件数",
+    ])
+    for i, mr in enumerate(mode_rows, start=2):
+        ws3.cell(row=i, column=1, value=MODE_LABEL.get(mr["mode"] or "", mr["mode"] or "(不明)"))
+        ws3.cell(row=i, column=2, value=mr["total"])
+        ws3.cell(row=i, column=3, value=mr["done"])
+        ws3.cell(row=i, column=4, value=_rate(mr["done"], mr["total"]))
+        ws3.cell(row=i, column=5, value=_r(mr["avg_min"]))
+        ws3.cell(row=i, column=6, value=_r(mr["median_min"]))
+        ws3.cell(row=i, column=7, value=_r(mr["max_min"]))
+        ws3.cell(row=i, column=8, value=_r(mr["avg_msgs"]))
+        ws3.cell(row=i, column=9, value=mr["eval_good"])
+        ws3.cell(row=i, column=10, value=mr["eval_bad"])
+    _autofit(ws3, [22, 10, 10, 12, 16, 14, 12, 16, 10, 10])
+
+    # ----- Sheet 4: FB集計 -----
+    ws4 = wb.create_sheet("FB集計")
+    _write_header(ws4, ["Phase", "Aspect", "コメント総件数", "記入あり", "記入率(%)"])
+    for i, fr in enumerate(fb_rows, start=2):
+        ws4.cell(row=i, column=1, value=fr["phase"] or "(不明)")
+        ws4.cell(row=i, column=2, value=fr["aspect"] or "(不明)")
+        ws4.cell(row=i, column=3, value=fr["total"])
+        ws4.cell(row=i, column=4, value=fr["non_empty"])
+        ws4.cell(row=i, column=5, value=_rate(fr["non_empty"], fr["total"]))
+    _autofit(ws4, [16, 22, 14, 12, 12])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"usage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.get("/api/sessions/export", dependencies=[Depends(verify_token)])
 async def export_sessions_csv():
     """全セッションをCSVで出力（現場メンバーの精度検収用）。
