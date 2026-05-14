@@ -3545,14 +3545,8 @@
     if (!driveToken) { connectGoogleDrive(); return; }
     const listEl = document.getElementById('driveFileList');
     listEl.innerHTML = '<div class="drive-status">検索中...</div>';
-    const mimeTypes = [
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "application/vnd.ms-excel",
-      "text/csv",
-      "application/vnd.google-apps.spreadsheet"
-    ].map(m => `mimeType='${m}'`).join(' or ');
-    const qParam = `name contains '${q.replace(/'/g,"\\'")}' and (${mimeTypes}) and trashed=false`;
-    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qParam)}&fields=files(id,name,modifiedTime,mimeType)&pageSize=20&orderBy=modifiedTime desc&includeItemsFromAllDrives=true&supportsAllDrives=true`;
+    const qParam = `name contains '${q.replace(/'/g,"\\'")}' and trashed=false`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qParam)}&fields=files(id,name,modifiedTime,mimeType)&pageSize=30&orderBy=modifiedTime desc&corpora=allDrives&includeItemsFromAllDrives=true&supportsAllDrives=true`;
     try {
       const res = await fetch(url, { headers: { Authorization: 'Bearer ' + driveToken } });
       if (res.status === 401) {
