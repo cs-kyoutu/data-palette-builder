@@ -3546,18 +3546,30 @@
     const listEl = document.getElementById('driveFileList');
     listEl.innerHTML = '<div class="drive-status">検索中...</div>';
     const qParam = `name contains '${q.replace(/'/g,"\\'")}' and trashed=false`;
-    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qParam)}&fields=files(id,name,modifiedTime,mimeType)&pageSize=30&orderBy=modifiedTime desc&corpora=allDrives&includeItemsFromAllDrives=true&supportsAllDrives=true`;
+    // まず allDrives で試行、失敗したら user（マイドライブ）にフォールバック
+    const baseParams = `q=${encodeURIComponent(qParam)}&fields=files(id,name,modifiedTime,mimeType)&pageSize=30&orderBy=modifiedTime desc`;
+    const urlAll = `https://www.googleapis.com/drive/v3/files?${baseParams}&corpora=allDrives&includeItemsFromAllDrives=true&supportsAllDrives=true`;
+    const urlUser = `https://www.googleapis.com/drive/v3/files?${baseParams}`;
     try {
-      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + driveToken } });
+      let res = await fetch(urlAll, { headers: { Authorization: 'Bearer ' + driveToken } });
+      // allDrives が使えないアカウント（個人アカウント等）は user にフォールバック
+      if (!res.ok && res.status !== 401) {
+        console.warn('Drive allDrives search failed, falling back to user corpora', res.status);
+        res = await fetch(urlUser, { headers: { Authorization: 'Bearer ' + driveToken } });
+      }
       if (res.status === 401) {
-        driveToken = null;
-        _tokenClient = null;
+        driveToken = null; _tokenClient = null;
         document.getElementById('driveAuthArea').classList.remove('hidden');
         document.getElementById('driveSearchArea').classList.add('hidden');
         listEl.innerHTML = '';
         return;
       }
       const data = await res.json();
+      if (data.error) {
+        console.error('Drive API error:', data.error);
+        listEl.innerHTML = `<div class="drive-status">エラー: ${data.error.message || data.error.status}</div>`;
+        return;
+      }
       const files = data.files || [];
       if (!files.length) { listEl.innerHTML = '<div class="drive-status">ファイルが見つかりませんでした</div>'; return; }
       listEl.innerHTML = '';
@@ -3571,6 +3583,7 @@
         listEl.appendChild(item);
       }
     } catch(e) {
+      console.error('Drive search error:', e);
       listEl.innerHTML = '<div class="drive-status">エラーが発生しました</div>';
     }
   }
