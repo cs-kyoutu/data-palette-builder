@@ -306,6 +306,55 @@
     .text-input-area:focus { border-color: var(--primary); outline: none; }
     .text-input-area::placeholder { color: var(--text-muted); }
 
+    /* Google Drive button & modal */
+    .drive-btn {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; margin-top: 8px; padding: 8px 14px;
+      border: 1.5px solid var(--border); border-radius: 6px;
+      font-size: 12px; cursor: pointer;
+      background: var(--surface); color: var(--text); font-family: inherit;
+      transition: all 0.15s;
+    }
+    .drive-btn:hover { border-color: #4285F4; color: #4285F4; background: #f0f4ff; }
+    .drive-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 2000;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .drive-modal {
+      background: var(--surface); border-radius: 12px; padding: 24px;
+      width: 480px; max-width: 95vw; box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+    }
+    .drive-modal h3 { font-size: 15px; font-weight: 700; color: var(--primary-dark); margin-bottom: 14px; }
+    .drive-search-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .drive-search-input {
+      flex: 1; padding: 9px 12px; border: 1.5px solid var(--border);
+      border-radius: 8px; font-size: 13px; font-family: inherit; color: var(--text);
+    }
+    .drive-search-input:focus { border-color: var(--primary); outline: none; }
+    .drive-search-btn {
+      padding: 9px 16px; background: var(--primary); color: white;
+      border: none; border-radius: 8px; font-size: 13px; cursor: pointer;
+      font-family: inherit; font-weight: 600;
+    }
+    .drive-search-btn:hover { background: var(--primary-dark); }
+    .drive-file-list { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px; }
+    .drive-file-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+      border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s;
+    }
+    .drive-file-item:last-child { border-bottom: none; }
+    .drive-file-item:hover { background: var(--primary-bg); }
+    .drive-file-icon { font-size: 18px; flex-shrink: 0; }
+    .drive-file-name { font-size: 13px; color: var(--text); flex: 1; word-break: break-all; }
+    .drive-file-date { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+    .drive-status { font-size: 12px; color: var(--text-muted); text-align: center; padding: 24px; }
+    .drive-modal-footer { display: flex; justify-content: flex-end; }
+    .drive-cancel-btn {
+      padding: 8px 18px; border: 1.5px solid var(--border); border-radius: 6px;
+      font-size: 13px; cursor: pointer; background: var(--surface); color: var(--text); font-family: inherit;
+    }
+    .drive-cancel-btn:hover { border-color: var(--text-muted); }
+
     /* Generate button */
     .generate-area {
       max-width: 1200px;
@@ -966,6 +1015,7 @@
             <p>テーブル定義書をドロップ<br>または クリックして選択（Excel / CSV）</p>
             <input type="file" id="orgInputFile" accept=".xlsx,.xls,.csv" multiple style="display:none" onchange="handleOrgInputFiles(this.files)">
           </div>
+          <button class="drive-btn" onclick="openDriveModal('org')">🗂 Google Drive から読み込む</button>
         </div>
 
         <!-- テキスト入力 -->
@@ -1051,6 +1101,7 @@
           <p>テーブル定義書をドロップ<br>または クリックして選択（Excel / CSV）</p>
           <input type="file" id="inputFileInput" accept=".xlsx,.xls,.csv" multiple>
         </div>
+        <button class="drive-btn" onclick="openDriveModal('input')">🗂 Google Drive から読み込む</button>
       </div>
 
       <div class="file-list" id="inputFileList"></div>
@@ -1082,6 +1133,7 @@
           <p>マッピング定義ファイルをドロップ<br>または クリックして選択（Excel / CSV）</p>
           <input type="file" id="outputFileInput" accept=".xlsx,.xls,.csv">
         </div>
+        <button class="drive-btn" onclick="openDriveModal('output')">🗂 Google Drive から読み込む</button>
       </div>
 
       <!-- テキスト入力 -->
@@ -1114,7 +1166,32 @@
   </div>
 </div>
 
+<!-- Google Drive picker modal -->
+<div id="driveModal" class="drive-modal-overlay hidden">
+  <div class="drive-modal">
+    <h3>🗂 Google Drive からファイルを選択</h3>
+    <div id="driveAuthArea">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Googleアカウントでログインしてファイルを検索します。</p>
+      <button class="drive-search-btn" style="width:100%;padding:11px" onclick="connectGoogleDrive()">Googleアカウントでログイン</button>
+    </div>
+    <div id="driveSearchArea" class="hidden">
+      <div class="drive-search-row">
+        <input type="text" id="driveSearchInput" class="drive-search-input" placeholder="ファイル名で検索..."
+          onkeydown="if(event.key==='Enter') searchDrive()">
+        <button class="drive-search-btn" onclick="searchDrive()">検索</button>
+      </div>
+      <div class="drive-file-list" id="driveFileList">
+        <div class="drive-status">ファイル名を入力して検索してください</div>
+      </div>
+    </div>
+    <div class="drive-modal-footer">
+      <button class="drive-cancel-btn" onclick="closeDriveModal()">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
   // ===== クライアントサイド ファイルパース (SheetJS) =====
 
@@ -3415,6 +3492,143 @@
   function removeTyping() {
     const el = document.getElementById("typing");
     if (el) el.remove();
+  }
+
+  // ===== Google Drive Integration =====
+  const GOOGLE_CLIENT_ID = '479162835415-h7vnc5uaj0q8rbjvq4i38prfla35capa.apps.googleusercontent.com';
+  const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+  let driveToken = null;
+  let driveTargetArea = null;
+  let _tokenClient = null;
+
+  function openDriveModal(area) {
+    driveTargetArea = area;
+    document.getElementById('driveModal').classList.remove('hidden');
+    if (driveToken) {
+      document.getElementById('driveAuthArea').classList.add('hidden');
+      document.getElementById('driveSearchArea').classList.remove('hidden');
+    } else {
+      document.getElementById('driveAuthArea').classList.remove('hidden');
+      document.getElementById('driveSearchArea').classList.add('hidden');
+    }
+    document.getElementById('driveFileList').innerHTML = '<div class="drive-status">ファイル名を入力して検索してください</div>';
+    document.getElementById('driveSearchInput').value = '';
+  }
+
+  function closeDriveModal() {
+    document.getElementById('driveModal').classList.add('hidden');
+  }
+
+  function connectGoogleDrive() {
+    if (!window.google || !window.google.accounts) {
+      alert('Google Identity Services の読み込みに失敗しました。ページを再読み込みしてください。');
+      return;
+    }
+    if (!_tokenClient) {
+      _tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: DRIVE_SCOPE,
+        callback: (resp) => {
+          if (resp.error) { alert('認証に失敗しました: ' + resp.error); return; }
+          driveToken = resp.access_token;
+          document.getElementById('driveAuthArea').classList.add('hidden');
+          document.getElementById('driveSearchArea').classList.remove('hidden');
+        }
+      });
+    }
+    _tokenClient.requestAccessToken({ prompt: '' });
+  }
+
+  async function searchDrive() {
+    const q = document.getElementById('driveSearchInput').value.trim();
+    if (!q) return;
+    if (!driveToken) { connectGoogleDrive(); return; }
+    const listEl = document.getElementById('driveFileList');
+    listEl.innerHTML = '<div class="drive-status">検索中...</div>';
+    const mimeTypes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "text/csv",
+      "application/vnd.google-apps.spreadsheet"
+    ].map(m => `mimeType='${m}'`).join(' or ');
+    const qParam = `name contains '${q.replace(/'/g,"\\'")}' and (${mimeTypes}) and trashed=false`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qParam)}&fields=files(id,name,modifiedTime,mimeType)&pageSize=20&orderBy=modifiedTime desc`;
+    try {
+      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + driveToken } });
+      if (res.status === 401) {
+        driveToken = null;
+        _tokenClient = null;
+        document.getElementById('driveAuthArea').classList.remove('hidden');
+        document.getElementById('driveSearchArea').classList.add('hidden');
+        listEl.innerHTML = '';
+        return;
+      }
+      const data = await res.json();
+      const files = data.files || [];
+      if (!files.length) { listEl.innerHTML = '<div class="drive-status">ファイルが見つかりませんでした</div>'; return; }
+      listEl.innerHTML = '';
+      for (const f of files) {
+        const icon = f.mimeType === 'text/csv' ? '📄' : '📊';
+        const date = f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString('ja-JP') : '';
+        const item = document.createElement('div');
+        item.className = 'drive-file-item';
+        item.innerHTML = `<span class="drive-file-icon">${icon}</span><span class="drive-file-name">${f.name}</span><span class="drive-file-date">${date}</span>`;
+        item.onclick = () => selectDriveFile(f.id, f.name, f.mimeType);
+        listEl.appendChild(item);
+      }
+    } catch(e) {
+      listEl.innerHTML = '<div class="drive-status">エラーが発生しました</div>';
+    }
+  }
+
+  async function selectDriveFile(fileId, fileName, mimeType) {
+    const listEl = document.getElementById('driveFileList');
+    listEl.innerHTML = '<div class="drive-status">ダウンロード中...</div>';
+    try {
+      let url;
+      let dlName = fileName;
+      if (mimeType === 'application/vnd.google-apps.spreadsheet') {
+        url = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application%2Fvnd.openxmlformats-officedocument.spreadsheetml.sheet`;
+        if (!dlName.endsWith('.xlsx')) dlName += '.xlsx';
+      } else {
+        url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+      }
+      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + driveToken } });
+      if (!res.ok) throw new Error('download failed ' + res.status);
+      const blob = await res.blob();
+      const file = new File([blob], dlName, { type: blob.type });
+      const fileType = driveTargetArea === 'output' ? 'output' : 'input';
+      const data = await parseFileClientSide(file, fileType);
+      closeDriveModal();
+      if (driveTargetArea === 'input') {
+        if (data.tables && data.tables.length) {
+          for (const t of data.tables) {
+            const idx = inputTables.findIndex(x => x.table_name === t.table_name);
+            if (idx >= 0) inputTables[idx] = t; else inputTables.push(t);
+          }
+          addInputFileItem(dlName);
+          renderInputPreview();
+          updateGenerateBtn();
+        }
+      } else if (driveTargetArea === 'output') {
+        if (data.mapping) {
+          outputMapping = data.mapping;
+          document.getElementById('outputFileList').innerHTML = '';
+          addOutputFileItem(dlName);
+          renderOutputPreview();
+          updateGenerateBtn();
+        }
+      } else if (driveTargetArea === 'org') {
+        if (data.tables && data.tables.length) {
+          organizationInputTables = mergeOrgTables(organizationInputTables, data.tables);
+          renderOrgInputPreview();
+          updateRunMappingBtn();
+        }
+      }
+    } catch(e) {
+      console.error(e);
+      listEl.innerHTML = '<div class="drive-status">ダウンロードに失敗しました</div>';
+    }
   }
 </script>
 
