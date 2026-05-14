@@ -73,7 +73,21 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 14px;
+      margin-bottom: 6px;
+    }
+    .panel-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.6;
+      padding: 8px 10px;
+      background: var(--primary-bg);
+      border-radius: 6px;
+      border-left: 3px solid var(--primary);
+    }
+    .panel-desc strong {
+      color: var(--primary-dark);
+      font-weight: 600;
     }
     .panel-header h2 {
       font-size: 14px;
@@ -1002,22 +1016,26 @@
         <h2>インプット（テーブル定義書）</h2>
         <span class="badge" id="inputCount">0 テーブル</span>
       </div>
+      <div class="panel-desc">
+        <strong>今持っているデータの構造</strong>（素材）を入力します。<br>
+        テーブルごとに「カラム名・型・説明」を登録してください。複数テーブル可。
+      </div>
 
       <div class="input-method-toggle">
-        <button class="toggle-btn active" onclick="switchInputMethod('preset')">プリセット</button>
+        <button class="toggle-btn" onclick="switchInputMethod('preset')">プリセット</button>
+        <button class="toggle-btn active" onclick="switchInputMethod('text')">テキスト入力</button>
         <button class="toggle-btn" onclick="switchInputMethod('upload')">ファイルアップロード</button>
-        <button class="toggle-btn" onclick="switchInputMethod('text')">テキスト入力</button>
       </div>
 
       <!-- テキスト入力 -->
-      <div id="inputTextArea" class="hidden">
+      <div id="inputTextArea">
         <textarea class="text-input-area" id="inputTextInput"
-          rows="12" placeholder="テーブル定義をペースト（タブ区切り、スペース区切り、b→dashメタデータ形式対応）"></textarea>
+          rows="12" placeholder="カラム名	型	説明&#10;user_id	bigint	顧客ID&#10;amount	int	注文金額&#10;order_dt	date	注文日&#10;&#10;※ タブ区切り・スペース区切り・b→dashメタデータ形式対応&#10;※ テーブル名はファイル名 or シート名から自動取得"></textarea>
         <button class="upload-btn" onclick="parseAndSetInputText()">テーブル定義を読み込む</button>
       </div>
 
       <!-- プリセット -->
-      <div id="inputPreset">
+      <div id="inputPreset" class="hidden">
         <div class="preset-search-wrap">
           <span class="preset-search-icon">🔍</span>
           <input type="text" class="preset-search" id="presetSearch" placeholder="業界を検索..." oninput="filterPresets()">
@@ -1047,14 +1065,18 @@
         <h2>アウトプット（マッピング定義）</h2>
         <span class="badge" id="outputCount">0 カラム</span>
       </div>
+      <div class="panel-desc">
+        <strong>作りたいデータの定義</strong>（ゴール）を入力します。<br>
+        最終的に出力したいカラムとその定義を記述してください。フォーマット不問、自由記述でOK。
+      </div>
 
       <div class="input-method-toggle">
-        <button class="toggle-btn active" onclick="switchOutputMethod('upload')">ファイルアップロード</button>
-        <button class="toggle-btn" onclick="switchOutputMethod('text')">テキスト入力</button>
+        <button class="toggle-btn active" onclick="switchOutputMethod('text')">テキスト入力</button>
+        <button class="toggle-btn" onclick="switchOutputMethod('upload')">ファイルアップロード</button>
       </div>
 
       <!-- ファイルアップロード -->
-      <div id="outputUpload">
+      <div id="outputUpload" class="hidden">
         <div class="drop-zone" id="outputDropZone" onclick="document.getElementById('outputFileInput').click()">
           <div class="icon">&#128203;</div>
           <p>マッピング定義ファイルをドロップ<br>または クリックして選択（Excel / CSV）</p>
@@ -1063,9 +1085,9 @@
       </div>
 
       <!-- テキスト入力 -->
-      <div id="outputText" class="hidden">
+      <div id="outputText">
         <textarea class="text-input-area" id="outputTextInput"
-          placeholder="最終テーブルのカラム定義をテキストで入力&#10;&#10;例:&#10;顧客ID - 顧客テーブルの顧客ID&#10;メールアドレス - 顧客テーブルのメールアドレス&#10;最終カート投入日 - webアクセスログから算出&#10;カート投入商品名1 - 商品テーブルの商品名"></textarea>
+          placeholder="作りたいテーブルのカラムと定義を自由に記述（フォーマット不問）&#10;&#10;例:&#10;顧客ID         — 顧客テーブルの顧客ID&#10;月次売上合計    — ordersテーブルのamountを月次で集計&#10;最終購入日      — ordersテーブルの最新order_dt&#10;購入回数        — ordersテーブルの注文件数&#10;&#10;※ Phase2経由の場合は自動入力されます"></textarea>
       </div>
 
       <div class="file-list" id="outputFileList"></div>
@@ -1092,7 +1114,125 @@
   </div>
 </div>
 
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 <script>
+  // ===== クライアントサイド ファイルパース (SheetJS) =====
+
+  function _colIdx(header, ...candidates) {
+    const cl = candidates.map(c => c.toLowerCase());
+    for (let i = 0; i < header.length; i++) {
+      if (!header[i]) continue;
+      const v = String(header[i]).trim().toLowerCase().replace(/\n/g, '');
+      if (!v) continue;
+      if (cl.includes(v)) return i;
+      for (const c of cl) { if (v.includes(c) || c.includes(v)) return i; }
+    }
+    return null;
+  }
+
+  function _isBdash(header) {
+    const h = new Set(header.map(v => v ? String(v).trim().toLowerCase() : ''));
+    return ['データファイル名', 'カラム論理名', 'データ型'].filter(k => h.has(k)).length >= 2;
+  }
+
+  function _parseBdashRows(rows, header) {
+    const tC = _colIdx(header, 'データファイル名');
+    const nC = _colIdx(header, 'カラム論理名');
+    const tyC = _colIdx(header, 'データ型');
+    const cC = _colIdx(header, '顧客IDフラグ', '顧客idフラグ');
+    if (tC === null || nC === null) return [];
+    const m = new Map();
+    for (const row of rows) {
+      if (!row || row.every(v => v == null)) continue;
+      const tn = row[tC] != null ? String(row[tC]).trim() : '';
+      const cn = row[nC] != null ? String(row[nC]).trim() : '';
+      if (!tn || !cn) continue;
+      const ty = tyC !== null && row[tyC] != null ? String(row[tyC]).trim() : '';
+      let isCid = false;
+      if (cC !== null && row[cC] != null) isCid = ['true','1','○','yes'].includes(String(row[cC]).trim().toLowerCase());
+      if (!m.has(tn)) m.set(tn, []);
+      m.get(tn).push({ name: cn, type: ty, description: isCid ? '顧客ID（結合キー）' : '' });
+    }
+    return Array.from(m.entries()).map(([tn, cols]) => ({ table_name: tn, columns: cols }));
+  }
+
+  const _INPUT_KW = ['カラム名','項目名','name','column','フィールド名','フィールド','カラム論理名','カラム物理名','列名','属性名','項目','テーブル名','データファイル名'];
+
+  function _findHeaderIdx(allRows, keywords, maxRows = 30) {
+    const kl = keywords.map(k => k.toLowerCase());
+    for (let i = 0; i < Math.min(allRows.length, maxRows); i++) {
+      for (const cell of (allRows[i] || [])) {
+        if (cell == null) continue;
+        const v = String(cell).trim().toLowerCase().replace(/\n/g, '');
+        if (!v) continue;
+        for (const k of kl) { if (v === k || v.includes(k) || k.includes(v)) return i; }
+      }
+    }
+    return 0;
+  }
+
+  function _parseInputBlock(tableName, header, dataRows) {
+    if (_isBdash(header)) return _parseBdashRows(dataRows, header);
+    let nC = _colIdx(header, 'カラム名','項目名','name','column','フィールド名','カラム論理名','列名','属性名','項目','カラム物理名');
+    const tyC = _colIdx(header, '型','type','データ型','形式','data_type','タイプ');
+    const dC = _colIdx(header, '説明','description','備考','定義','概要','用途','コメント','memo');
+    if (nC === null) nC = 0;
+    const columns = [];
+    for (const row of dataRows) {
+      if (!row || row.every(v => v == null)) continue;
+      const n = row[nC] != null ? String(row[nC]).trim() : '';
+      if (!n) continue;
+      columns.push({ name: n, type: tyC !== null && row[tyC] != null ? String(row[tyC]).trim() : '', description: dC !== null && row[dC] != null ? String(row[dC]).trim() : '' });
+    }
+    return columns.length ? [{ table_name: tableName, columns }] : [];
+  }
+
+  function _parseOutputBlock(header, dataRows) {
+    let nC = _colIdx(header, 'カラム名','項目名','name','column','列名','フィールド名');
+    const dC = _colIdx(header, '定義','説明','definition','description','備考','用途');
+    const scC = _colIdx(header, 'インプットカラム','元カラム','source_column','ソースカラム','素材になるカラム名','素材になる\nカラム名');
+    const stC = _colIdx(header, 'インプットデータ','元テーブル','source_table','ソーステーブル','素材になるID/データファイル名','素材になる\nID/データファイル名');
+    if (nC === null) nC = 1;
+    const columns = [];
+    for (const row of dataRows) {
+      if (!row || row.every(v => v == null)) continue;
+      const n = row[nC] != null ? String(row[nC]).trim() : '';
+      if (!n) continue;
+      columns.push({ name: n, definition: dC !== null && row[dC] != null ? String(row[dC]).trim() : '', source_column: scC !== null && row[scC] != null ? String(row[scC]).trim() : '', source_table: stC !== null && row[stC] != null ? String(row[stC]).trim() : '' });
+    }
+    return { columns };
+  }
+
+  async function parseFileClientSide(file, fileType) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'xls', 'csv'].includes(ext)) throw new Error('対応形式: .xlsx, .csv');
+    let wb;
+    if (ext === 'csv') {
+      wb = XLSX.read(await file.text(), { type: 'string' });
+    } else {
+      wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
+    }
+    if (fileType === 'input') {
+      const tables = [];
+      for (const sheetName of wb.SheetNames) {
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: null });
+        if (rows.length < 2) continue;
+        const hi = _findHeaderIdx(rows, _INPUT_KW);
+        const header = (rows[hi] || []).map(v => v != null ? String(v).trim() : '');
+        const tableName = ext === 'csv' ? file.name.replace(/\.[^.]+$/, '') : sheetName;
+        tables.push(..._parseInputBlock(tableName, header, rows.slice(hi + 1)));
+      }
+      return { tables };
+    } else {
+      const _OUT_KW = ['カラム名','項目名','name','column','列名','フィールド名','定義','素材になる'];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: null });
+      if (rows.length < 2) return { mapping: { columns: [] } };
+      const hi = _findHeaderIdx(rows, _OUT_KW);
+      const header = (rows[hi] || []).map(v => v != null ? String(v).trim() : '');
+      return { mapping: _parseOutputBlock(header, rows.slice(hi + 1)) };
+    }
+  }
+
   // --- Auth: 全fetchにBearer Token を自動付与 ---
   (function() {
     const _origFetch = window.fetch;
@@ -1441,7 +1581,7 @@
   // --- State ---
   let inputTables = [];       // [{table_name, columns: [{name, type, description}]}]
   let outputMapping = null;   // {columns: [{name, definition, source_column, source_table}]}
-  let outputTextMode = false;
+  let outputTextMode = true;
   let sessionId = null;
   let isLoading = false;
   let industriesData = {};
@@ -1527,6 +1667,13 @@
     const lines = text.split("\n").filter(l => l.trim());
     if (lines.length === 0) return;
 
+    // デリミタ自動検出（1行目のカンマ数 vs タブ数）
+    const firstLine = lines[0];
+    const isCSV = (firstLine.match(/,/g) || []).length > (firstLine.match(/\t/g) || []).length;
+    const splitLine = isCSV
+      ? (line) => line.split(",").map(s => s.trim())
+      : (line) => line.split(/\t+|\s{2,}/).map(s => s.trim()).filter(Boolean);
+
     // b→dashメタデータ形式の検出（データファイル名、カラム論理名）
     const isBdashMeta = lines[0].includes("データファイル名") || lines[0].includes("カラム論理名");
 
@@ -1547,7 +1694,7 @@
 
     if (isBdashMeta && headerIdx >= 0) {
       // b→dashメタデータ形式: ヘッダーからカラム位置を動的に特定
-      const headerParts = lines[headerIdx].split(/\t/).map(s => s.trim());
+      const headerParts = splitLine(lines[headerIdx]);
       const findCol = (keywords) => headerParts.findIndex(h => keywords.some(k => h.includes(k)));
       const tableCol = findCol(["データファイル名"]);
       const nameCol = findCol(["カラム論理名"]);
@@ -1555,7 +1702,7 @@
       const custIdCol = findCol(["顧客IDフラグ"]);
 
       for (let i = headerIdx + 1; i < lines.length; i++) {
-        const parts = lines[i].split(/\t/).map(s => s.trim());
+        const parts = splitLine(lines[i]);
         if (parts.length < 3) continue;
         const tableName = tableCol >= 0 ? parts[tableCol] : (parts[1] || parts[0]);
         let colName = nameCol >= 0 ? parts[nameCol] : (parts[2] || "");
@@ -1573,7 +1720,7 @@
       for (const line of lines) {
         const tableMatch = line.match(/【(.+?)】/);
         if (tableMatch) {
-          const parts = line.split(/\t+|\s{2,}/).map(s => s.trim()).filter(Boolean);
+          const parts = splitLine(line);
           currentTable = tableMatch[1];
           const colName = parts[0].replace(/【.+】/g, "").trim();
           const dataType = parts[1] || "";
@@ -1582,11 +1729,11 @@
         }
       }
     } else {
-      // タブ/スペース区切り汎用パース
+      // 汎用パース（タブ/スペース/カンマ）
       let currentTable = "テーブル1";
       const startIdx = headerIdx >= 0 ? headerIdx + 1 : 0;
       for (let i = startIdx; i < lines.length; i++) {
-        const parts = lines[i].split(/\t+|\s{2,}/).map(s => s.trim()).filter(Boolean);
+        const parts = splitLine(lines[i]);
         if (parts.length === 0) continue;
         // テーブル名行の検出（カラム数が少なく、型キーワードを含まない）
         if (parts.length <= 2 && !/型|テキスト|整数|日付|真偽/.test(parts.join(""))) {
@@ -1662,13 +1809,8 @@
   // --- File upload handlers ---
   async function handleInputFiles(files) {
     for (const file of files) {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("file_type", "input");
-
       try {
-        const res = await fetch("/api/upload", { method: "POST", body: formData });
-        const data = await res.json();
+        const data = await parseFileClientSide(file, 'input');
         if (data.tables) {
           for (const t of data.tables) {
             const existing = inputTables.findIndex(x => x.table_name === t.table_name);
@@ -1688,13 +1830,8 @@
 
   async function handleOutputFiles(files) {
     const file = files[0];
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("file_type", "output");
-
     try {
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json();
+      const data = await parseFileClientSide(file, 'output');
       if (data.mapping) {
         outputMapping = data.mapping;
         document.getElementById("outputFileList").innerHTML = "";
@@ -2914,19 +3051,17 @@
 
   async function handleOrgInputFiles(files) {
     if (!files || !files.length) return;
-    const fd = new FormData();
-    for (const f of files) fd.append('files', f);
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (data.input_tables) {
-        // 既存テーブルに追加（同名は上書き）
-        organizationInputTables = mergeOrgTables(organizationInputTables, data.input_tables);
-        renderOrgInputPreview();
-        updateRunMappingBtn();
+      for (const f of files) {
+        const data = await parseFileClientSide(f, 'input');
+        if (data.tables) {
+          organizationInputTables = mergeOrgTables(organizationInputTables, data.tables);
+          renderOrgInputPreview();
+          updateRunMappingBtn();
+        }
       }
     } catch(e) {
-      alert('アップロードに失敗しました');
+      alert('ファイル解析に失敗しました');
     }
   }
 

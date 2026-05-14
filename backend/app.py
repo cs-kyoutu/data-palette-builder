@@ -11,6 +11,7 @@ FastAPI + Claude API による自動手順書生成Webアプリ
 import csv
 import io
 import json
+import base64
 import os
 import re
 import uuid
@@ -24,7 +25,7 @@ except ImportError:
     pass  # Render環境では環境変数で設定
 
 import anthropic
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -1406,35 +1407,36 @@ async def list_industries():
     return result
 
 
-@app.post("/api/upload", dependencies=[Depends(verify_token)])
-async def upload_file(
-    file: UploadFile = File(...),
-    file_type: str = Form("input"),  # "input" or "output"
-):
-    """ファイルをアップロードして解析結果を返す"""
-    # ファイル保存
-    suffix = Path(file.filename).suffix.lower()
+class UploadRequest(BaseModel):
+    filename: str
+    content: str  # base64 encoded file content
+    file_type: str = "input"
+
+
+@app.post("/api/parse", dependencies=[Depends(verify_token)])
+async def upload_file(req: UploadRequest):
+    """ファイルをアップロードして解析結果を返す（base64 JSON）"""
+    suffix = Path(req.filename).suffix.lower()
     if suffix not in (".xlsx", ".xls", ".csv"):
         raise HTTPException(400, "対応形式: .xlsx, .csv")
 
     save_path = UPLOAD_DIR / f"{uuid.uuid4()}{suffix}"
-    content = await file.read()
     with open(save_path, "wb") as f:
-        f.write(content)
+        f.write(base64.b64decode(req.content))
 
     try:
-        if file_type == "input":
+        if req.file_type == "input":
             if suffix == ".csv":
-                result = parse_input_csv(str(save_path), table_name=Path(file.filename).stem)
+                result = parse_input_csv(str(save_path), table_name=Path(req.filename).stem)
             else:
                 result = parse_input_excel(str(save_path))
-            return {"type": "input", "tables": result, "filename": file.filename}
+            return {"type": "input", "tables": result, "filename": req.filename}
         else:
             if suffix == ".csv":
                 result = parse_output_csv(str(save_path))
             else:
                 result = parse_output_excel(str(save_path))
-            return {"type": "output", "mapping": result, "filename": file.filename}
+            return {"type": "output", "mapping": result, "filename": req.filename}
     except Exception as e:
         raise HTTPException(400, f"ファイルの解析に失敗しました。ファイル形式を確認してください。")
 
