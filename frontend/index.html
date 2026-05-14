@@ -1193,6 +1193,26 @@
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
+  // ===== クライアント固有ID（レートリミット用） =====
+  const _clientId = (() => {
+    const key = 'dpb_client_id';
+    let id = localStorage.getItem(key);
+    if (!id) {
+      id = 'c_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem(key, id);
+    }
+    return id;
+  })();
+
+  // /api/* へのすべてのfetchに X-Client-ID を自動付与
+  const _origFetch = window.fetch.bind(window);
+  window.fetch = function(url, opts = {}) {
+    if (typeof url === 'string' && url.startsWith('/api/')) {
+      opts = { ...opts, headers: { 'X-Client-ID': _clientId, ...opts.headers } };
+    }
+    return _origFetch(url, opts);
+  };
+
   // ===== クライアントサイド ファイルパース (SheetJS) =====
 
   function _colIdx(header, ...candidates) {

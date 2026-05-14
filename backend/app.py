@@ -42,7 +42,13 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-limiter = Limiter(key_func=get_remote_address)
+
+def get_client_id(request: Request) -> str:
+    """X-Client-ID ヘッダーがあればそれを、なければIPアドレスをレートリミットキーとする"""
+    return request.headers.get("X-Client-ID") or get_remote_address(request)
+
+
+limiter = Limiter(key_func=get_client_id)
 
 app = FastAPI(title="データパレット構築手順書ジェネレータ")
 app.state.limiter = limiter
@@ -77,7 +83,7 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # --- RDS PostgreSQL接続 ---
 import psycopg2
 from psycopg2.extras import RealDictCursor, Json
-from psycopg2.pool import SimpleConnectionPool
+from psycopg2.pool import ThreadedConnectionPool
 from contextlib import contextmanager
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -87,7 +93,7 @@ _db_pool = None
 def _get_pool():
     global _db_pool
     if _db_pool is None and DATABASE_URL:
-        _db_pool = SimpleConnectionPool(1, 5, DATABASE_URL)
+        _db_pool = ThreadedConnectionPool(1, 10, DATABASE_URL)
     return _db_pool
 
 
