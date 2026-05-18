@@ -60,6 +60,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def log_client_ip(request: Request, call_next):
+    xff = request.headers.get("x-forwarded-for", "")
+    real_ip = xff.split(",")[0].strip() if xff else (request.client.host if request.client else "-")
+    print(f"[CLIENT_IP] {real_ip} {request.method} {request.url.path}", flush=True)
+    return await call_next(request)
+
+
 # --- 認証 ---
 AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "")
 security = HTTPBearer(auto_error=False)
