@@ -1587,7 +1587,14 @@ async def regenerate(request: Request, req: RegenerateRequest):
     input_tables = session.get("input_tables", [])
     output_mapping = session.get("output_mapping", {})
 
-    if "messages_step2" not in session or not session["messages_step2"]:
+    msgs2 = session.get("messages_step2", [])
+    print(f"[REGEN] session={req.session_id[:8]} messages_step2 count={len(msgs2)}", flush=True)
+    for i, m in enumerate(msgs2):
+        print(f"[REGEN]   [{i}] role={m.get('role')} content_len={len(m.get('content',''))}", flush=True)
+    print(f"[REGEN] correction='{req.correction[:100]}'", flush=True)
+    print(f"[REGEN] input_tables count={len(input_tables)} plan_exists={bool(plan)}", flush=True)
+
+    if not msgs2:
         session["messages_step2"] = [
             {"role": "user", "content": "処理方針に基づいて設計書JSONを出力してください。"}
         ]
@@ -1608,6 +1615,14 @@ async def regenerate(request: Request, req: RegenerateRequest):
         assistant_text = response2.content[0].text
         if response2.stop_reason == "max_tokens":
             print(f"[WARN] regenerate Step2 truncated (session={req.session_id})", flush=True)
+        has_json = "```json" in assistant_text
+        print(f"[REGEN] new response len={len(assistant_text)} has_json={has_json}", flush=True)
+        if has_json:
+            try:
+                new_steps = json.loads(assistant_text.split("```json")[1].split("```")[0].strip()).get("processing_steps", [])
+                print(f"[REGEN] new design steps={len(new_steps)}: {[s.get('operation') for s in new_steps if isinstance(s, dict)]}", flush=True)
+            except Exception:
+                pass
         session["messages_step2"].append({"role": "assistant", "content": assistant_text})
     except Exception as e:
         session["messages_step2"].pop()
