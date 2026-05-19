@@ -53,32 +53,81 @@ def build_spreadsheet(generation_data: dict) -> tuple[str, str]:
     # ========== ■ フロー セクション ==========
     write_section_header(cur_row, "■ フロー")
     cur_row += 1
+    cur_row += 1  # 空行
 
-    # データ準備テーブルをボックスで配置
-    if prep_sec and prep_sec.get("rows"):
-        cur_row += 1  # 空行
-        tables = prep_sec["rows"]
-        col_start = 3  # C列から開始
-        for t_idx, table_row in enumerate(tables):
-            tbl_name = table_row[1] if len(table_row) > 1 else f"テーブル{t_idx+1}"
-            usage = table_row[2] if len(table_row) > 2 else ""
-            cols_info = table_row[3] if len(table_row) > 3 else ""
+    # 横型フロー図: [Input1][Input2] → ①Op → ②Op → [Output]
+    input_names = generation_data.get("input_tables", [])
+    output_name = generation_data.get("output_name", "")
+    steps_for_flow = []
+    if proc_sec and proc_sec.get("rows"):
+        marks = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭","⑮"]
+        mark_idx = 0
+        for r in proc_sec["rows"]:
+            if len(r) > 1 and r[0]:
+                op_name = r[1] if len(r) > 1 else ""
+                save_as = r[4] if len(r) > 4 else ""
+                mark = marks[mark_idx] if mark_idx < len(marks) else f"({mark_idx+1})"
+                steps_for_flow.append((mark, op_name, save_as))
+                mark_idx += 1
 
-            base_col = col_start + t_idx * 5  # 5列ごとに配置
-            if base_col > 18:
-                break
+    if input_names or steps_for_flow:
+        thin = Side(style="thin")
+        box_border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        BOX_W, BOX_H = 3, 2
 
-            # テーブル名ラベル
-            ws.cell(row=cur_row, column=base_col, value="ID").font = font9
-            id_cell = ws.cell(row=cur_row + 1, column=base_col, value=tbl_name)
-            id_cell.font = font9
-            # マージして箱っぽく
-            end_col = base_col + 2
-            ws.merge_cells(start_row=cur_row + 1, start_column=base_col,
-                          end_row=cur_row + 3, end_column=end_col)
-            id_cell.alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
+        n_inputs = max(len(input_names), 1)
+        # フロー全体の縦の中心行（インプット群の中心）
+        total_input_height = n_inputs * BOX_H + (n_inputs - 1)  # BOX_H行 + 1行ギャップ
+        mid_row = cur_row + total_input_height // 2
 
-        cur_row += 5  # テーブルボックス分
+        def draw_box(r, c, text, fill_color=None):
+            try:
+                ws.merge_cells(start_row=r, start_column=c, end_row=r + BOX_H - 1, end_column=c + BOX_W - 1)
+            except Exception:
+                pass
+            cell = ws.cell(row=r, column=c, value=text)
+            cell.font = font9
+            cell.alignment = center_align
+            for rr in range(r, r + BOX_H):
+                for cc in range(c, c + BOX_W):
+                    ws.cell(row=rr, column=cc).border = box_border
+            if fill_color:
+                fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
+                for rr in range(r, r + BOX_H):
+                    for cc in range(c, c + BOX_W):
+                        ws.cell(row=rr, column=cc).fill = fill
+
+        def draw_arrow(r, c):
+            cell = ws.cell(row=r, column=c, value="→")
+            cell.font = font9
+            cell.alignment = center_align
+
+        col = 2  # B列スタート
+
+        # インプットボックス（左側、縦積み）
+        for i, name in enumerate(input_names[:8]):
+            r = cur_row + i * (BOX_H + 1)
+            draw_box(r, col, name, fill_color="D9EAF7")
+
+        col += BOX_W
+
+        # インプット→ステップ1の矢印
+        draw_arrow(mid_row, col)
+        col += 1
+
+        # ステップボックス（横並び）
+        for mark, op_name, save_as in steps_for_flow[:10]:
+            draw_box(mid_row - BOX_H // 2 + 1, col, f"{mark}\n{op_name}", fill_color="FFF9C4")
+            col += BOX_W
+            draw_arrow(mid_row, col)
+            col += 1
+
+        # アウトプットボックス
+        if output_name:
+            draw_box(mid_row - BOX_H // 2 + 1, col, output_name, fill_color="D5F5E3")
+
+        cur_row += total_input_height + 2
 
     cur_row += 1  # 空行
 

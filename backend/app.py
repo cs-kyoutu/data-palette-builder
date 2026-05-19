@@ -1456,9 +1456,173 @@ async def upload_file(req: UploadRequest):
         raise HTTPException(400, f"ファイルの解析に失敗しました。ファイル形式を確認してください。")
 
 
+def _build_from_design_doc(session_id: str, session: dict, generation_data: dict, input_tables: list) -> "ChatResponse":
+    """design actionのJSONからExcelを生成してChatResponseを返す（_generate_impl_bodyとregenerateで共用）"""
+    session["design_doc"] = generation_data
+    try:
+        procedure_text = generate_procedure_text(generation_data)
+        session["procedure_text"] = procedure_text
+
+        steps = generation_data.get("processing_steps", [])
+
+        proc_rows = []
+        step_num = 1
+        for s in steps:
+            if not isinstance(s, dict):
+                continue
+            step_val = s.get("step", "")
+            sn = str(step_num) if step_val else ""
+            if step_val:
+                step_num += 1
+            op = s.get("operation", "")
+            settings = s.get("settings", {})
+            if not isinstance(settings, dict):
+                settings = {}
+            save_as = s.get("save_as", "")
+
+            try:
+                template_text = render_step(s)
+            except Exception:
+                template_text = f"『{op}』"
+
+            param_values = []
+            for v in list(settings.values())[:5]:
+                if isinstance(v, list):
+                    parts = [json.dumps(item, ensure_ascii=False) if isinstance(item, dict) else str(item) for item in v]
+                    param_values.append(", ".join(parts))
+                elif isinstance(v, dict):
+                    param_values.append(json.dumps(v, ensure_ascii=False))
+                else:
+                    param_values.append(str(v))
+            while len(param_values) < 5:
+                param_values.append("")
+
+            proc_rows.append([sn, op, "", template_text, save_as, "", *param_values, template_text])
+
+        # フロー図用: インプットテーブル名とアウトプット名をexcel_dataに渡す
+        input_names = [t.get("table_name", f"テーブル{i+1}") for i, t in enumerate(input_tables)]
+        output_name = next((s.get("save_as", "") for s in reversed(steps) if isinstance(s, dict) and s.get("save_as")), "")
+
+        excel_data = {
+            "action": "generate",
+            "title": generation_data.get("summary", "データパレット構築手順書"),
+            "input_tables": input_names,
+            "output_name": output_name,
+            "sections": [
+                {
+                    "sheet_name": "結合・加工",
+                    "title": "手順書",
+                    "columns": ["対象作業No", "アイコン", "", "アイコン利用方法", "作成後項目名", "", "対象1", "対象2", "対象3", "対象4", "対象5", "完成形テキスト"],
+                    "rows": proc_rows,
+                }
+            ],
+        }
+
+        filepath, filename = build_spreadsheet(excel_data)
+        session["last_file"] = filepath
+        session["last_filename"] = filename
+
+        summary_lines = ["📋 **設計書サマリー**", f"**概要**: {generation_data.get('summary', '')}"]
+        summary_lines.append(f"**処理ステップ数**: {len([s for s in steps if isinstance(s, dict) and s.get('step')])}")
+        for s in steps:
+            if isinstance(s, dict) and s.get("step"):
+                summary_lines.append(f"  Step{s['step']}: {s.get('operation', '')} → {s.get('save_as', '')}")
+        summary_lines += ["", "📝 **手順書プレビュー**"]
+        design_summary = "\n".join(summary_lines)
+
+        design_path = OUTPUT_DIR / f"design_{session_id}.json"
+        with open(design_path, "w", encoding="utf-8") as f:
+            json.dump(generation_data, f, ensure_ascii=False, indent=2)
+        session["design_file"] = str(design_path)
+
+        return ChatResponse(
+            session_id=session_id,
+            reply=f"{design_summary}\n\n{procedure_text[:3000]}",
+            status="done",
+            download_url=f"/api/download/{session_id}",
+        )
+    except Exception as e:
+        return ChatResponse(
+            session_id=session_id,
+            reply=f"Phase3（手順書生成）でエラー: {e}\n\n設計書JSON:\n{json.dumps(generation_data, ensure_ascii=False, indent=2)[:2000]}",
+            status="asking",
+        )
+
+
 async def _generate_core(req: GenerateRequest) -> ChatResponse:
     """設計書生成のコアロジック（内部呼び出し用）"""
     return await _generate_impl(req)
+
+
+class RegenerateRequest(BaseModel):
+    session_id: str
+    correction: str
+
+
+@app.post("/api/regenerate", response_model=ChatResponse, dependencies=[Depends(verify_token)])
+@limiter.limit("10/minute")
+async def regenerate(request: Request, req: RegenerateRequest):
+    """修正依頼をもとにPhase3の手順書を再生成する（Step2のみ再実行）"""
+    session = sessions.get(req.session_id)
+    if not session:
+        raise HTTPException(404, "セッションが見つかりません")
+
+    plan = session.get("plan")
+    if not plan:
+        raise HTTPException(400, "設計書のプランが見つかりません。先に手順書を生成してください。")
+
+    input_tables = session.get("input_tables", [])
+    output_mapping = session.get("output_mapping", {})
+
+    if "messages_step2" not in session or not session["messages_step2"]:
+        session["messages_step2"] = [
+            {"role": "user", "content": "処理方針に基づいて設計書JSONを出力してください。"}
+        ]
+
+    correction_msg = f"以下の点を修正して設計書を再生成してください：\n\n{req.correction}"
+    session["messages_step2"].append({"role": "user", "content": correction_msg})
+
+    try:
+        step2_prompt = get_system_prompt_step2(input_tables, output_mapping, plan)
+        response2 = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=16000,
+            system=step2_prompt,
+            messages=session["messages_step2"],
+        )
+        assistant_text = response2.content[0].text
+        if response2.stop_reason == "max_tokens":
+            print(f"[WARN] regenerate Step2 truncated (session={req.session_id})", flush=True)
+        session["messages_step2"].append({"role": "assistant", "content": assistant_text})
+    except Exception as e:
+        session["messages_step2"].pop()
+        sessions.save(req.session_id, session)
+        raise HTTPException(500, f"再生成エラー: {e}")
+
+    result = ChatResponse(session_id=req.session_id, reply="設計書JSONが取得できませんでした。", status="asking")
+
+    if "```json" in assistant_text:
+        try:
+            json_str = assistant_text.split("```json")[1].split("```")[0].strip()
+            generation_data = _parse_json_with_repair(json_str)
+            if generation_data.get("action") == "design":
+                result = _build_from_design_doc(req.session_id, session, generation_data, input_tables)
+            elif generation_data.get("action") == "generate":
+                filepath, filename = build_spreadsheet(generation_data)
+                session["last_file"] = filepath
+                session["last_filename"] = filename
+                display_text = assistant_text.split("```json")[0].strip() or "手順書を再生成しました。"
+                result = ChatResponse(
+                    session_id=req.session_id,
+                    reply=display_text,
+                    status="done",
+                    download_url=f"/api/download/{req.session_id}",
+                )
+        except (json.JSONDecodeError, IndexError) as e:
+            result = ChatResponse(session_id=req.session_id, reply=f"JSON解析エラー: {e}", status="asking")
+
+    sessions.save(req.session_id, session)
+    return result
 
 
 @app.post("/api/generate", response_model=ChatResponse, dependencies=[Depends(verify_token)])
@@ -1584,103 +1748,7 @@ async def _generate_impl_body(req: GenerateRequest, session_id: str, session: di
                 )
 
             elif generation_data.get("action") == "design":
-                # === Phase3: テンプレートエンジンで手順書生成（AI不要） ===
-                session["design_doc"] = generation_data
-                try:
-                    # テンプレートエンジンで手順書テキスト生成（Phase3）
-                    procedure_text = generate_procedure_text(generation_data)
-                    session["procedure_text"] = procedure_text
-
-                    # Excel出力用データ構築
-                    steps = generation_data.get("processing_steps", [])
-                    groups = generation_data.get("processing_groups", [])
-
-                    # 結合・加工シートのrows構築（シート2フォーマット: 12列）
-                    proc_rows = []
-                    step_num = 1
-                    for s in steps:
-                        if not isinstance(s, dict):
-                            continue
-                        step_val = s.get("step", "")
-                        sn = str(step_num) if step_val else ""
-                        if step_val:
-                            step_num += 1
-                        op = s.get("operation", "")
-                        settings = s.get("settings", {})
-                        if not isinstance(settings, dict):
-                            settings = {}
-                        save_as = s.get("save_as", "")
-
-                        # テンプレートテキスト生成（E列用）
-                        try:
-                            template_text = render_step(s)
-                        except Exception:
-                            template_text = f"『{op}』"
-
-                        # パラメータ値を抽出（G〜K列用、最大5個）
-                        param_values = []
-                        for v in list(settings.values())[:5]:
-                            if isinstance(v, list):
-                                parts = [json.dumps(item, ensure_ascii=False) if isinstance(item, dict) else str(item) for item in v]
-                                param_values.append(", ".join(parts))
-                            elif isinstance(v, dict):
-                                param_values.append(json.dumps(v, ensure_ascii=False))
-                            else:
-                                param_values.append(str(v))
-                        while len(param_values) < 5:
-                            param_values.append("")
-
-                        # 完成形テキスト（L列用）
-                        complete_text = template_text
-
-                        # [sn, op, unused, template_text, save_as, unused, p1, p2, p3, p4, p5, complete]
-                        proc_rows.append([sn, op, "", template_text, save_as, "", *param_values, complete_text])
-
-                    excel_data = {
-                        "action": "generate",
-                        "title": generation_data.get("summary", "データパレット構築手順書"),
-                        "sections": [
-                            {
-                                "sheet_name": "結合・加工",
-                                "title": "手順書",
-                                "columns": ["対象作業No", "アイコン", "", "アイコン利用方法", "作成後項目名", "", "対象1", "対象2", "対象3", "対象4", "対象5", "完成形テキスト"],
-                                "rows": proc_rows,
-                            }
-                        ],
-                    }
-
-                    filepath, filename = build_spreadsheet(excel_data)
-                    session["last_file"] = filepath
-                    session["last_filename"] = filename
-
-                    # 設計書サマリーを作成
-                    summary_lines = [f"📋 **設計書サマリー**", f"**概要**: {generation_data.get('summary', '')}"]
-                    summary_lines.append(f"**処理ステップ数**: {len(steps)}")
-                    for s in steps:
-                        if s.get("step"):
-                            summary_lines.append(f"  Step{s['step']}: {s.get('operation', '')} → {s.get('save_as', '')}")
-                    summary_lines.append("")
-                    summary_lines.append("📝 **手順書プレビュー**")
-                    design_summary = "\n".join(summary_lines)
-
-                    # 設計書JSONを保存
-                    design_path = OUTPUT_DIR / f"design_{session_id}.json"
-                    with open(design_path, "w", encoding="utf-8") as f:
-                        json.dump(generation_data, f, ensure_ascii=False, indent=2)
-                    session["design_file"] = str(design_path)
-
-                    return ChatResponse(
-                        session_id=session_id,
-                        reply=f"{design_summary}\n\n{procedure_text[:3000]}",
-                        status="done",
-                        download_url=f"/api/download/{session_id}",
-                    )
-                except Exception as e:
-                    return ChatResponse(
-                        session_id=session_id,
-                        reply=f"Phase3（手順書生成）でエラー: {e}\n\n設計書JSON:\n{json.dumps(generation_data, ensure_ascii=False, indent=2)[:2000]}",
-                        status="asking",
-                    )
+                return _build_from_design_doc(session_id, session, generation_data, req.input_tables)
 
         except (json.JSONDecodeError, IndexError) as e:
             print(f"[DEBUG] JSON parse error in generate: {e}")

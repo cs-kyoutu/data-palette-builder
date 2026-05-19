@@ -2221,7 +2221,10 @@
         </div>
         <div class="correction-area" style="display:none; margin-top:8px;">
           <textarea placeholder="修正内容を入力..." style="width:100%; height:60px; border:1px solid var(--border); border-radius:6px; padding:6px; font-size:12px; resize:vertical;"></textarea>
-          <button onclick="sendFeedback(false, this)" style="margin-top:4px; padding:4px 12px; border:none; border-radius:4px; background:var(--primary); color:white; cursor:pointer; font-size:12px;">送信</button>
+          <div style="display:flex; gap:6px; margin-top:4px;">
+            <button onclick="regenerateDesign(this)" style="padding:4px 14px; border:none; border-radius:4px; background:var(--primary); color:white; cursor:pointer; font-size:12px;">再生成</button>
+            <button onclick="sendFeedback(false, this)" style="padding:4px 12px; border:1px solid var(--border); border-radius:4px; background:white; color:var(--text-muted); cursor:pointer; font-size:12px;">保存のみ</button>
+          </div>
         </div>
         ${feedbackCommentBlock(FB_ASPECTS.design)}
       `;
@@ -2243,6 +2246,58 @@
   function showCorrectionInput(btn) {
     const area = btn.closest("div").parentElement.querySelector(".correction-area");
     area.style.display = "block";
+  }
+
+  async function regenerateDesign(btn) {
+    const corrArea = btn.closest(".correction-area");
+    const correction = corrArea?.querySelector("textarea")?.value?.trim();
+    if (!correction) {
+      alert("修正内容を入力してください。");
+      return;
+    }
+    const fbArea = btn.closest("div[style*='border-top']") || btn.closest("div").parentElement;
+    const btnRow = fbArea.querySelector('.fb-eval-row');
+
+    // フィードバックをナレッジに保存（バックグラウンド）
+    fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, is_correct: false, correction })
+    }).catch(e => console.error("FB error:", e));
+
+    // ボタン無効化・ローディング表示
+    btn.disabled = true;
+    btn.textContent = "再生成中...";
+    if (btnRow) btnRow.style.display = "none";
+    showTyping();
+
+    try {
+      const res = await fetch("/api/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, correction })
+      });
+      const data = await res.json();
+      removeTyping();
+
+      if (data.reply) {
+        showAiMessage("ai", data.reply, data.download_url || null);
+      }
+
+      // フィードバックエリアを完了表示に置き換え
+      const status = document.createElement('div');
+      status.style.cssText = 'font-size:12px; color:var(--text-muted); margin-top:4px;';
+      status.textContent = "↺ 修正内容で再生成しました";
+      if (btnRow) btnRow.replaceWith(status);
+      corrArea.remove();
+    } catch (e) {
+      removeTyping();
+      btn.disabled = false;
+      btn.textContent = "再生成";
+      if (btnRow) btnRow.style.display = "";
+      console.error("Regenerate error:", e);
+      alert("再生成中にエラーが発生しました。");
+    }
   }
 
   function sendFeedback(isCorrect, btn) {
