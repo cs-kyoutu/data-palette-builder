@@ -1209,6 +1209,8 @@ SYSTEM_PROMPT_REGEN_SUFFIX = """
 - 修正指示に明記された箇所のみ変更し、それ以外は直前のJSONから引き継ぐ
 - 修正指示と上記の処理方針が矛盾する場合は修正指示を優先する
 - JSONは必ず完結させること
+- 質問禁止。不明点は最良の推測で補完してJSON出力すること
+- 必ず ```json ブロックでJSONを出力すること。テキストのみの返答は禁止
 
 修正指示：
 {correction}
@@ -1617,12 +1619,20 @@ async def regenerate(request: Request, req: RegenerateRequest):
             print(f"[WARN] regenerate Step2 truncated (session={req.session_id})", flush=True)
         has_json = "```json" in assistant_text
         print(f"[REGEN] new response len={len(assistant_text)} has_json={has_json}", flush=True)
-        if has_json:
-            try:
-                new_steps = json.loads(assistant_text.split("```json")[1].split("```")[0].strip()).get("processing_steps", [])
-                print(f"[REGEN] new design steps={len(new_steps)}: {[s.get('operation') for s in new_steps if isinstance(s, dict)]}", flush=True)
-            except Exception:
-                pass
+        if not has_json:
+            print(f"[REGEN] no JSON, AI text={assistant_text[:300]!r}", flush=True)
+            session["messages_step2"].pop()
+            sessions.save(req.session_id, session)
+            return ChatResponse(
+                session_id=req.session_id,
+                reply=f"修正内容をより具体的に入力してください。\n\nAIの返答：{assistant_text[:300]}",
+                status="asking",
+            )
+        try:
+            new_steps = json.loads(assistant_text.split("```json")[1].split("```")[0].strip()).get("processing_steps", [])
+            print(f"[REGEN] new design steps={len(new_steps)}: {[s.get('operation') for s in new_steps if isinstance(s, dict)]}", flush=True)
+        except Exception:
+            pass
         session["messages_step2"].append({"role": "assistant", "content": assistant_text})
     except Exception as e:
         session["messages_step2"].pop()
