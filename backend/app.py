@@ -411,20 +411,21 @@ sessions = SessionStore()
 
 
 def _cleanup_old_files():
-    """1時間ごとにアップロード/出力ファイル + 古いセッションをクリーンアップ"""
-    MAX_AGE_HOURS = 24
+    """1時間ごとにアップロード/出力ファイルをクリーンアップ（セッションはRDSに90日保持）"""
+    FILE_MAX_AGE_HOURS = 24
+    SESSION_MAX_AGE_DAYS = 90
     while True:
         _time.sleep(3600)  # 1時間ごとに実行
         now = _time.time()
         for d in [UPLOAD_DIR, OUTPUT_DIR]:
             for f in d.iterdir():
-                if f.is_file() and (now - f.stat().st_mtime) > MAX_AGE_HOURS * 3600:
+                if f.is_file() and (now - f.stat().st_mtime) > FILE_MAX_AGE_HOURS * 3600:
                     try:
                         f.unlink()
                     except OSError:
                         pass
         try:
-            sessions.cleanup_older_than(MAX_AGE_HOURS)
+            sessions.cleanup_older_than(SESSION_MAX_AGE_DAYS * 24)
         except Exception as e:
             print(f"session cleanup failed: {e}")
 
@@ -1984,14 +1985,83 @@ async def _chat_body(req: ChatRequest, session: dict):
     )
 
 
+def _regen_excel(session: dict, session_id: str) -> tuple[str, str]:
+    """design_docからExcelを再生成して(filepath, filename)を返す"""
+    generation_data = session.get("design_doc")
+    if not generation_data:
+        raise ValueError("design_docが見つかりません")
+    input_tables = session.get("input_tables", [])
+    steps = generation_data.get("processing_steps", [])
+    proc_rows = []
+    step_num = 1
+    for s in steps:
+        if not isinstance(s, dict):
+            continue
+        step_val = s.get("step", "")
+        sn = str(step_num) if step_val else ""
+        if step_val:
+            step_num += 1
+        op = s.get("operation", "")
+        settings = s.get("settings", {})
+        if not isinstance(settings, dict):
+            settings = {}
+        save_as = s.get("save_as", "")
+        try:
+            template_text = render_step(s)
+        except Exception:
+            template_text = f"『{op}』"
+        param_values = []
+        for v in list(settings.values())[:5]:
+            if isinstance(v, list):
+                parts = [json.dumps(item, ensure_ascii=False) if isinstance(item, dict) else str(item) for item in v]
+                param_values.append(", ".join(parts))
+            elif isinstance(v, dict):
+                param_values.append(json.dumps(v, ensure_ascii=False))
+            else:
+                param_values.append(str(v))
+        while len(param_values) < 5:
+            param_values.append("")
+        proc_rows.append([sn, op, "", template_text, save_as, "", *param_values, template_text])
+
+    input_names = [t.get("table_name", f"テーブル{i+1}") for i, t in enumerate(input_tables)]
+    output_name = next((s.get("save_as", "") for s in reversed(steps) if isinstance(s, dict) and s.get("save_as")), "")
+    excel_data = {
+        "action": "generate",
+        "title": generation_data.get("summary", "データパレット構築手順書"),
+        "input_tables": input_names,
+        "output_name": output_name,
+        "sections": [{"sheet_name": "結合・加工", "title": "手順書",
+            "columns": ["対象作業No", "アイコン", "", "アイコン利用方法", "作成後項目名", "", "対象1", "対象2", "対象3", "対象4", "対象5", "完成形テキスト"],
+            "rows": proc_rows}],
+    }
+    filepath, filename = build_spreadsheet(excel_data)
+    session["last_file"] = filepath
+    session["last_filename"] = filename
+    return filepath, filename
+
+
 @app.get("/api/download/{session_id}", dependencies=[Depends(verify_token)])
 async def download(session_id: str):
     session = sessions.get(session_id)
-    if not session or "last_file" not in session:
-        raise HTTPException(404, "ファイルが見つかりません")
+    if not session:
+        raise HTTPException(404, "セッションが見つかりません")
+
+    filepath = session.get("last_file")
+    filename = session.get("last_filename", f"手順書_{session_id[:8]}.xlsx")
+
+    # ローカルファイルが消えていたらdesign_docから再生成
+    if not filepath or not Path(filepath).exists():
+        if not session.get("design_doc"):
+            raise HTTPException(404, "ファイルが見つかりません")
+        try:
+            filepath, filename = _regen_excel(session, session_id)
+            sessions.save(session_id, session)
+        except Exception as e:
+            raise HTTPException(500, f"ファイル再生成エラー: {e}")
+
     return FileResponse(
-        session["last_file"],
-        filename=session["last_filename"],
+        filepath,
+        filename=filename,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
@@ -3062,6 +3132,59 @@ async def export_sessions_csv():
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.get("/api/admin/sessions", dependencies=[Depends(verify_token)])
+async def admin_list_sessions(limit: int = 100):
+    """이력 조회: design_doc이 있는 세션 목록을 최신순으로 반환"""
+    with _db_conn() as conn:
+        if conn is None:
+            raise HTTPException(503, "DB未接続")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT
+                    id,
+                    created_at,
+                    mode,
+                    data->'consultation_result'->>'strategy_name' AS strategy_name,
+                    data->'design_doc'->>'summary'               AS summary,
+                    data ? 'design_doc'                          AS has_output
+                FROM sessions
+                WHERE data ? 'design_doc'
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (limit,))
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/admin/sessions/{session_id}", dependencies=[Depends(verify_token)])
+async def admin_get_session(session_id: str):
+    """이력 상세: 대화내용 + design_doc 전체 반환"""
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(404, "セッションが見つかりません")
+    cr = session.get("consultation_result") or {}
+    return {
+        "session_id": session_id,
+        "strategy_name": cr.get("strategy_name", ""),
+        "summary": (session.get("design_doc") or {}).get("summary", ""),
+        "messages": session.get("messages", []),
+        "messages_step2": session.get("messages_step2", []),
+        "consultation_messages": session.get("consultation_messages", []),
+        "consultation_result": cr,
+        "design_doc": session.get("design_doc"),
+        "has_download": bool(session.get("design_doc")),
+    }
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page():
+    html_path = FRONTEND_PATH / "admin.html"
+    html = html_path.read_text(encoding="utf-8")
+    token_script = f'<script>window.__APP_AUTH_TOKEN__="{AUTH_TOKEN}";</script>'
+    html = html.replace("</head>", f"{token_script}</head>")
+    return html
 
 
 @app.get("/healthz")

@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>手順書 생성 이력</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f6fa; color: #222; }
+
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 18px; font-weight: 600; }
+    header a { color: #aaa; font-size: 13px; text-decoration: none; margin-left: auto; }
+    header a:hover { color: #fff; }
+
+    .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+
+    .stats { display: flex; gap: 16px; margin-bottom: 20px; }
+    .stat-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 14px 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      min-width: 140px;
+    }
+    .stat-card .label { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .stat-card .value { font-size: 24px; font-weight: 700; color: #1a1a2e; }
+
+    .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .toolbar input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+    }
+    .toolbar input:focus { border-color: #4f8ef7; }
+
+    table {
+      width: 100%;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      border-collapse: collapse;
+      overflow: hidden;
+    }
+    thead tr { background: #1a1a2e; color: #fff; }
+    th { padding: 12px 14px; text-align: left; font-size: 13px; font-weight: 500; }
+    tbody tr { border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background .15s; }
+    tbody tr:hover { background: #f0f4ff; }
+    tbody tr.expanded { background: #eef3ff; }
+    td { padding: 12px 14px; font-size: 13px; vertical-align: top; }
+    td.date { color: #666; white-space: nowrap; }
+    td.strategy { font-weight: 600; max-width: 200px; }
+    td.summary { color: #444; max-width: 340px; }
+    td.dl { text-align: center; }
+
+    .dl-btn {
+      display: inline-block;
+      background: #4f8ef7;
+      color: #fff;
+      padding: 5px 14px;
+      border-radius: 5px;
+      font-size: 12px;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .dl-btn:hover { background: #3a7be0; }
+
+    /* 대화 상세 패널 */
+    .detail-row td { padding: 0; }
+    .detail-panel {
+      background: #f8f9ff;
+      border-top: 2px solid #4f8ef7;
+      padding: 20px 24px;
+    }
+    .detail-panel h3 { font-size: 14px; color: #1a1a2e; margin-bottom: 12px; }
+
+    .conv-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .conv-tab {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid #ccc;
+      background: #fff;
+      color: #555;
+    }
+    .conv-tab.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+
+    .conv-pane { display: none; }
+    .conv-pane.active { display: block; }
+
+    .message-list { display: flex; flex-direction: column; gap: 10px; max-height: 500px; overflow-y: auto; }
+    .message {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .message .role {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      min-width: 50px;
+      text-align: center;
+    }
+    .message.user .role { background: #e8f0fe; color: #3a6bc0; }
+    .message.assistant .role { background: #e6f4ea; color: #2d6a4f; }
+    .message .content {
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 12px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      flex: 1;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .design-json {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      border-radius: 6px;
+      padding: 14px;
+      font-size: 11px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .empty { text-align: center; padding: 60px; color: #aaa; font-size: 14px; }
+    .loading { text-align: center; padding: 60px; color: #aaa; }
+
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #e6f4ea;
+      color: #2d6a4f;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📋 手順書 생성 이력</h1>
+  <a href="/">← 메인으로</a>
+</header>
+
+<div class="container">
+  <div class="stats">
+    <div class="stat-card">
+      <div class="label">총 생성 수</div>
+      <div class="value" id="total-count">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">오늘 생성</div>
+      <div class="value" id="today-count">—</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="施策名 또는 요약으로 검색..." oninput="filterTable()">
+  </div>
+
+  <table id="main-table">
+    <thead>
+      <tr>
+        <th>생성일시</th>
+        <th>施策名</th>
+        <th>手順書 요약</th>
+        <th style="text-align:center">다운로드</th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      <tr><td colspan="4" class="loading">로딩 중...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+const authHeaders = () => {
+  const t = window.__APP_AUTH_TOKEN__;
+  return t ? { 'Authorization': `Bearer ${t}` } : {};
+};
+
+let allSessions = [];
+let expandedId = null;
+
+async function loadSessions() {
+  try {
+    const res = await fetch('/api/admin/sessions?limit=200', { headers: authHeaders() });
+    if (!res.ok) throw new Error(res.status);
+    allSessions = await res.json();
+    renderTable(allSessions);
+    updateStats(allSessions);
+  } catch (e) {
+    document.getElementById('table-body').innerHTML =
+      `<tr><td colspan="4" class="empty">데이터 로딩 실패: ${e}</td></tr>`;
+  }
+}
+
+function updateStats(sessions) {
+  document.getElementById('total-count').textContent = sessions.length;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayCount = sessions.filter(s => (s.created_at || '').startsWith(today)).length;
+  document.getElementById('today-count').textContent = todayCount;
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function renderTable(sessions) {
+  const tbody = document.getElementById('table-body');
+  if (!sessions.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">생성된 手順書가 없습니다</td></tr>';
+    return;
+  }
+  tbody.innerHTML = sessions.map(s => `
+    <tr class="data-row" data-id="${s.id}" onclick="toggleDetail('${s.id}')">
+      <td class="date">${formatDate(s.created_at)}</td>
+      <td class="strategy">${s.strategy_name || '（相談なし）'}</td>
+      <td class="summary">${(s.summary || '').slice(0, 80)}${(s.summary || '').length > 80 ? '…' : ''}</td>
+      <td class="dl">
+        <a class="dl-btn" href="/api/download/${s.id}" onclick="event.stopPropagation()" download>⬇ Excel</a>
+      </td>
+    </tr>
+    <tr class="detail-row" id="detail-${s.id}" style="display:none">
+      <td colspan="4">
+        <div class="detail-panel" id="panel-${s.id}">
+          <div style="color:#888;font-size:12px">로딩 중...</div>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function toggleDetail(sessionId) {
+  const detailRow = document.getElementById(`detail-${sessionId}`);
+  const dataRow = document.querySelector(`tr.data-row[data-id="${sessionId}"]`);
+
+  if (expandedId === sessionId) {
+    detailRow.style.display = 'none';
+    dataRow.classList.remove('expanded');
+    expandedId = null;
+    return;
+  }
+
+  // 기존 열린 것 닫기
+  if (expandedId) {
+    document.getElementById(`detail-${expandedId}`).style.display = 'none';
+    document.querySelector(`tr.data-row[data-id="${expandedId}"]`)?.classList.remove('expanded');
+  }
+
+  detailRow.style.display = '';
+  dataRow.classList.add('expanded');
+  expandedId = sessionId;
+
+  const panel = document.getElementById(`panel-${sessionId}`);
+
+  try {
+    const res = await fetch(`/api/admin/sessions/${sessionId}`, { headers: authHeaders() });
+    const data = await res.json();
+    renderDetail(panel, data, sessionId);
+  } catch (e) {
+    panel.innerHTML = `<div style="color:red">상세 로딩 실패: ${e}</div>`;
+  }
+}
+
+function renderDetail(panel, data, sessionId) {
+  const tabs = [
+    { id: 'phase1', label: '📝 Phase1 상담', messages: data.consultation_messages || [] },
+    { id: 'step1',  label: '🔍 Step1 방침',  messages: data.messages || [] },
+    { id: 'step2',  label: '⚙️ Step2 설계', messages: data.messages_step2 || [] },
+    { id: 'design', label: '📄 설계서 JSON', messages: null },
+  ].filter(t => t.messages === null || t.messages.length > 0);
+
+  const firstTab = tabs[0]?.id || 'design';
+
+  panel.innerHTML = `
+    <h3>${data.strategy_name || '（施策名なし）'} — ${data.summary || ''}</h3>
+    <div class="conv-tabs">
+      ${tabs.map(t => `<div class="conv-tab${t.id === firstTab ? ' active' : ''}" onclick="switchTab('${sessionId}','${t.id}')" id="tab-${sessionId}-${t.id}">${t.label}</div>`).join('')}
+    </div>
+    ${tabs.map(t => `
+      <div class="conv-pane${t.id === firstTab ? ' active' : ''}" id="pane-${sessionId}-${t.id}">
+        ${t.messages !== null
+          ? `<div class="message-list">${renderMessages(t.messages)}</div>`
+          : `<div class="design-json">${JSON.stringify(data.design_doc, null, 2)}</div>`
+        }
+      </div>
+    `).join('')}
+  `;
+}
+
+function renderMessages(messages) {
+  if (!messages.length) return '<div style="color:#aaa;font-size:12px;padding:10px">대화 없음</div>';
+  return messages.map(m => `
+    <div class="message ${m.role}">
+      <span class="role">${m.role === 'user' ? '👤 사람' : '🤖 AI'}</span>
+      <div class="content">${escHtml(m.content || '')}</div>
+    </div>
+  `).join('');
+}
+
+function switchTab(sessionId, tabId) {
+  document.querySelectorAll(`[id^="tab-${sessionId}-"]`).forEach(el => el.classList.remove('active'));
+  document.querySelectorAll(`[id^="pane-${sessionId}-"]`).forEach(el => el.classList.remove('active'));
+  document.getElementById(`tab-${sessionId}-${tabId}`).classList.add('active');
+  document.getElementById(`pane-${sessionId}-${tabId}`).classList.add('active');
+}
+
+function filterTable() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const filtered = allSessions.filter(s =>
+    (s.strategy_name || '').toLowerCase().includes(q) ||
+    (s.summary || '').toLowerCase().includes(q)
+  );
+  renderTable(filtered);
+  updateStats(filtered);
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+loadSessions();
+</script>
+</body>
+</html>

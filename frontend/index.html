@@ -973,7 +973,8 @@
     </div>
     <div class="consultation-input-wrap" id="consultationInputWrap">
       <textarea id="consultationInput" placeholder="例: カート落ちした人にリマインドメールを送りたい" rows="1"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendConsultation();}"></textarea>
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendConsultation();}"
+        oninput="autoResize(this)"></textarea>
       <button class="send-btn" onclick="sendConsultation()">&#10148;</button>
     </div>
   </div>
@@ -1047,7 +1048,8 @@
         <div class="ai-messages" id="organizationMessages" style="max-height:300px;"></div>
         <div class="consultation-input-wrap" id="organizationInputWrap">
           <textarea id="organizationInput" placeholder="回答を入力..." rows="1"
-            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendOrganization();}"></textarea>
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendOrganization();}"
+            oninput="autoResize(this)"></textarea>
           <button class="send-btn" onclick="sendOrganization()">&#10148;</button>
         </div>
         <div class="hidden" id="orgFbWrap" style="padding:10px 14px;border-top:1px solid var(--border);font-size:12px;"></div>
@@ -1160,7 +1162,8 @@
     <div class="ai-messages" id="aiMessages"></div>
     <div class="ai-input-area" id="aiInputArea">
       <textarea id="aiInput" placeholder="回答を入力..." rows="1"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"
+        oninput="autoResize(this)"></textarea>
       <button class="send-btn" id="aiSendBtn" onclick="sendChat()">&#10148;</button>
     </div>
   </div>
@@ -1683,6 +1686,11 @@
   let isLoading = false;
   let industriesData = {};
 
+  function autoResize(el) {
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+  }
+
   // 施策相談用
   let currentMode = 'consultation';  // 'consultation' | 'organization' | 'procedure'
   let consultationSessionId = null;
@@ -2093,6 +2101,7 @@
 
     isLoading = true;
     input.value = "";
+    input.style.height = "42px";
     showAiMessage("user", text);
     showTyping();
 
@@ -2529,6 +2538,7 @@
     if (!text || isLoading) return;
     isLoading = true;
     input.value = '';
+    input.style.height = "42px";
 
     // ウェルカムメッセージを消す
     const welcome = document.querySelector('.consultation-welcome');
@@ -3247,6 +3257,7 @@
     if (!text || isLoading || !organizationSessionId) return;
     isLoading = true;
     input.value = '';
+    input.style.height = "42px";
 
     const msgContainer = document.getElementById('organizationMessages');
     showConsultationMessage('user', text, msgContainer);
