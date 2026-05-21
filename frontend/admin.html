@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>手順書 생성 이력</title>
+  <title>手順書 生成履歴</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f6fa; color: #222; }
@@ -53,7 +53,7 @@
       overflow: hidden;
     }
     thead tr { background: #1a1a2e; color: #fff; }
-    th { padding: 12px 14px; text-align: left; font-size: 13px; font-weight: 500; }
+    th { padding: 12px 14px; text-align: center; font-size: 13px; font-weight: 500; }
     tbody tr { border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background .15s; }
     tbody tr:hover { background: #f0f4ff; }
     tbody tr.expanded { background: #eef3ff; }
@@ -159,37 +159,37 @@
 <body>
 
 <header>
-  <h1>📋 手順書 생성 이력</h1>
-  <a href="/">← 메인으로</a>
+  <h1>📋 手順書 生成履歴</h1>
+  <a href="/">← メインへ戻る</a>
 </header>
 
 <div class="container">
   <div class="stats">
     <div class="stat-card">
-      <div class="label">총 생성 수</div>
+      <div class="label">生成数（合計）</div>
       <div class="value" id="total-count">—</div>
     </div>
     <div class="stat-card">
-      <div class="label">오늘 생성</div>
+      <div class="label">本日の生成数</div>
       <div class="value" id="today-count">—</div>
     </div>
   </div>
 
   <div class="toolbar">
-    <input type="text" id="search" placeholder="施策名 또는 요약으로 검색..." oninput="filterTable()">
+    <input type="text" id="search" placeholder="施策名または概要で検索..." oninput="filterTable()">
   </div>
 
   <table id="main-table">
     <thead>
       <tr>
-        <th>생성일시</th>
+        <th>生成日時</th>
         <th>施策名</th>
-        <th>手順書 요약</th>
-        <th style="text-align:center">다운로드</th>
+        <th>手順書の概要</th>
+        <th>ダウンロード</th>
       </tr>
     </thead>
     <tbody id="table-body">
-      <tr><td colspan="4" class="loading">로딩 중...</td></tr>
+      <tr><td colspan="4" class="loading">読み込み中...</td></tr>
     </tbody>
   </table>
 </div>
@@ -212,7 +212,7 @@ async function loadSessions() {
     updateStats(allSessions);
   } catch (e) {
     document.getElementById('table-body').innerHTML =
-      `<tr><td colspan="4" class="empty">데이터 로딩 실패: ${e}</td></tr>`;
+      `<tr><td colspan="4" class="empty">データの読み込みに失敗しました: ${e}</td></tr>`;
   }
 }
 
@@ -232,7 +232,7 @@ function formatDate(iso) {
 function renderTable(sessions) {
   const tbody = document.getElementById('table-body');
   if (!sessions.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="empty">생성된 手順書가 없습니다</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">生成された手順書はありません</td></tr>';
     return;
   }
   tbody.innerHTML = sessions.map(s => `
@@ -247,7 +247,7 @@ function renderTable(sessions) {
     <tr class="detail-row" id="detail-${s.id}" style="display:none">
       <td colspan="4">
         <div class="detail-panel" id="panel-${s.id}">
-          <div style="color:#888;font-size:12px">로딩 중...</div>
+          <div style="color:#888;font-size:12px">読み込み中...</div>
         </div>
       </td>
     </tr>
@@ -265,7 +265,7 @@ async function toggleDetail(sessionId) {
     return;
   }
 
-  // 기존 열린 것 닫기
+  // 既存の展開行を閉じる
   if (expandedId) {
     document.getElementById(`detail-${expandedId}`).style.display = 'none';
     document.querySelector(`tr.data-row[data-id="${expandedId}"]`)?.classList.remove('expanded');
@@ -282,16 +282,16 @@ async function toggleDetail(sessionId) {
     const data = await res.json();
     renderDetail(panel, data, sessionId);
   } catch (e) {
-    panel.innerHTML = `<div style="color:red">상세 로딩 실패: ${e}</div>`;
+    panel.innerHTML = `<div style="color:red">詳細の読み込みに失敗しました: ${e}</div>`;
   }
 }
 
 function renderDetail(panel, data, sessionId) {
   const tabs = [
-    { id: 'phase1', label: '📝 Phase1 상담', messages: data.consultation_messages || [] },
-    { id: 'step1',  label: '🔍 Step1 방침',  messages: data.messages || [] },
-    { id: 'step2',  label: '⚙️ Step2 설계', messages: data.messages_step2 || [] },
-    { id: 'design', label: '📄 설계서 JSON', messages: null },
+    { id: 'phase1', label: '📝 Phase1 施策相談', messages: data.consultation_messages || [] },
+    { id: 'step1',  label: '🔍 Step1 方針決定', messages: data.messages || [] },
+    { id: 'step2',  label: '⚙️ Step2 設計',    messages: data.messages_step2 || [] },
+    { id: 'design', label: '📄 設計書JSON',     messages: null },
   ].filter(t => t.messages === null || t.messages.length > 0);
 
   const firstTab = tabs[0]?.id || 'design';
@@ -313,10 +313,10 @@ function renderDetail(panel, data, sessionId) {
 }
 
 function renderMessages(messages) {
-  if (!messages.length) return '<div style="color:#aaa;font-size:12px;padding:10px">대화 없음</div>';
+  if (!messages.length) return '<div style="color:#aaa;font-size:12px;padding:10px">会話なし</div>';
   return messages.map(m => `
     <div class="message ${m.role}">
-      <span class="role">${m.role === 'user' ? '👤 사람' : '🤖 AI'}</span>
+      <span class="role">${m.role === 'user' ? '👤 ユーザー' : '🤖 AI'}</span>
       <div class="content">${escHtml(m.content || '')}</div>
     </div>
   `).join('');
