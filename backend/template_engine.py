@@ -82,8 +82,14 @@ def _normalize_settings(op: str, settings: dict) -> dict:
         if "join_keys" in s:
             jk = s.pop("join_keys")
             if isinstance(jk, list):
-                parts = [f"「{k.get('left', '')}」と「{k.get('right', '')}」" for k in jk if isinstance(k, dict)]
-                s["統合キー"] = "、".join(parts)
+                parts = []
+                for k in jk:
+                    if not isinstance(k, dict):
+                        continue
+                    left = k.get("left", "")
+                    right = k.get("right", "")
+                    parts.append(left if left == right else f"{left} = {right}")
+                s["統合キー"] = ", ".join(parts)
             elif isinstance(jk, dict):
                 tables = list(jk.keys())
                 columns = list(jk.values())
@@ -92,7 +98,8 @@ def _normalize_settings(op: str, settings: dict) -> dict:
                         s["左ファイル"] = tables[0]
                     if "右ファイル" not in s:
                         s["右ファイル"] = tables[1]
-                    s["統合キー"] = f"「{columns[0]}」と「{columns[1]}」"
+                    left, right = columns[0], columns[1]
+                    s["統合キー"] = left if left == right else f"{left} = {right}"
             else:
                 s["統合キー"] = str(jk)
         if "keep_columns" in s:

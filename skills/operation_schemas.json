@@ -1,0 +1,543 @@
+{
+  "version": "1.0",
+  "generated": "2026-05-22",
+  "note": "b→dash Data Palette 操作設定 JSON Schema 精密定義。x-constraints=確定制約, x-confirm=実UI要確認項目, x-example=正常系設定例。",
+  "operations": {
+
+    "横統合": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "横統合_settings",
+      "description": "2テーブルをキーで横方向に結合（JOIN）",
+      "type": "object",
+      "required": ["左ファイル", "右ファイル", "統合方法", "統合キー"],
+      "additionalProperties": false,
+      "properties": {
+        "左ファイル": {
+          "type": "string",
+          "description": "ベーステーブルのデータ名"
+        },
+        "右ファイル": {
+          "type": "string",
+          "description": "結合テーブルのデータ名（マスタ等）"
+        },
+        "統合方法": {
+          "type": "string",
+          "enum": ["左", "右", "内部", "完全外部"],
+          "description": "左=LEFT JOIN / 右=RIGHT JOIN / 内部=INNER JOIN / 完全外部=FULL OUTER JOIN"
+        },
+        "統合キー": {
+          "type": "string",
+          "description": "結合キーのマッピング。同名の場合は「顧客ID」、別名の場合は「左カラム名 = 右カラム名」形式。複合キーはカンマ区切り（例: \"顧客ID = 顧客コード, 日付 = 注文日\"）"
+        },
+        "残すカラム": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "右テーブルから取り込むカラム名リスト。省略時は右テーブルの全カラム"
+        }
+      },
+      "x-constraints": [
+        "統合キーの左右カラムは同データ型必須（型不一致は結合0件またはエラー）",
+        "右テーブルの統合キーに重複があると左1行がN行にマッチして出力行が増殖する（N倍になる）",
+        "「内部」は左テーブルのキー非一致行が消える（行数減少）",
+        "「残すカラム」省略時に左右で同名カラムがあると出力カラム名が衝突する可能性がある"
+      ],
+      "x-confirm": [
+        "「残すカラム」に右テーブルの統合キー自体を含めることができるか",
+        "完全外部結合でのNULL値の出力挙動（b→dash固有の仕様）"
+      ],
+      "x-example": {
+        "左ファイル": "購買データ",
+        "右ファイル": "顧客マスタ",
+        "統合方法": "左",
+        "統合キー": "顧客ID",
+        "残すカラム": ["性別", "年代", "都道府県"]
+      }
+    },
+
+    "縦統合": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "縦統合_settings",
+      "description": "複数テーブルを縦方向に積み上げて1テーブルにまとめる（UNION）",
+      "type": "object",
+      "required": ["統合ファイル", "重複設定"],
+      "additionalProperties": false,
+      "properties": {
+        "統合ファイル": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string" },
+          "description": "縦結合するテーブル名リスト。リストの順番が出力の行順になる"
+        },
+        "重複設定": {
+          "type": "string",
+          "enum": ["重複を残す", "重複を除く"],
+          "description": "重複を残す=UNION ALL / 重複を除く=UNION DISTINCT（全カラム一致行が対象）"
+        }
+      },
+      "x-constraints": [
+        "全テーブルのカラム名・カラム数・データ型が完全一致していなければならない",
+        "「重複を除く」は全カラムの値が一致する行を重複とみなして除去する",
+        "カラム順が異なるテーブルを統合すると列が誤マッピングされる可能性がある（名前ではなく位置で結合される場合）"
+      ],
+      "x-confirm": [
+        "統合ファイルの上限数（最大テーブル数の制約があるか）",
+        "カラム名一致・型不一致の場合のエラーメッセージ内容",
+        "列の照合はカラム名基準か位置（順番）基準か"
+      ],
+      "x-example": {
+        "統合ファイル": ["売上_4月", "売上_5月", "売上_6月"],
+        "重複設定": "重複を残す"
+      }
+    },
+
+    "集約": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "集約_settings",
+      "description": "指定キーでグループ化し集計関数でデータを1行に集約（GROUP BY + AGG）",
+      "type": "object",
+      "required": ["まとめる単位", "集約定義"],
+      "additionalProperties": false,
+      "properties": {
+        "まとめる単位": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "GROUP BY に相当するカラム名リスト（複数指定可）"
+        },
+        "集約定義": {
+          "type": "array",
+          "minItems": 1,
+          "description": "集計対象カラムと集計方法のペアリスト（1ステップで複数集計を定義できる場合）",
+          "items": {
+            "type": "object",
+            "required": ["対象項目", "集計方法"],
+            "additionalProperties": false,
+            "properties": {
+              "対象項目": {
+                "type": "string",
+                "description": "集計するカラム名"
+              },
+              "集計方法": {
+                "type": "string",
+                "enum": ["COUNT", "UNIQUE_COUNT", "SUM", "AVG", "MAX", "MIN", "最新", "最古", "行結合"],
+                "description": "COUNT=件数 / UNIQUE_COUNT=ユニーク件数 / SUM=合計 / AVG=平均 / MAX=最大値 / MIN=最小値 / 最新=最新値 / 最古=最古値 / 行結合=文字列連結"
+              },
+              "出力カラム名": {
+                "type": "string",
+                "description": "省略時はb→dashが自動命名（例: SUM_購買金額）"
+              }
+            }
+          }
+        }
+      },
+      "x-constraints": [
+        "SUM/AVGは数値型カラムのみ適用可（文字列型には事前の型変換が必要）",
+        "最新/最古は日付型・日時型カラムのみ適用可",
+        "集約後は「まとめる単位」カラム以外の非集計カラムは出力されない",
+        "行結合は文字列連結のため、後続で数値演算する場合は別の集計方法を使う"
+      ],
+      "x-confirm": [
+        "1ステップで複数の集計定義（集約定義の配列）を指定できるか、それとも1ステップ1集計か",
+        "1ステップ1集計の場合はフラット構造（集約対象項目 + 集計方法 が独立フィールド）に修正が必要",
+        "まとめる単位を空（全体集計）にすることは可能か",
+        "出力カラム名の自動命名規則（b→dash固有のプレフィックス等）"
+      ],
+      "x-example": {
+        "まとめる単位": ["顧客ID"],
+        "集約定義": [
+          { "対象項目": "購買金額", "集計方法": "SUM",   "出力カラム名": "購買金額合計" },
+          { "対象項目": "購買ID",   "集計方法": "COUNT", "出力カラム名": "購買回数" },
+          { "対象項目": "購買日",   "集計方法": "最新",  "出力カラム名": "最終購買日" }
+        ]
+      }
+    },
+
+    "絞込み": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "絞込み_settings",
+      "description": "指定条件を満たす行のみを残す（WHERE）",
+      "type": "object",
+      "required": ["絞込み項目", "絞込み条件"],
+      "additionalProperties": false,
+      "properties": {
+        "絞込み項目": {
+          "type": "string",
+          "description": "絞込みに使うカラム名"
+        },
+        "絞込み条件": {
+          "type": "object",
+          "required": ["演算子"],
+          "description": "演算子によって必須フィールドが変わる（if/then参照）",
+          "properties": {
+            "演算子": {
+              "type": "string",
+              "enum": [
+                "等しい", "等しくない",
+                "含む", "含まない",
+                "以上", "以下", "より大きい", "より小さい",
+                "空白", "空白でない",
+                "期間",
+                "過去N日以内",
+                "リストに含まれる", "リストに含まれない"
+              ],
+              "description": "文字列型: 等しい/等しくない/含む/含まない/空白/空白でない / 数値型: 等しい/以上/以下/より大きい/より小さい / 日付型: 以上/以下/期間/過去N日以内 / 共通: リストに含まれる/含まれない"
+            },
+            "値": {
+              "type": ["string", "number"],
+              "description": "比較値（等しい/含む/以上/以下等のとき使用）"
+            },
+            "開始値": {
+              "type": ["string", "number"],
+              "description": "期間指定の開始値（演算子=「期間」のとき必須）"
+            },
+            "終了値": {
+              "type": ["string", "number"],
+              "description": "期間指定の終了値（演算子=「期間」のとき必須）"
+            },
+            "N": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "「過去N日以内」のN値（演算子=「過去N日以内」のとき必須）"
+            },
+            "値リスト": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": ["string", "number"] },
+              "description": "リスト条件の値群（演算子=「リストに含まれる/含まれない」のとき必須）"
+            }
+          },
+          "if":   { "properties": { "演算子": { "const": "期間" } } },
+          "then": { "required": ["開始値", "終了値"] },
+          "else": {
+            "if":   { "properties": { "演算子": { "const": "過去N日以内" } } },
+            "then": { "required": ["N"] },
+            "else": {
+              "if":   { "properties": { "演算子": { "enum": ["リストに含まれる", "リストに含まれない"] } } },
+              "then": { "required": ["値リスト"] },
+              "else": {
+                "if":   { "properties": { "演算子": { "enum": ["空白", "空白でない"] } } },
+                "then": {},
+                "else": { "required": ["値"] }
+              }
+            }
+          }
+        }
+      },
+      "x-constraints": [
+        "日付型での期間絞込みはカラムが日付型であることが前提（文字列型では正確な比較不可）",
+        "「含む」は部分一致（LIKE %value%）相当と推定",
+        "数値型カラムに「含む/含まない」を使うと型エラーになる可能性がある"
+      ],
+      "x-confirm": [
+        "演算子の完全なリスト（「先頭が一致」「末尾が一致」等が存在するか）",
+        "「含む」の大文字小文字区別の有無",
+        "複数条件のAND/OR組み合わせは1ステップで設定できるか、複数の絞込みステップが必要か",
+        "「過去N日以内」の基準日は処理実行日（動的）か固定日付か"
+      ],
+      "x-example": {
+        "絞込み項目": "購買日",
+        "絞込み条件": {
+          "演算子": "過去N日以内",
+          "N": 90
+        }
+      }
+    },
+
+    "連結": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "連結_settings",
+      "description": "複数カラムを1つのカラムに結合（CONCAT）",
+      "type": "object",
+      "required": ["連結対象"],
+      "additionalProperties": false,
+      "properties": {
+        "連結対象": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 6,
+          "items": { "type": "string" },
+          "description": "連結するカラム名リスト（順番が連結順序。最大6カラム）"
+        }
+      },
+      "x-constraints": [
+        "数値型カラムは事前に型変換（文字列型）してから連結する",
+        "連結対象は最大6カラムまで（YAMLより。実UIの制約は要確認）",
+        "NULLを含むカラムの連結結果はNULLになる可能性がある（DBエンジン依存）",
+        "区切り文字の挿入は非対応。区切り文字が必要な場合は「追加」で区切り文字カラムを作成してから連結する"
+      ],
+      "x-confirm": [
+        "UIの設定フィールドが「連結対象1〜6」という個別フィールドか、配列形式かを実UI確認",
+        "連結対象の上限が本当に6カラムか（実UI確認）",
+        "カラム名ではなく固定文字列リテラルを連結対象に含めることができるか（テキスト挿入との違い）",
+        "NULL値を空文字として扱うオプション（COALESCE相当）があるか"
+      ],
+      "x-example": {
+        "連結対象": ["姓", "名"]
+      }
+    },
+
+    "時刻演算": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "時刻演算_settings",
+      "description": "2つの日時カラムの差分を指定単位で算出（DATEDIFF）",
+      "type": "object",
+      "required": ["引かれる値", "引く値", "算出単位"],
+      "additionalProperties": false,
+      "properties": {
+        "引かれる値": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["種別", "カラム名"],
+              "additionalProperties": false,
+              "properties": {
+                "種別":    { "type": "string", "const": "カラム" },
+                "カラム名": { "type": "string", "description": "終了日時が入っているカラム名" }
+              }
+            },
+            {
+              "type": "object",
+              "required": ["種別", "値"],
+              "additionalProperties": false,
+              "properties": {
+                "種別": { "type": "string", "const": "固定値" },
+                "値":   { "type": "string", "description": "ISO 8601形式（YYYY-MM-DD または YYYY-MM-DDTHH:MM:SS）" }
+              }
+            }
+          ],
+          "description": "被減数（終了日時）。カラム参照または固定日時値"
+        },
+        "引く値": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["種別", "カラム名"],
+              "additionalProperties": false,
+              "properties": {
+                "種別":    { "type": "string", "const": "カラム" },
+                "カラム名": { "type": "string", "description": "開始日時が入っているカラム名" }
+              }
+            },
+            {
+              "type": "object",
+              "required": ["種別", "値"],
+              "additionalProperties": false,
+              "properties": {
+                "種別": { "type": "string", "const": "固定値" },
+                "値":   { "type": "string", "description": "ISO 8601形式（YYYY-MM-DD または YYYY-MM-DDTHH:MM:SS）" }
+              }
+            }
+          ],
+          "description": "減数（開始日時）。カラム参照または固定日時値"
+        },
+        "算出単位": {
+          "type": "string",
+          "enum": ["年", "月", "日", "時間", "分", "秒"],
+          "description": "差分の算出単位"
+        }
+      },
+      "x-constraints": [
+        "両カラムとも日付型または日時型である必要がある（文字列型は型変換が必要）",
+        "引かれる値 < 引く値 の場合、結果は負の値になる",
+        "算出単位「月」は月の日数差により直感と異なる結果になる場合がある（例: 1/31→3/1 は1ヶ月）",
+        "算出結果は整数（切り捨て）と推定。小数が必要な場合は「日」で算出して四則演算で換算する"
+      ],
+      "x-confirm": [
+        "固定値として「現在日時」（CURRENT_DATE/NOW()相当）を特別な値で指定できるか",
+        "引かれる値・引く値のUIがドロップダウン（カラム選択）＋テキスト入力（固定値）の切り替え形式かを実UI確認",
+        "算出結果の型は整数か小数か（特に時間・分・秒単位の場合）"
+      ],
+      "x-example": {
+        "引かれる値": { "種別": "カラム", "カラム名": "最終購買日" },
+        "引く値":     { "種別": "カラム", "カラム名": "初回購買日" },
+        "算出単位":   "日"
+      }
+    },
+
+    "抽出": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "抽出_settings",
+      "description": "文字列カラムの先頭・末尾・中間から指定N文字を取り出す（LEFT/RIGHT/SUBSTR）",
+      "type": "object",
+      "required": ["抽出対象項目", "抽出方法", "文字数"],
+      "additionalProperties": false,
+      "properties": {
+        "抽出対象項目": {
+          "type": "string",
+          "description": "抽出するカラム名（文字列型必須）"
+        },
+        "抽出方法": {
+          "type": "string",
+          "enum": ["先頭", "末尾", "中間"],
+          "description": "先頭=LEFT(col,n) / 末尾=RIGHT(col,n) / 中間=SUBSTR(col, start, n)"
+        },
+        "文字数": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "抽出する文字数"
+        },
+        "開始位置": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "中間抽出の開始位置（1始まり）。抽出方法=「中間」のとき必須"
+        }
+      },
+      "if":   { "properties": { "抽出方法": { "const": "中間" } } },
+      "then": { "required": ["抽出対象項目", "抽出方法", "文字数", "開始位置"] },
+      "x-constraints": [
+        "文字列型カラムのみ適用可（数値型・日付型は事前に型変換が必要）",
+        "文字数が実際の文字列長を超えた場合、文字列末尾まで取得（エラーにはならない）と推定",
+        "開始位置は1始まり（先頭文字が1）と仮定。0始まりの場合は設定値を要調整"
+      ],
+      "x-confirm": [
+        "開始位置の基点が1始まりか0始まりか（実UI表示で確認必要）",
+        "マルチバイト文字（日本語）のカウント単位が文字数かバイト数か",
+        "文字数が実際の長さを超えた場合の挙動（切り捨てかエラーか）"
+      ],
+      "x-example": {
+        "抽出対象項目": "生年月日",
+        "抽出方法": "先頭",
+        "文字数": 4
+      }
+    },
+
+    "ランキング": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ランキング_settings",
+      "description": "グループ内順位を付与（RANK/DENSE_RANK/ROW_NUMBER）。行数は変わらない。",
+      "type": "object",
+      "required": ["まとめる単位", "ランキング順", "昇順降順", "行番号同率"],
+      "additionalProperties": false,
+      "properties": {
+        "まとめる単位": {
+          "type": "string",
+          "description": "PARTITION BY に相当するカラム名（グループ単位）。全件ランキングは定数カラムを作成して使用"
+        },
+        "ランキング順": {
+          "type": "string",
+          "description": "ORDER BY に相当するカラム名（順位付けの基準）"
+        },
+        "昇順降順": {
+          "type": "string",
+          "enum": ["昇順", "降順"],
+          "description": "昇順=値が小さいほど順位が上 / 降順=値が大きいほど順位が上"
+        },
+        "行番号同率": {
+          "type": "string",
+          "enum": ["行番号", "同率あり", "同率なし"],
+          "description": "行番号=ROW_NUMBER（全て別順位）/ 同率あり=DENSE_RANK（同率同順位・次順位を飛ばさない）/ 同率なし=RANK（同率同順位・次順位を飛ばす）"
+        }
+      },
+      "x-constraints": [
+        "ランキング単体では行数は変わらない。目的のランクに絞るには後続ステップで絞込みを実施する",
+        "全件ランキング（グループなし）は「追加」で定数カラムを作成してまとめる単位に使用する",
+        "ランキング順カラムに同値が多い場合、行番号モードでは内部の順序が不定になることがある"
+      ],
+      "x-confirm": [
+        "「まとめる単位」に複数カラムを指定できるか（例: 商品カテゴリ + 店舗ID）",
+        "「ランキング順」に複数カラムを指定できるか（複合ORDER BY）",
+        "「行番号同率」のUI上の実際の選択肢テキストがYAML記載と一致するか（最重要確認項目）",
+        "全件ランキング（PARTITION BY なし）を直接設定できるか"
+      ],
+      "x-example": {
+        "まとめる単位": "顧客ID",
+        "ランキング順": "購買日",
+        "昇順降順": "降順",
+        "行番号同率": "行番号"
+      }
+    },
+
+    "名寄せ": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "名寄せ_settings",
+      "description": "同一エンティティの重複レコードを優先条件に基づき代表行1行に統合",
+      "type": "object",
+      "required": ["名寄せキー", "判定項目", "判定順"],
+      "additionalProperties": false,
+      "properties": {
+        "名寄せキー": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "同一エンティティを識別するキーカラムリスト（複数指定で複合キー）"
+        },
+        "判定項目": {
+          "type": "string",
+          "description": "代表値を選ぶ優先度判定に使うカラム（例: 更新日時, フラグ）"
+        },
+        "判定順": {
+          "type": "string",
+          "enum": ["最新", "最古", "最大", "最小"],
+          "description": "最新=判定項目の最大日時 / 最古=最小日時 / 最大=最大数値 / 最小=最小数値"
+        }
+      },
+      "x-constraints": [
+        "名寄せ後は代表行の値がそのまま保持される（SUM/AVG等の集計値ではなく元の行の値）",
+        "「最新/最古」は判定項目が日付型・日時型のとき使用。「最大/最小」は数値型のとき使用",
+        "複数カラムを組み合わせたキーは事前に連結で1カラムにまとめると設定しやすい",
+        "判定項目が同値（タイ）のときに選ばれる行は不定（挿入順等に依存する可能性あり）"
+      ],
+      "x-confirm": [
+        "名寄せが独立した操作として存在するか、「ランキング(ROW_NUMBER)+絞込み」で実現するかを実UI確認（最重要）",
+        "判定項目が同値のときにどの行が選ばれるか（不定か、挿入順か）",
+        "複数の判定項目（タイブレーク用の第2優先カラム）を設定できるか"
+      ],
+      "x-example": {
+        "名寄せキー": ["顧客ID"],
+        "判定項目": "更新日時",
+        "判定順": "最新"
+      }
+    },
+
+    "参照": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "参照_settings",
+      "description": "グループ内で指定条件の行の値を全行に付与（FIRST_VALUE/LAST_VALUE ウィンドウ関数）。行数は変わらない。",
+      "type": "object",
+      "required": ["まとめる単位", "参照する項目", "参照する順", "昇順降順"],
+      "additionalProperties": false,
+      "properties": {
+        "まとめる単位": {
+          "type": "string",
+          "description": "PARTITION BY に相当するカラム名（グループ単位）"
+        },
+        "参照する項目": {
+          "type": "string",
+          "description": "取り出したい値を持つカラム名（例: 購買金額）"
+        },
+        "参照する順": {
+          "type": "string",
+          "description": "どの行を参照するかを決める基準カラム（例: 購買日）"
+        },
+        "昇順降順": {
+          "type": "string",
+          "enum": ["昇順", "降順"],
+          "description": "昇順=ORDER BY ... ASC → FIRST_VALUE（グループ内最古の値）/ 降順=ORDER BY ... DESC → FIRST_VALUE（グループ内最新の値）"
+        },
+        "出力カラム名": {
+          "type": "string",
+          "description": "付与する新規カラムの名前（省略時はb→dashが自動命名）"
+        }
+      },
+      "x-constraints": [
+        "参照する順カラムに一意性がない場合、取得される値が不定になる",
+        "出力テーブルの行数は変わらない（全行に同じグループの代表値が付与される）",
+        "全件参照（グループなし）が必要な場合は「追加」で定数カラムを作成してまとめる単位に使用する"
+      ],
+      "x-confirm": [
+        "YAMLの「入力する値」フィールドが何を意味するか（出力カラム名の別名か、参照元の追加指定か）要確認",
+        "「まとめる単位」に複数カラムを指定できるか",
+        "グループ内の2番目・3番目の値（FIRST_VALUE以外のオフセット）を参照できるか",
+        "この操作が独立した操作として存在するか、「ランキング+横統合+絞込み」の組み合わせで実現するかを実UI確認"
+      ],
+      "x-example": {
+        "まとめる単位": "顧客ID",
+        "参照する項目": "購買金額",
+        "参照する順": "購買日",
+        "昇順降順": "昇順",
+        "出力カラム名": "初回購買金額"
+      }
+    }
+
+  }
+}
