@@ -3373,8 +3373,17 @@ async def admin_list_sessions(limit: int = 100):
 
 @app.get("/api/admin/sessions/{session_id}", dependencies=[Depends(verify_token)])
 async def admin_get_session(session_id: str):
-    """이력 상세: 대화내용 + design_doc 전체 반환"""
-    session = sessions.get(session_id)
+    """이력 상세: 대화내용 + design_doc 전체 반환 (DB優先、フォールバックでメモリ)"""
+    session = None
+    with _db_conn() as conn:
+        if conn is not None:
+            with conn.cursor() as cur:
+                cur.execute("SELECT data FROM sessions WHERE id = %s", (session_id,))
+                row = cur.fetchone()
+                if row:
+                    session = row[0]
+    if session is None:
+        session = sessions.get(session_id)
     if not session:
         raise HTTPException(404, "セッションが見つかりません")
     cr = session.get("consultation_result") or {}
