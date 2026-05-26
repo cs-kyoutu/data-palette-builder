@@ -3369,17 +3369,10 @@ async def admin_weekly_stats():
                   COUNT(*) FILTER (WHERE data ? 'consultation_result' AND data->>'evaluation' = 'good')        AS p1_good,
                   COUNT(*) FILTER (WHERE data ? 'consultation_result' AND data->>'evaluation' = 'bad')         AS p1_bad,
                   COUNT(*) FILTER (WHERE data ? 'consultation_result' AND data->>'evaluation' IS NULL)         AS p1_none,
-                  COUNT(*) FILTER (WHERE (data->'input_tables') IS NOT NULL
-                                     AND jsonb_array_length(data->'input_tables') > 0)                         AS p2_count,
-                  COUNT(*) FILTER (WHERE (data->'input_tables') IS NOT NULL
-                                     AND jsonb_array_length(data->'input_tables') > 0
-                                     AND data->>'evaluation' = 'good')                                         AS p2_good,
-                  COUNT(*) FILTER (WHERE (data->'input_tables') IS NOT NULL
-                                     AND jsonb_array_length(data->'input_tables') > 0
-                                     AND data->>'evaluation' = 'bad')                                          AS p2_bad,
-                  COUNT(*) FILTER (WHERE (data->'input_tables') IS NOT NULL
-                                     AND jsonb_array_length(data->'input_tables') > 0
-                                     AND data->>'evaluation' IS NULL)                                          AS p2_none,
+                  COUNT(*) FILTER (WHERE data->>'finalized' = 'true')                                            AS p2_count,
+                  COUNT(*) FILTER (WHERE data->>'finalized' = 'true' AND data->>'evaluation' = 'good')         AS p2_good,
+                  COUNT(*) FILTER (WHERE data->>'finalized' = 'true' AND data->>'evaluation' = 'bad')          AS p2_bad,
+                  COUNT(*) FILTER (WHERE data->>'finalized' = 'true' AND data->>'evaluation' IS NULL)          AS p2_none,
                   COUNT(*) FILTER (WHERE data ? 'design_doc')                                                  AS p3_count,
                   COUNT(*) FILTER (WHERE data ? 'design_doc' AND data->>'evaluation' = 'good')                 AS p3_good,
                   COUNT(*) FILTER (WHERE data ? 'design_doc' AND data->>'evaluation' = 'bad')                  AS p3_bad,
