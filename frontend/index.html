@@ -380,6 +380,20 @@
     }
     .pm-add-table-btn:hover { border-color: var(--primary); color: var(--primary); }
 
+    /* Output column editor */
+    .out-col-labels { display: flex; gap: 6px; padding: 0 2px 4px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+    .out-col-labels span { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+    .out-col-editor { display: flex; flex-direction: column; gap: 3px; min-height: 60px; }
+    .out-col-row { display: flex; gap: 6px; align-items: center; }
+    .out-col-input {
+      padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px;
+      font-size: 13px; font-family: inherit; background: var(--bg);
+    }
+    .out-col-input:focus { border-color: var(--primary); outline: none; }
+    .out-col-name { flex: 0 0 36%; min-width: 90px; }
+    .out-col-def { flex: 1; }
+    .out-col-row .pm-col-del { flex-shrink: 0; }
+
     /* Google Drive button & modal */
     .drive-btn {
       display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -1220,11 +1234,16 @@
 
       <!-- テキスト入力 -->
       <div id="outputText">
-        <div class="textarea-copy-row">
-          <button class="copy-format-btn" onclick="copyFormatExample('output', this)">📋 例をコピー</button>
+        <div class="out-col-labels">
+          <span style="flex:0 0 36%;min-width:90px">カラム名</span>
+          <span style="flex:1">定義・集計方法</span>
+          <span style="width:26px"></span>
         </div>
-        <textarea class="text-input-area" id="outputTextInput"
-          placeholder="作りたいテーブルのカラムと定義を自由に記述（フォーマット不問）&#10;&#10;例:&#10;顧客ID         — 顧客テーブルの顧客ID&#10;月次売上合計    — ordersテーブルのamountを月次で集計&#10;最終購入日      — ordersテーブルの最新order_dt&#10;購入回数        — ordersテーブルの注文件数&#10;&#10;※ Phase2経由の場合は自動入力されます"></textarea>
+        <div id="outputColEditor" class="out-col-editor"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px">
+          <button class="pm-add-col-btn" style="width:auto;padding:5px 12px" onclick="_addOutputCol()">＋ カラムを追加</button>
+          <button class="copy-format-btn" onclick="_insertOutputExamples()">＋ 例を挿入</button>
+        </div>
       </div>
 
       <div class="file-list" id="outputFileList"></div>
@@ -1805,6 +1824,76 @@
     }
   }
 
+  // --- アウトプットカラムエディター ---
+  const _OUTPUT_EXAMPLES = [
+    { name: '顧客ID',      definition: '顧客テーブルの顧客ID' },
+    { name: '月次売上合計', definition: 'ordersテーブルのamountを月次で集計' },
+    { name: '最終購入日',  definition: 'ordersテーブルの最新order_dt' },
+    { name: '購入回数',    definition: 'ordersテーブルの注文件数' },
+  ];
+
+  function _outputColRowHtml(col) {
+    return `<div class="out-col-row">
+      <input class="out-col-input out-col-name" type="text" value="${escapeHtml(col?.name || '')}" placeholder="顧客ID" oninput="updateGenerateBtn()">
+      <input class="out-col-input out-col-def"  type="text" value="${escapeHtml(col?.definition || '')}" placeholder="顧客テーブルの顧客IDを参照">
+      <button class="pm-col-del" onclick="this.closest('.out-col-row').remove();updateGenerateBtn()">✕</button>
+    </div>`;
+  }
+
+  function _renderOutputColEditor(cols) {
+    const editor = document.getElementById('outputColEditor');
+    if (!editor) return;
+    editor.innerHTML = (cols.length ? cols : [{},{},{}]).map(c => _outputColRowHtml(c)).join('');
+  }
+
+  function _addOutputCol() {
+    const editor = document.getElementById('outputColEditor');
+    const div = document.createElement('div');
+    div.innerHTML = _outputColRowHtml({});
+    editor.appendChild(div.firstElementChild);
+    editor.lastElementChild.querySelector('input').focus();
+    updateGenerateBtn();
+  }
+
+  function _insertOutputExamples() {
+    const editor = document.getElementById('outputColEditor');
+    // 空行だけなら置き換え、そうでなければ追加
+    const hasContent = Array.from(editor.querySelectorAll('.out-col-name')).some(i => i.value.trim());
+    if (!hasContent) editor.innerHTML = '';
+    _OUTPUT_EXAMPLES.forEach(ex => {
+      const div = document.createElement('div');
+      div.innerHTML = _outputColRowHtml(ex);
+      editor.appendChild(div.firstElementChild);
+    });
+    updateGenerateBtn();
+  }
+
+  function _syncOutputEditorFromMapping(mapping) {
+    if (!mapping || !mapping.columns) return;
+    outputTextMode = true;
+    _renderOutputColEditor(mapping.columns.map(c => ({ name: c.name || '', definition: c.definition || '' })));
+    updateGenerateBtn();
+    // テキスト入力タブに切替
+    const textBtn = document.querySelector('.panel:last-child .toggle-btn');
+    if (textBtn) {
+      document.querySelectorAll('.panel:last-child .toggle-btn').forEach(b => b.classList.remove('active'));
+      textBtn.classList.add('active');
+    }
+    document.getElementById('outputText').classList.remove('hidden');
+    document.getElementById('outputUpload').classList.add('hidden');
+  }
+
+  function _collectOutputCols() {
+    const columns = [];
+    document.querySelectorAll('#outputColEditor .out-col-row').forEach(row => {
+      const name = row.querySelector('.out-col-name')?.value.trim();
+      const definition = row.querySelector('.out-col-def')?.value.trim() || '';
+      if (name) columns.push({ name, definition, source_table: '', source_column: '' });
+    });
+    const raw_text = columns.map(c => c.definition ? `${c.name} — ${c.definition}` : c.name).join('\n');
+    return { columns, raw_text };
+  }
+
   function _fallbackCopy(text, onSuccess) {
     const ta = document.createElement('textarea');
     ta.value = text;
@@ -2132,6 +2221,7 @@
     setupDropZone("outputDropZone", "outputFileInput", handleOutputFiles);
   }
   init();
+  _renderOutputColEditor([]);
 
   // --- Drop zone setup ---
   function setupDropZone(zoneId, inputId, handler) {
@@ -2422,12 +2512,18 @@
   // --- Generate button state ---
   function updateGenerateBtn() {
     const hasInput = inputTables.length > 0;
-    const hasOutput = outputTextMode
-      ? document.getElementById("outputTextInput").value.trim().length > 0
-      : (outputMapping && outputMapping.columns.length > 0);
+    let hasOutput, colCount;
+    if (outputTextMode) {
+      const filled = Array.from(document.querySelectorAll('#outputColEditor .out-col-name')).filter(i => i.value.trim());
+      hasOutput = filled.length > 0;
+      colCount = filled.length;
+    } else {
+      hasOutput = !!(outputMapping && outputMapping.columns.length > 0);
+      colCount = outputMapping ? outputMapping.columns.length : 0;
+    }
+    document.getElementById("outputCount").textContent = `${colCount} カラム`;
     document.getElementById("generateBtn").disabled = !(hasInput && hasOutput);
   }
-  document.getElementById("outputTextInput").addEventListener("input", updateGenerateBtn);
 
   // --- Generate ---
   async function generate() {
@@ -2438,8 +2534,7 @@
     // アウトプットがテキストモードの場合、テキストからマッピングを構築
     let finalOutputMapping = outputMapping;
     if (outputTextMode) {
-      const text = document.getElementById("outputTextInput").value.trim();
-      finalOutputMapping = parseOutputDefinition(text);
+      finalOutputMapping = _collectOutputCols();
     }
 
     // インプットもテキストモードの場合はパース結果を使う
@@ -3474,6 +3569,7 @@
     outputMapping = consultationResult.output_mapping;
     renderInputPreview();
     renderOutputPreview();
+    _syncOutputEditorFromMapping(outputMapping);
     document.getElementById('inputCount').textContent = `${inputTables.length} テーブル`;
     document.getElementById('outputCount').textContent = `${outputMapping.columns.length} カラム`;
     updateGenerateBtn();
@@ -3917,6 +4013,7 @@
     // 左右パネルにデータを反映
     renderInputPreview();
     renderOutputPreview();
+    _syncOutputEditorFromMapping(outputMapping);
     document.getElementById('inputCount').textContent = `${inputTables.length} テーブル`;
     if (outputMapping && outputMapping.columns) {
       document.getElementById('outputCount').textContent = `${outputMapping.columns.length} カラム`;
