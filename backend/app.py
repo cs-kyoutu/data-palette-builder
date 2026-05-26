@@ -2849,11 +2849,12 @@ async def organization_csv(session_id: str):
 
     body = "﻿" + "\n".join(lines)  # BOM付きUTF-8（Excel対応）
     strategy = (session.get("consultation_result") or {}).get("strategy_name", "output_mapping")
-    safe_name = strategy.replace("/", "_").replace(" ", "_")[:40]
+    from urllib.parse import quote
+    encoded = quote(strategy[:40] + ".csv", safe="")
     return Response(
         content=body.encode("utf-8"),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{safe_name}.csv"'},
+        headers={"Content-Disposition": f"attachment; filename=\"output_mapping.csv\"; filename*=UTF-8''{encoded}"},
     )
 
 
