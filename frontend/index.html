@@ -305,6 +305,45 @@
     }
     .text-input-area:focus { border-color: var(--primary); outline: none; }
     .text-input-area::placeholder { color: var(--text-muted); }
+    .textarea-copy-row {
+      display: flex; justify-content: flex-end; margin-bottom: 4px;
+    }
+    .copy-format-btn {
+      font-size: 11px; padding: 3px 9px;
+      border: 1px solid var(--border); border-radius: 4px;
+      background: var(--bg); color: var(--text-muted);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .copy-format-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .copy-format-btn.copied { border-color: #22c55e; color: #22c55e; }
+
+    /* Preset manager modal */
+    .preset-mgr-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 11px; border: 1px solid var(--border);
+      border-radius: 6px; margin-bottom: 6px; background: var(--bg);
+    }
+    .preset-mgr-item-info { flex: 1; min-width: 0; }
+    .preset-mgr-item-label { font-size: 13px; font-weight: 600; }
+    .preset-mgr-item-desc { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .preset-mgr-btn { font-size: 12px; padding: 4px 10px; border-radius: 4px; cursor: pointer; border: 1px solid; background: transparent; flex-shrink: 0; }
+    .preset-mgr-btn-edit { border-color: var(--primary); color: var(--primary); }
+    .preset-mgr-btn-edit:hover { background: rgba(12,170,235,.08); }
+    .preset-mgr-btn-delete { border-color: #ef4444; color: #ef4444; }
+    .preset-mgr-btn-delete:hover { background: #fee2e2; }
+    .preset-mgr-add-btn {
+      width: 100%; padding: 9px; border: 2px dashed var(--border);
+      border-radius: 6px; font-size: 13px; color: var(--text-muted);
+      cursor: pointer; background: transparent; margin-top: 6px;
+    }
+    .preset-mgr-add-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .preset-mgr-form label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 12px 0 4px; }
+    .preset-mgr-form label:first-child { margin-top: 0; }
+    .preset-mgr-form input, .preset-mgr-form textarea {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 13px; font-family: inherit; box-sizing: border-box;
+    }
+    .preset-mgr-form input:focus, .preset-mgr-form textarea:focus { border-color: var(--primary); outline: none; }
 
     /* Google Drive button & modal */
     .drive-btn {
@@ -1081,6 +1120,9 @@
 
       <!-- テキスト入力 -->
       <div id="inputTextArea">
+        <div class="textarea-copy-row">
+          <button class="copy-format-btn" onclick="copyFormatExample('input', this)">📋 例をコピー</button>
+        </div>
         <textarea class="text-input-area" id="inputTextInput"
           rows="12" placeholder="カラム名	型	説明&#10;user_id	bigint	顧客ID&#10;amount	int	注文金額&#10;order_dt	date	注文日&#10;&#10;※ タブ区切り・スペース区切り・b→dashメタデータ形式対応&#10;※ テーブル名はファイル名 or シート名から自動取得"></textarea>
         <button class="org-next-btn" onclick="parseAndSetInputText()">テーブル定義を読み込む</button>
@@ -1094,6 +1136,9 @@
         </div>
         <div class="preset-chips" id="presetChips"></div>
         <div class="preset-no-match" id="presetNoMatch">該当する業界がありません</div>
+        <div style="text-align:right;margin-top:8px">
+          <button class="copy-format-btn" onclick="openPresetManager()">⚙ プリセット管理</button>
+        </div>
       </div>
 
       <!-- ファイルアップロード -->
@@ -1140,6 +1185,9 @@
 
       <!-- テキスト入力 -->
       <div id="outputText">
+        <div class="textarea-copy-row">
+          <button class="copy-format-btn" onclick="copyFormatExample('output', this)">📋 例をコピー</button>
+        </div>
         <textarea class="text-input-area" id="outputTextInput"
           placeholder="作りたいテーブルのカラムと定義を自由に記述（フォーマット不問）&#10;&#10;例:&#10;顧客ID         — 顧客テーブルの顧客ID&#10;月次売上合計    — ordersテーブルのamountを月次で集計&#10;最終購入日      — ordersテーブルの最新order_dt&#10;購入回数        — ordersテーブルの注文件数&#10;&#10;※ Phase2経由の場合は自動入力されます"></textarea>
       </div>
@@ -1166,6 +1214,17 @@
         oninput="autoResize(this)"></textarea>
       <button class="send-btn" id="aiSendBtn" onclick="sendChat()">&#10148;</button>
     </div>
+  </div>
+</div>
+
+<!-- プリセット管理モーダル -->
+<div id="presetManagerModal" class="drive-modal-overlay hidden" onclick="if(event.target===this)closePresetManager()">
+  <div class="drive-modal" style="max-width:600px;width:94vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="font-size:15px;font-weight:700">⚙ プリセット管理</h3>
+      <button onclick="closePresetManager()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);line-height:1">✕</button>
+    </div>
+    <div id="presetMgrContent"></div>
   </div>
 </div>
 
@@ -1689,6 +1748,244 @@
   function autoResize(el) {
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 160) + "px";
+  }
+
+  const FORMAT_EXAMPLES = {
+    input: 'カラム名\t型\t説明\nuser_id\tbigint\t顧客ID\namount\tint\t注文金額\norder_dt\tdate\t注文日',
+    output: '顧客ID         — 顧客テーブルの顧客ID\n月次売上合計    — ordersテーブルのamountを月次で集計\n最終購入日      — ordersテーブルの最新order_dt\n購入回数        — ordersテーブルの注文件数'
+  };
+
+  function copyFormatExample(type, btn) {
+    navigator.clipboard.writeText(FORMAT_EXAMPLES[type]).then(() => {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '✓ コピーしました';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  // --- プリセット管理 ---
+  let _presetMgrData = {};
+  let _editingPresetId = null;
+
+  async function openPresetManager() {
+    document.getElementById('presetManagerModal').classList.remove('hidden');
+    const content = document.getElementById('presetMgrContent');
+    content.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px;text-align:center">読み込み中...</div>';
+    try {
+      const res = await fetch('/api/industries');
+      _presetMgrData = await res.json();
+      _renderPresetList();
+    } catch(e) {
+      content.innerHTML = '<div style="color:#ef4444;font-size:13px">読み込みに失敗しました</div>';
+    }
+  }
+
+  function closePresetManager() {
+    document.getElementById('presetManagerModal').classList.add('hidden');
+  }
+
+  function _renderPresetList() {
+    const entries = Object.entries(_presetMgrData);
+    let html = '';
+    if (!entries.length) {
+      html = '<div style="color:var(--text-muted);font-size:13px;padding:12px;text-align:center">プリセットがありません</div>';
+    }
+    for (const [id, ind] of entries) {
+      const lbl = escapeHtml(ind.label || id);
+      const desc = escapeHtml(ind.description || '');
+      const tCount = (ind.tables || []).length;
+      const hasPrev = !!ind.prev_data;
+      html += `
+        <div class="preset-mgr-item">
+          <div class="preset-mgr-item-info">
+            <div class="preset-mgr-item-label">${lbl}</div>
+            <div class="preset-mgr-item-desc">${desc}${desc ? ' · ' : ''}テーブル${tCount}件</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            ${hasPrev ? `<button class="preset-mgr-btn" style="border-color:#f59e0b;color:#f59e0b" title="1つ前の状態に戻す" onclick="_revertPreset('${escapeHtml(id)}','${lbl}')">↩ 元に戻す</button>` : ''}
+            <button class="preset-mgr-btn preset-mgr-btn-edit" onclick="_openPresetForm('${escapeHtml(id)}')">編集</button>
+            <button class="preset-mgr-btn preset-mgr-btn-delete" onclick="_deletePreset('${escapeHtml(id)}','${lbl}')">削除</button>
+          </div>
+        </div>`;
+    }
+    html += `<button class="preset-mgr-add-btn" onclick="_openPresetForm(null)">＋ 新規プリセットを追加</button>`;
+    html += `<div style="text-align:center;margin-top:10px"><button onclick="_showTrash()" style="background:none;border:none;font-size:12px;color:var(--text-muted);cursor:pointer">🗑 最近削除したプリセット</button></div>`;
+    document.getElementById('presetMgrContent').innerHTML = html;
+  }
+
+  async function _revertPreset(id, label) {
+    if (!confirm(`「${label}」を1つ前の編集状態に戻しますか？`)) return;
+    try {
+      const res = await fetch(`/api/industries/${id}/revert`, { method: 'POST' });
+      if (!res.ok) { const t = await res.text(); alert('元に戻せませんでした: ' + t); return; }
+      const ind = await fetch('/api/industries').then(r => r.json());
+      industriesData = ind; _presetMgrData = ind;
+      _refreshPresetChips(); _renderPresetList();
+    } catch(e) { alert('エラーが発生しました'); }
+  }
+
+  async function _showTrash() {
+    const content = document.getElementById('presetMgrContent');
+    content.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px;text-align:center">読み込み中...</div>';
+    try {
+      const deleted = await fetch('/api/industries/deleted').then(r => r.json());
+      const entries = Object.entries(deleted);
+      let html = `<button onclick="_renderPresetList()" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:12px;margin-bottom:12px;padding:0">← 一覧に戻る</button>
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">🗑 最近削除したプリセット（30日間保持）</div>`;
+      if (!entries.length) {
+        html += '<div style="color:var(--text-muted);font-size:13px;padding:12px;text-align:center">削除済みのプリセットはありません</div>';
+      }
+      for (const [id, ind] of entries) {
+        const lbl = escapeHtml(ind.label || id);
+        const deletedAt = ind.deleted_at ? new Date(ind.deleted_at).toLocaleDateString('ja-JP') : '';
+        html += `
+          <div class="preset-mgr-item">
+            <div class="preset-mgr-item-info">
+              <div class="preset-mgr-item-label" style="color:var(--text-muted)">${lbl}</div>
+              <div class="preset-mgr-item-desc">削除日: ${deletedAt}</div>
+            </div>
+            <button class="preset-mgr-btn preset-mgr-btn-edit" onclick="_restorePreset('${escapeHtml(id)}','${lbl}')">復元</button>
+          </div>`;
+      }
+      content.innerHTML = html;
+    } catch(e) {
+      content.innerHTML = '<div style="color:#ef4444;font-size:13px">読み込みに失敗しました</div>';
+    }
+  }
+
+  async function _restorePreset(id, label) {
+    try {
+      const res = await fetch(`/api/industries/${id}/restore`, { method: 'POST' });
+      if (!res.ok) { alert('復元に失敗しました'); return; }
+      const ind = await fetch('/api/industries').then(r => r.json());
+      industriesData = ind; _presetMgrData = ind;
+      _refreshPresetChips(); _showTrash();
+    } catch(e) { alert('エラーが発生しました'); }
+  }
+
+  function _openPresetForm(id) {
+    _editingPresetId = id;
+    const preset = id ? _presetMgrData[id] : null;
+    const tablesText = preset ? _tablesToText(preset.tables || []) : '';
+    document.getElementById('presetMgrContent').innerHTML = `
+      <button onclick="_renderPresetList()" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:12px;margin-bottom:12px;padding:0">← 一覧に戻る</button>
+      <div class="preset-mgr-form">
+        <label>ラベル（表示名）<span style="color:#ef4444">*</span></label>
+        <input id="pmLabel" type="text" value="${escapeHtml(preset?.label || '')}" placeholder="例: EC専業">
+        <label>説明</label>
+        <input id="pmDesc" type="text" value="${escapeHtml(preset?.description || '')}" placeholder="例: 自社EC・モール出店を主軸とするEC専業企業">
+        <label>テーブル定義（タブ区切り）<span style="font-weight:400;font-size:11px;margin-left:4px">テーブル名行 → カラム名 / 型 / 説明</span></label>
+        <textarea id="pmTables" rows="14" style="font-family:monospace;font-size:12px;resize:vertical" placeholder="テーブル名&#10;カラム名&#9;型&#9;説明&#10;user_id&#9;bigint&#9;顧客ID&#10;&#10;別テーブル名&#10;...">${escapeHtml(tablesText)}</textarea>
+        <div id="pmError" style="color:#ef4444;font-size:12px;margin-top:6px;display:none"></div>
+        <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+          <button class="copy-format-btn" style="padding:7px 16px" onclick="_renderPresetList()">キャンセル</button>
+          <button class="org-next-btn" style="margin:0;width:auto;padding:7px 20px" onclick="_savePreset()">保存</button>
+        </div>
+      </div>`;
+  }
+
+  function _tablesToText(tables) {
+    if (!tables || !tables.length) return '';
+    return tables.map(t => {
+      const rows = (t.columns || []).map(c => `${c.name || ''}\t${c.type || ''}\t${c.description || ''}`);
+      return `${t.table_name}\nカラム名\t型\t説明\n${rows.join('\n')}`;
+    }).join('\n\n');
+  }
+
+  function _parsePresetTablesText(text) {
+    const tables = [];
+    let current = null;
+    for (const raw of text.split('\n')) {
+      const line = raw.trim();
+      if (!line) continue;
+      const parts = line.split('\t');
+      if (parts[0] === 'カラム名') continue;
+      if (parts.length === 1 || (parts.length <= 2 && !/bigint|int|text|varchar|char|date|bool|float|テキスト|整数|日付|真偽/.test(line.toLowerCase()))) {
+        current = { table_name: parts[0].trim(), columns: [] };
+        tables.push(current);
+        continue;
+      }
+      if (!current) { current = { table_name: 'テーブル1', columns: [] }; tables.push(current); }
+      const [name = '', type = '', description = ''] = parts.map(s => s.trim());
+      if (name) current.columns.push({ name, type, description });
+    }
+    return tables;
+  }
+
+  async function _savePreset() {
+    const label = document.getElementById('pmLabel').value.trim();
+    const desc = document.getElementById('pmDesc').value.trim();
+    const tablesText = document.getElementById('pmTables').value;
+    const errEl = document.getElementById('pmError');
+    if (!label) { errEl.textContent = 'ラベルは必須です'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+    const tables = _parsePresetTablesText(tablesText);
+    const body = { label, description: desc, tables };
+    try {
+      let res;
+      if (_editingPresetId) {
+        res = await fetch(`/api/industries/${_editingPresetId}`, {
+          method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+        });
+      } else {
+        res = await fetch('/api/industries', {
+          method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+        });
+      }
+      if (!res.ok) throw new Error(await res.text());
+      const ind = await fetch('/api/industries').then(r => r.json());
+      industriesData = ind;
+      _presetMgrData = ind;
+      _refreshPresetChips();
+      _renderPresetList();
+    } catch(e) {
+      errEl.textContent = '保存に失敗しました: ' + e.message;
+      errEl.style.display = 'block';
+    }
+  }
+
+  async function _deletePreset(id, label) {
+    if (!confirm(`「${label}」を削除しますか？`)) return;
+    try {
+      const res = await fetch(`/api/industries/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
+      const ind = await fetch('/api/industries').then(r => r.json());
+      industriesData = ind;
+      _presetMgrData = ind;
+      _refreshPresetChips();
+      _renderPresetList();
+    } catch(e) {
+      alert('削除に失敗しました');
+    }
+  }
+
+  function _refreshPresetChips() {
+    const chipsEl = document.getElementById('presetChips');
+    if (chipsEl) {
+      chipsEl.innerHTML = '';
+      for (const [key, ind] of Object.entries(industriesData)) {
+        const chip = document.createElement('button');
+        chip.className = 'preset-chip';
+        chip.dataset.key = key;
+        chip.textContent = ind.label || key;
+        chip.onclick = () => togglePreset(key);
+        chipsEl.appendChild(chip);
+      }
+    }
+    const consultEl = document.getElementById('consultationIndustryChips');
+    if (consultEl) {
+      consultEl.innerHTML = '';
+      for (const [key, ind] of Object.entries(industriesData)) {
+        const chip = document.createElement('button');
+        chip.className = 'preset-chip';
+        chip.dataset.key = key;
+        chip.textContent = ind.label || key;
+        chip.onclick = () => toggleConsultationIndustry(key, chip);
+        consultEl.appendChild(chip);
+      }
+    }
+    populateOrgPresetChips();
   }
 
   // 施策相談用

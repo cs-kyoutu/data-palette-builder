@@ -194,6 +194,8 @@ _DDL_STATEMENTS = [
     "ALTER TABLE feedback_log ADD COLUMN IF NOT EXISTS output_text TEXT",
     "CREATE INDEX IF NOT EXISTS idx_feedback_log_created_at ON feedback_log(created_at)",
     "CREATE INDEX IF NOT EXISTS idx_feedback_log_session_id ON feedback_log(session_id)",
+    "ALTER TABLE industries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
+    "ALTER TABLE industries ADD COLUMN IF NOT EXISTS prev_data JSONB",
 ]
 
 
@@ -220,6 +222,7 @@ _INDUSTRY_COLS = [
     ("label", "label"),
     ("description", "description"),
     ("tables", "tables"),
+    ("prev_data", "prev_data"),
     ("created_at", "created_at"),
     ("updated_at", "updated_at"),
 ]
@@ -304,7 +307,7 @@ def _load_industries() -> dict:
         with _db_conn() as conn:
             if conn is not None:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                    cur.execute("SELECT * FROM industries")
+                    cur.execute("SELECT * FROM industries WHERE deleted_at IS NULL")
                     rows = cur.fetchall()
                     if rows:
                         return {row["id"]: dict(row) for row in rows}
@@ -2768,6 +2771,24 @@ async def delete_strategy_template(tpl_id: str):
     return {"status": "deleted"}
 
 
+@app.get("/api/industries/deleted", dependencies=[Depends(verify_token)])
+async def list_deleted_industries():
+    """ソフトデリート済みの業界プリセット一覧（30日以内）"""
+    try:
+        with _db_conn() as conn:
+            if conn is None:
+                return {}
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM industries WHERE deleted_at IS NOT NULL "
+                    "AND deleted_at > NOW() - INTERVAL '30 days' ORDER BY deleted_at DESC"
+                )
+                rows = cur.fetchall()
+                return {row["id"]: dict(row) for row in rows}
+    except Exception:
+        return {}
+
+
 @app.post("/api/industries", dependencies=[Depends(verify_token)])
 async def create_industry(entry: dict):
     """業界プリセット追加"""
@@ -2779,17 +2800,69 @@ async def create_industry(entry: dict):
 
 @app.put("/api/industries/{ind_id}", dependencies=[Depends(verify_token)])
 async def update_industry(ind_id: str, update: dict):
-    """業界プリセット更新"""
+    """業界プリセット更新。変更前の状態を prev_data に保存する"""
+    try:
+        with _db_conn() as conn:
+            if conn is None:
+                raise RuntimeError("DB未設定")
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT label, description, tables FROM industries WHERE id = %s", (ind_id,)
+                )
+                row = cur.fetchone()
+                if row:
+                    update["prev_data"] = {
+                        "label": row["label"],
+                        "description": row["description"],
+                        "tables": row["tables"] or [],
+                    }
+    except Exception:
+        pass
     update.pop("id", None)
     update["updated_at"] = datetime.now().isoformat()
     _update_row("industries", ind_id, update, _INDUSTRY_COLS)
     return {"status": "updated"}
 
 
+@app.post("/api/industries/{ind_id}/revert", dependencies=[Depends(verify_token)])
+async def revert_industry(ind_id: str):
+    """業界プリセットを1つ前の状態に戻す"""
+    with _db_conn() as conn:
+        if conn is None:
+            raise RuntimeError("DB未設定")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT prev_data FROM industries WHERE id = %s", (ind_id,))
+            row = cur.fetchone()
+            if not row or not row["prev_data"]:
+                raise HTTPException(status_code=404, detail="前回バージョンがありません")
+            prev = row["prev_data"] if isinstance(row["prev_data"], dict) else json.loads(row["prev_data"])
+            cur.execute(
+                "UPDATE industries SET label = %s, description = %s, tables = %s::jsonb,"
+                " updated_at = NOW(), prev_data = NULL WHERE id = %s",
+                (prev.get("label"), prev.get("description"), json.dumps(prev.get("tables", [])), ind_id),
+            )
+    return {"status": "reverted"}
+
+
+@app.post("/api/industries/{ind_id}/restore", dependencies=[Depends(verify_token)])
+async def restore_industry(ind_id: str):
+    """ソフトデリート済みプリセットを復元"""
+    with _db_conn() as conn:
+        if conn is None:
+            raise RuntimeError("DB未設定")
+        with conn.cursor() as cur:
+            cur.execute("UPDATE industries SET deleted_at = NULL WHERE id = %s", (ind_id,))
+    return {"status": "restored"}
+
+
 @app.delete("/api/industries/{ind_id}", dependencies=[Depends(verify_token)])
 async def delete_industry(ind_id: str):
-    """業界プリセット削除"""
-    _delete_row("industries", ind_id)
+    """業界プリセットをソフトデリート（30日後に自動失効）"""
+    with _db_conn() as conn:
+        if conn is None:
+            raise RuntimeError("DB未設定")
+        with conn.cursor() as cur:
+            cur.execute("UPDATE industries SET deleted_at = NOW() WHERE id = %s", (ind_id,))
     return {"status": "deleted"}
 
 
