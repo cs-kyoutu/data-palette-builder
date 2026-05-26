@@ -1234,16 +1234,12 @@
 
       <!-- テキスト入力 -->
       <div id="outputText">
-        <div class="out-col-labels">
-          <span style="flex:0 0 36%;min-width:90px">カラム名</span>
-          <span style="flex:1">定義・集計方法</span>
-          <span style="width:26px"></span>
+        <div class="textarea-copy-row">
+          <button class="copy-format-btn" onclick="copyFormatExample('output', this)">📋 例をコピー</button>
         </div>
-        <div id="outputColEditor" class="out-col-editor"></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px">
-          <button class="pm-add-col-btn" style="width:auto;padding:5px 12px" onclick="_addOutputCol()">＋ カラムを追加</button>
-          <button class="copy-format-btn" onclick="_insertOutputExamples()">＋ 例を挿入</button>
-        </div>
+        <textarea class="text-input-area" id="outputTextInput"
+          placeholder="作りたいテーブルのカラムと定義を自由に記述（フォーマット不問）&#10;&#10;例:&#10;顧客ID         — 顧客テーブルの顧客ID&#10;月次売上合計    — ordersテーブルのamountを月次で集計&#10;最終購入日      — ordersテーブルの最新order_dt&#10;購入回数        — ordersテーブルの注文件数&#10;&#10;※ Phase2経由の場合は自動入力されます"
+          oninput="updateGenerateBtn()"></textarea>
       </div>
 
       <div class="file-list" id="outputFileList"></div>
@@ -1871,14 +1867,14 @@
   function _syncOutputEditorFromMapping(mapping) {
     if (!mapping || !mapping.columns) return;
     outputTextMode = true;
-    _renderOutputColEditor(mapping.columns.map(c => ({ name: c.name || '', definition: c.definition || '' })));
+    const text = mapping.columns.map(c => c.definition ? `${c.name} — ${c.definition}` : c.name).join('\n');
+    const ta = document.getElementById('outputTextInput');
+    if (ta) ta.value = text;
     updateGenerateBtn();
     // テキスト入力タブに切替
+    document.querySelectorAll('.panel:last-child .toggle-btn').forEach(b => b.classList.remove('active'));
     const textBtn = document.querySelector('.panel:last-child .toggle-btn');
-    if (textBtn) {
-      document.querySelectorAll('.panel:last-child .toggle-btn').forEach(b => b.classList.remove('active'));
-      textBtn.classList.add('active');
-    }
+    if (textBtn) textBtn.classList.add('active');
     document.getElementById('outputText').classList.remove('hidden');
     document.getElementById('outputUpload').classList.add('hidden');
   }
@@ -2514,9 +2510,9 @@
     const hasInput = inputTables.length > 0;
     let hasOutput, colCount;
     if (outputTextMode) {
-      const filled = Array.from(document.querySelectorAll('#outputColEditor .out-col-name')).filter(i => i.value.trim());
-      hasOutput = filled.length > 0;
-      colCount = filled.length;
+      const text = (document.getElementById("outputTextInput")?.value || "").trim();
+      hasOutput = text.length > 0;
+      colCount = text ? text.split('\n').filter(l => l.trim()).length : 0;
     } else {
       hasOutput = !!(outputMapping && outputMapping.columns.length > 0);
       colCount = outputMapping ? outputMapping.columns.length : 0;
@@ -2534,7 +2530,8 @@
     // アウトプットがテキストモードの場合、テキストからマッピングを構築
     let finalOutputMapping = outputMapping;
     if (outputTextMode) {
-      finalOutputMapping = _collectOutputCols();
+      const text = document.getElementById("outputTextInput")?.value.trim() || "";
+      finalOutputMapping = parseOutputDefinition(text);
     }
 
     // インプットもテキストモードの場合はパース結果を使う
