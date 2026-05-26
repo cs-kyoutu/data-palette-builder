@@ -1107,6 +1107,8 @@ def _build_operation_cards_for_step1() -> str:
 
         line_scenes = " / ".join(s.split("→")[0].rstrip("、").strip() for s in scenes)
         line_misuse = misuses[0] if misuses else ""
+        bdash_notes = card.get("注意_b→dash固有", [])
+        line_bdash = bdash_notes[0] if bdash_notes else ""
         diff_items = list(diffs.items())[:1]
         line_diff = "vs {}: {}".format(
             diff_items[0][0], diff_items[0][1].split("。")[0]
@@ -1115,6 +1117,8 @@ def _build_operation_cards_for_step1() -> str:
         block = f"【{op_name}】{desc}\n  使う場面: {line_scenes}"
         if line_misuse:
             block += f"\n  注意: {line_misuse}"
+        if line_bdash:
+            block += f"\n  b→dash: {line_bdash}"
         if line_diff:
             block += f"\n  {line_diff}"
         sections.get(cat, sections["加工"]).append(block)

@@ -1,0 +1,178 @@
+# b→dash Data Palette Builder テストケース集
+# 作成: 2026-05-26
+# 用途: AI生成品質の検証・プロンプト改修後の回帰テスト
+
+test_cases:
+
+  - id: TC-001
+    name: 顧客ID先頭0除去
+    description: 0埋め12桁の顧客IDから先頭の0を除去する
+    input_tables:
+      - table_name: 顧客
+        columns:
+          - name: 顧客ID
+            type: テキスト
+            description: 0埋め12桁（例: 000000012345）
+    output_mapping:
+      columns:
+        - name: 顧客ID
+          definition: 先頭の0を除去した顧客ID（例: 12345）
+    additional_context: "顧客ID 先頭の0を除去する（0埋め12桁→純粋な数値ID）"
+    expected_operation: 型変換（テキスト→数値）
+    actual_result_before: 除外（1文字しか消えない → NG）
+    actual_result_after: 検証中
+    validation_note: "b→dashで型変換（テキスト→数値）で動作確認済み（2026-05-26）"
+
+  - id: TC-002
+    name: 姓+名を結合して氏名を作成
+    description: 別カラムの姓と名を連結してフルネームを生成
+    input_tables:
+      - table_name: 顧客
+        columns:
+          - name: 姓
+            type: テキスト
+            description: ""
+          - name: 名
+            type: テキスト
+            description: ""
+    output_mapping:
+      columns:
+        - name: 氏名
+          definition: 姓と名を結合したフルネーム
+    additional_context: "氏名 姓と名を結合してフルネームを作成する"
+    expected_operation: 連結
+    actual_result_before: 連結 ✅
+    validation_note: ""
+
+  - id: TC-003
+    name: 購入金額に消費税10%加算
+    description: 税抜き金額に1.1を乗算して税込金額を生成
+    input_tables:
+      - table_name: 受注
+        columns:
+          - name: 顧客ID
+            type: テキスト
+            description: ""
+          - name: 購入金額
+            type: 数値
+            description: 税抜き金額
+    output_mapping:
+      columns:
+        - name: 税込金額
+          definition: 購入金額×1.1（消費税10%加算）
+    additional_context: "税込金額 購入金額に消費税10%を加算"
+    expected_operation: 四則演算（乗算）
+    actual_result_before: 四則演算（乗算×1.1） ✅
+    validation_note: ""
+
+  - id: TC-004
+    name: 都道府県から地域に変換
+    description: 都道府県を8地域（東北・関東・中部・近畿・中国・四国・九州等）に変換
+    input_tables:
+      - table_name: 顧客
+        columns:
+          - name: 顧客ID
+            type: テキスト
+            description: ""
+          - name: 都道府県
+            type: テキスト
+            description: ""
+    output_mapping:
+      columns:
+        - name: 地域
+          definition: 都道府県を北海道・東北・関東・中部・近畿・中国・四国・九州の8地域に変換
+    additional_context: "地域 都道府県を8地域に変換する"
+    expected_operation: テンプレート_都道府県地域変換
+    actual_result_before: テンプレート_都道府県地域変換 ✅
+    validation_note: ""
+
+  - id: TC-005
+    name: 顧客ごとの購入回数・合計金額集計
+    description: 受注テーブルを顧客IDで集約して購入回数とSUM金額を出力
+    input_tables:
+      - table_name: 受注
+        columns:
+          - name: 顧客ID
+            type: テキスト
+            description: ""
+          - name: 受注ID
+            type: テキスト
+            description: ""
+          - name: 購入金額
+            type: 数値
+            description: ""
+    output_mapping:
+      columns:
+        - name: 顧客ID
+          definition: 顧客ID
+        - name: 購入回数
+          definition: 受注件数のカウント
+        - name: 購入合計金額
+          definition: 購入金額の合計
+    additional_context: "顧客ごとの購入回数と購入合計金額を集計する"
+    expected_operation: 集約 → カラム名変更
+    actual_result_before: 集約→カラム名変更 ✅
+    validation_note: ""
+
+  - id: TC-006
+    name: メールアドレスからドメイン部分を抽出
+    description: "@"で分割してドメイン部分（@以降）を取り出す
+    input_tables:
+      - table_name: 顧客
+        columns:
+          - name: 顧客ID
+            type: テキスト
+            description: ""
+          - name: メール
+            type: テキスト
+            description: "user@example.com形式"
+    output_mapping:
+      columns:
+        - name: メールドメイン
+          definition: メールアドレスの@以降のドメイン部分（例: example.com）
+    additional_context: "メールドメイン メールアドレスの@以降を抽出する"
+    expected_operation: 分割（@で2分割）→ 元カラム削除
+    actual_result_before: "分割→削除 △（分割後のカラム名が不明確）"
+    validation_note: "分割後 メール_1=ユーザー名, メール_2=ドメイン。手順書にどちらがドメインか明記されるか要確認"
+
+  - id: TC-007
+    name: 会社名から法人格を除去して正規化
+    description: 株式会社・有限会社・合同会社・略称（株）等を除去
+    input_tables:
+      - table_name: 顧客
+        columns:
+          - name: 顧客ID
+            type: テキスト
+            description: ""
+          - name: 会社名
+            type: テキスト
+            description: 法人格含む（例: 株式会社〇〇、〇〇（株））
+    output_mapping:
+      columns:
+        - name: 会社名_正規化
+          definition: 会社名から株式会社・有限会社・合同会社を除去した社名
+    additional_context: "会社名_正規化 会社名から法人格を除去して正規化する"
+    expected_operation: 複製 → 置換×複数パターン
+    actual_result_before: "複製→置換×9パターン（株・有・合・略称まで網羅） ✅"
+    validation_note: ""
+
+  - id: TC-008
+    name: 生年月日から現在の満年齢を計算
+    description: 日付型の生年月日から今日時点の満年齢を算出
+    input_tables:
+      - table_name: 顧客
+        columns:
+          - name: 顧客ID
+            type: テキスト
+            description: ""
+          - name: 生年月日
+            type: 日付
+            description: YYYY-MM-DD形式
+    output_mapping:
+      columns:
+        - name: 年齢
+          definition: 生年月日から計算した現在の満年齢
+    additional_context: "年齢 生年月日から現在の満年齢を計算する"
+    expected_operation: テンプレート_年齢算出
+    actual_result_before: テンプレート_年齢算出 ✅
+    validation_note: ""
