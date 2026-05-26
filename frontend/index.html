@@ -1756,12 +1756,28 @@
   };
 
   function copyFormatExample(type, btn) {
-    navigator.clipboard.writeText(FORMAT_EXAMPLES[type]).then(() => {
+    const text = FORMAT_EXAMPLES[type];
+    const onSuccess = () => {
       const orig = btn.innerHTML;
       btn.innerHTML = '✓ コピーしました';
       btn.classList.add('copied');
       setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 2000);
-    });
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(onSuccess).catch(() => _fallbackCopy(text, onSuccess));
+    } else {
+      _fallbackCopy(text, onSuccess);
+    }
+  }
+
+  function _fallbackCopy(text, onSuccess) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); onSuccess(); } catch(e) { alert('コピーに失敗しました'); }
+    document.body.removeChild(ta);
   }
 
   // --- プリセット管理 ---
