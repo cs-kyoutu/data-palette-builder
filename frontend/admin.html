@@ -142,6 +142,21 @@
       overflow-y: auto;
     }
 
+    .io-section { margin-bottom: 20px; }
+    .io-section h4 { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 8px; }
+    .io-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 6px; }
+    .io-table th { background: #1a1a2e; color: #fff; padding: 6px 10px; text-align: left; font-weight: 500; }
+    .io-table td { padding: 6px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+    .io-table tbody tr:hover { background: #f5f7ff; }
+    .io-table td.col-name { font-weight: 600; white-space: nowrap; }
+    .io-table td.col-def { color: #444; }
+    .io-table td.col-type { color: #888; white-space: nowrap; }
+    .io-table td.col-desc { color: #555; }
+    .table-label {
+      display: inline-block; background: #e8f0fe; color: #3a5fc8;
+      font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px;
+    }
+
     .empty { text-align: center; padding: 60px; color: #aaa; font-size: 14px; }
     .loading { text-align: center; padding: 60px; color: #aaa; }
 
@@ -287,12 +302,18 @@ async function toggleDetail(sessionId) {
 }
 
 function renderDetail(panel, data, sessionId) {
+  const hasIo = (data.input_tables && data.input_tables.length > 0) || (data.output_mapping && data.output_mapping.columns && data.output_mapping.columns.length > 0);
   const tabs = [
-    { id: 'phase1', label: '📝 Phase1 施策相談', messages: data.consultation_messages || [] },
-    { id: 'step1',  label: '🔍 Step1 方針決定', messages: data.messages || [] },
-    { id: 'step2',  label: '⚙️ Step2 設計',    messages: data.messages_step2 || [] },
-    { id: 'design', label: '📄 設計書JSON',     messages: null },
-  ].filter(t => t.messages === null || t.messages.length > 0);
+    { id: 'io',     label: '📊 インプット/アウトプット', messages: null, type: 'io' },
+    { id: 'phase1', label: '📝 Phase1 施策相談', messages: data.consultation_messages || [], type: 'msg' },
+    { id: 'step1',  label: '🔍 Step1 方針決定', messages: data.messages || [], type: 'msg' },
+    { id: 'step2',  label: '⚙️ Step2 設計',    messages: data.messages_step2 || [], type: 'msg' },
+    { id: 'design', label: '📄 設計書JSON',     messages: null, type: 'json' },
+  ].filter(t => {
+    if (t.id === 'io') return hasIo;
+    if (t.type === 'msg') return t.messages.length > 0;
+    return true;
+  });
 
   const firstTab = tabs[0]?.id || 'design';
 
@@ -303,13 +324,63 @@ function renderDetail(panel, data, sessionId) {
     </div>
     ${tabs.map(t => `
       <div class="conv-pane${t.id === firstTab ? ' active' : ''}" id="pane-${sessionId}-${t.id}">
-        ${t.messages !== null
+        ${t.type === 'msg'
           ? `<div class="message-list">${renderMessages(t.messages)}</div>`
+          : t.type === 'io'
+          ? renderIo(data)
           : `<div class="design-json">${JSON.stringify(data.design_doc, null, 2)}</div>`
         }
       </div>
     `).join('')}
   `;
+}
+
+function renderIo(data) {
+  let html = '';
+
+  // インプットテーブル
+  const tables = data.input_tables || [];
+  if (tables.length > 0) {
+    html += `<div class="io-section"><h4>インプットテーブル</h4>`;
+    for (const t of tables) {
+      html += `<div class="table-label">📋 ${escHtml(t.table_name || '（テーブル名なし）')}</div>`;
+      const cols = t.columns || [];
+      if (cols.length > 0) {
+        html += `<table class="io-table">
+          <thead><tr><th>カラム名</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>${cols.map(c => `
+            <tr>
+              <td class="col-name">${escHtml(c.name || '')}</td>
+              <td class="col-type">${escHtml(c.type || '')}</td>
+              <td class="col-desc">${escHtml(c.description || '')}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+      } else {
+        html += `<div style="font-size:12px;color:#aaa;margin-bottom:8px">カラム定義なし</div>`;
+      }
+    }
+    html += `</div>`;
+  }
+
+  // アウトプット定義
+  const outCols = (data.output_mapping && data.output_mapping.columns) ? data.output_mapping.columns : [];
+  if (outCols.length > 0) {
+    html += `<div class="io-section"><h4>アウトプット定義</h4>
+      <table class="io-table">
+        <thead><tr><th>カラム名</th><th>定義・説明</th></tr></thead>
+        <tbody>${outCols.map(c => `
+          <tr>
+            <td class="col-name">${escHtml(c.name || '')}</td>
+            <td class="col-def">${escHtml(c.definition || '')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  if (!html) html = '<div style="color:#aaa;font-size:12px;padding:10px">データなし</div>';
+  return html;
 }
 
 function renderMessages(messages) {

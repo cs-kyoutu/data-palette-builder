@@ -3396,6 +3396,8 @@ async def admin_get_session(session_id: str):
         "consultation_messages": session.get("consultation_messages", []),
         "consultation_result": cr,
         "design_doc": session.get("design_doc"),
+        "input_tables": session.get("input_tables", []),
+        "output_mapping": session.get("output_mapping", {}),
         "has_download": bool(session.get("design_doc")),
     }
 
