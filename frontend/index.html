@@ -339,11 +339,46 @@
     .preset-mgr-add-btn:hover { border-color: var(--primary); color: var(--primary); }
     .preset-mgr-form label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 12px 0 4px; }
     .preset-mgr-form label:first-child { margin-top: 0; }
-    .preset-mgr-form input, .preset-mgr-form textarea {
+    .preset-mgr-form input {
       width: 100%; padding: 8px 10px; border: 1px solid var(--border);
       border-radius: 6px; font-size: 13px; font-family: inherit; box-sizing: border-box;
     }
-    .preset-mgr-form input:focus, .preset-mgr-form textarea:focus { border-color: var(--primary); outline: none; }
+    .preset-mgr-form input:focus { border-color: var(--primary); outline: none; }
+    .pm-table-block { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
+    .pm-table-header {
+      display: flex; align-items: center; gap: 6px; padding: 7px 10px;
+      background: #f7f8fa; border-bottom: 1px solid var(--border);
+    }
+    .pm-table-name {
+      flex: 1; font-size: 13px; font-weight: 600; border: none; background: transparent;
+      outline: none; font-family: inherit; min-width: 0;
+    }
+    .pm-table-name:focus { background: #fff; outline: 1px solid var(--primary); border-radius: 3px; padding: 1px 4px; }
+    .pm-cols-table { width: 100%; border-collapse: collapse; }
+    .pm-cols-table th {
+      padding: 5px 7px; text-align: left; font-size: 11px;
+      font-weight: 500; color: var(--text-muted); background: #fafbfc;
+      border-bottom: 1px solid var(--border);
+    }
+    .pm-cols-table td { padding: 2px 3px; border-bottom: 1px solid var(--border); }
+    .pm-cols-table tbody tr:last-child td { border-bottom: none; }
+    .pm-col-input {
+      width: 100%; border: none; padding: 5px 6px; font-size: 12px;
+      font-family: inherit; background: transparent; box-sizing: border-box;
+    }
+    .pm-col-input:focus { outline: 1px solid var(--primary); border-radius: 3px; background: #fff; }
+    .pm-col-del { background: none; border: none; cursor: pointer; color: #ccc; font-size: 15px; padding: 2px 5px; line-height: 1; }
+    .pm-col-del:hover { color: #ef4444; }
+    .pm-add-col-btn {
+      width: 100%; padding: 6px 12px; border: none; background: none;
+      cursor: pointer; font-size: 12px; color: var(--primary); text-align: left;
+    }
+    .pm-add-col-btn:hover { background: rgba(12,170,235,.06); }
+    .pm-add-table-btn {
+      width: 100%; padding: 8px; border: 2px dashed var(--border); border-radius: 6px;
+      font-size: 12px; color: var(--text-muted); cursor: pointer; background: transparent; margin-top: 4px;
+    }
+    .pm-add-table-btn:hover { border-color: var(--primary); color: var(--primary); }
 
     /* Google Drive button & modal */
     .drive-btn {
@@ -1893,7 +1928,6 @@
     if (id && preset) {
       _preEditSnapshot = { id, label: preset.label || '', description: preset.description || '', tables: preset.tables || [] };
     }
-    const tablesText = preset ? _tablesToText(preset.tables || []) : '';
     document.getElementById('presetMgrContent').innerHTML = `
       <button onclick="_renderPresetList()" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:12px;margin-bottom:12px;padding:0">← 一覧に戻る</button>
       <div class="preset-mgr-form">
@@ -1901,8 +1935,8 @@
         <input id="pmLabel" type="text" value="${escapeHtml(preset?.label || '')}" placeholder="例: EC専業">
         <label>説明</label>
         <input id="pmDesc" type="text" value="${escapeHtml(preset?.description || '')}" placeholder="例: 自社EC・モール出店を主軸とするEC専業企業">
-        <label>テーブル定義（タブ区切り）<span style="font-weight:400;font-size:11px;margin-left:4px">テーブル名行 → カラム名 / 型 / 説明</span></label>
-        <textarea id="pmTables" rows="14" style="font-family:monospace;font-size:12px;resize:vertical" placeholder="テーブル名&#10;カラム名&#9;型&#9;説明&#10;user_id&#9;bigint&#9;顧客ID&#10;&#10;別テーブル名&#10;...">${escapeHtml(tablesText)}</textarea>
+        <label style="margin-bottom:8px">テーブル定義</label>
+        <div id="pmTablesEditor">${_renderTableEditor(preset?.tables || [])}</div>
         <div id="pmError" style="color:#ef4444;font-size:12px;margin-top:6px;display:none"></div>
         <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
           <button class="copy-format-btn" style="padding:7px 16px" onclick="_renderPresetList()">キャンセル</button>
@@ -1911,42 +1945,81 @@
       </div>`;
   }
 
-  function _tablesToText(tables) {
-    if (!tables || !tables.length) return '';
-    return tables.map(t => {
-      const rows = (t.columns || []).map(c => `${c.name || ''}\t${c.type || ''}\t${c.description || ''}`);
-      return `${t.table_name}\nカラム名\t型\t説明\n${rows.join('\n')}`;
-    }).join('\n\n');
+  function _renderTableEditor(tables) {
+    const list = tables.length ? tables : [{ table_name: '', columns: [] }];
+    return list.map(t => _tableBlockHtml(t)).join('') +
+      `<button class="pm-add-table-btn" onclick="_addTableBlock(this)">＋ テーブルを追加</button>`;
   }
 
-  function _parsePresetTablesText(text) {
+  function _tableBlockHtml(t) {
+    const colRows = (t.columns || []).map(c => _colRowHtml(c)).join('');
+    return `<div class="pm-table-block">
+      <div class="pm-table-header">
+        <input class="pm-table-name" type="text" value="${escapeHtml(t.table_name || '')}" placeholder="テーブル名">
+        <button class="pm-col-del" onclick="_removeTableBlock(this)" title="テーブルを削除">✕</button>
+      </div>
+      <table class="pm-cols-table">
+        <thead><tr><th style="width:32%">カラム名</th><th style="width:20%">型</th><th>説明</th><th style="width:26px"></th></tr></thead>
+        <tbody>${colRows}</tbody>
+      </table>
+      <button class="pm-add-col-btn" onclick="_addColRow(this)">＋ カラムを追加</button>
+    </div>`;
+  }
+
+  function _colRowHtml(c) {
+    return `<tr>
+      <td><input class="pm-col-input" type="text" value="${escapeHtml(c?.name || '')}" placeholder="カラム名"></td>
+      <td><input class="pm-col-input" type="text" value="${escapeHtml(c?.type || '')}" placeholder="型"></td>
+      <td><input class="pm-col-input" type="text" value="${escapeHtml(c?.description || '')}" placeholder="説明"></td>
+      <td><button class="pm-col-del" onclick="this.closest('tr').remove()">✕</button></td>
+    </tr>`;
+  }
+
+  function _addTableBlock(btn) {
+    const div = document.createElement('div');
+    div.innerHTML = _tableBlockHtml({ table_name: '', columns: [{ name: '', type: '', description: '' }] });
+    btn.parentNode.insertBefore(div.firstElementChild, btn);
+    btn.previousElementSibling.querySelector('.pm-table-name').focus();
+  }
+
+  function _removeTableBlock(btn) {
+    const editor = document.getElementById('pmTablesEditor');
+    if (editor.querySelectorAll('.pm-table-block').length <= 1) return;
+    btn.closest('.pm-table-block').remove();
+  }
+
+  function _addColRow(btn) {
+    const tbody = btn.previousElementSibling.querySelector('tbody');
+    const tr = document.createElement('tr');
+    tr.innerHTML = _colRowHtml({});
+    tbody.appendChild(tr);
+    tr.querySelector('input').focus();
+  }
+
+  function _collectTablesFromEditor() {
     const tables = [];
-    let current = null;
-    for (const raw of text.split('\n')) {
-      const line = raw.trim();
-      if (!line) continue;
-      const parts = line.split('\t');
-      if (parts[0] === 'カラム名') continue;
-      if (parts.length === 1 || (parts.length <= 2 && !/bigint|int|text|varchar|char|date|bool|float|テキスト|整数|日付|真偽/.test(line.toLowerCase()))) {
-        current = { table_name: parts[0].trim(), columns: [] };
-        tables.push(current);
-        continue;
-      }
-      if (!current) { current = { table_name: 'テーブル1', columns: [] }; tables.push(current); }
-      const [name = '', type = '', description = ''] = parts.map(s => s.trim());
-      if (name) current.columns.push({ name, type, description });
-    }
+    document.querySelectorAll('#pmTablesEditor .pm-table-block').forEach(block => {
+      const tableName = block.querySelector('.pm-table-name').value.trim();
+      if (!tableName) return;
+      const columns = [];
+      block.querySelectorAll('tbody tr').forEach(row => {
+        const inputs = row.querySelectorAll('input');
+        const name = inputs[0]?.value.trim();
+        if (!name) return;
+        columns.push({ name, type: inputs[1]?.value.trim() || '', description: inputs[2]?.value.trim() || '' });
+      });
+      tables.push({ table_name: tableName, columns });
+    });
     return tables;
   }
 
   async function _savePreset() {
     const label = document.getElementById('pmLabel').value.trim();
     const desc = document.getElementById('pmDesc').value.trim();
-    const tablesText = document.getElementById('pmTables').value;
     const errEl = document.getElementById('pmError');
     if (!label) { errEl.textContent = 'ラベルは必須です'; errEl.style.display = 'block'; return; }
     errEl.style.display = 'none';
-    const tables = _parsePresetTablesText(tablesText);
+    const tables = _collectTablesFromEditor();
     const body = { label, description: desc, tables };
     try {
       let res;
