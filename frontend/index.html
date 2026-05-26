@@ -1273,12 +1273,12 @@
 
 <!-- プリセット管理モーダル -->
 <div id="presetManagerModal" class="drive-modal-overlay hidden" onclick="if(event.target===this)closePresetManager()">
-  <div class="drive-modal" style="max-width:600px;width:94vw">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+  <div class="drive-modal" style="max-width:600px;width:94vw;max-height:90vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-shrink:0">
       <h3 style="font-size:15px;font-weight:700">⚙ プリセット管理</h3>
       <button onclick="closePresetManager()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);line-height:1">✕</button>
     </div>
-    <div id="presetMgrContent"></div>
+    <div id="presetMgrContent" style="overflow-y:auto;flex:1;min-height:0"></div>
   </div>
 </div>
 
@@ -2027,7 +2027,7 @@
         <label style="margin-bottom:8px">テーブル定義</label>
         <div id="pmTablesEditor">${_renderTableEditor(preset?.tables || [])}</div>
         <div id="pmError" style="color:#ef4444;font-size:12px;margin-top:6px;display:none"></div>
-        <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+        <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;position:sticky;bottom:0;background:var(--surface);padding:10px 0 2px">
           <button class="copy-format-btn" style="padding:7px 16px" onclick="_renderPresetList()">キャンセル</button>
           <button class="org-next-btn" style="margin:0;width:auto;padding:7px 20px" onclick="_savePreset()">保存</button>
         </div>
