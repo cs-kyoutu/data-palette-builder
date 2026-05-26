@@ -3998,7 +3998,7 @@
     const token = window.__APP_AUTH_TOKEN__;
     const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
     const res = await fetch(`/api/organization/${organizationSessionId}/csv`, { headers });
-    if (!res.ok) { alert('CSVの取得に失敗しました'); return; }
+    if (!res.ok) { alert(`CSVの取得に失敗しました (HTTP ${res.status})`); return; }
     const blob = await res.blob();
     const cd = res.headers.get('Content-Disposition') || '';
     const m = cd.match(/filename="([^"]+)"/);
