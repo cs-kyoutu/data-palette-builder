@@ -3351,6 +3351,96 @@ async def export_sessions_csv():
     )
 
 
+@app.get("/api/admin/weekly_stats", dependencies=[Depends(verify_token)])
+async def admin_weekly_stats():
+    """週次利用集計（月〜日単位）。最大16週分を返す。"""
+    from datetime import timedelta, timezone
+    JST = timezone(timedelta(hours=9))
+    DAYS_JA = ['月', '火', '水', '木', '金', '土', '日']
+
+    with _db_conn() as conn:
+        if conn is None:
+            raise HTTPException(503, "DB未接続")
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                  date_trunc('week', created_at AT TIME ZONE 'Asia/Tokyo') AS week_start,
+                  COUNT(*) FILTER (WHERE data ? 'consultation_result')                                          AS p1_count,
+                  COUNT(*) FILTER (WHERE data ? 'consultation_result' AND data->>'evaluation' = 'good')        AS p1_good,
+                  COUNT(*) FILTER (WHERE data ? 'consultation_result' AND data->>'evaluation' = 'bad')         AS p1_bad,
+                  COUNT(*) FILTER (WHERE data ? 'consultation_result' AND data->>'evaluation' IS NULL)         AS p1_none,
+                  COUNT(*) FILTER (WHERE (data->'input_tables') IS NOT NULL
+                                     AND jsonb_array_length(data->'input_tables') > 0)                         AS p2_count,
+                  COUNT(*) FILTER (WHERE (data->'input_tables') IS NOT NULL
+                                     AND jsonb_array_length(data->'input_tables') > 0
+                                     AND data->>'evaluation' = 'good')                                         AS p2_good,
+                  COUNT(*) FILTER (WHERE (data->'input_tables') IS NOT NULL
+                                     AND jsonb_array_length(data->'input_tables') > 0
+                                     AND data->>'evaluation' = 'bad')                                          AS p2_bad,
+                  COUNT(*) FILTER (WHERE (data->'input_tables') IS NOT NULL
+                                     AND jsonb_array_length(data->'input_tables') > 0
+                                     AND data->>'evaluation' IS NULL)                                          AS p2_none,
+                  COUNT(*) FILTER (WHERE data ? 'design_doc')                                                  AS p3_count,
+                  COUNT(*) FILTER (WHERE data ? 'design_doc' AND data->>'evaluation' = 'good')                 AS p3_good,
+                  COUNT(*) FILTER (WHERE data ? 'design_doc' AND data->>'evaluation' = 'bad')                  AS p3_bad,
+                  COUNT(*) FILTER (WHERE data ? 'design_doc' AND data->>'evaluation' IS NULL)                  AS p3_none
+                FROM sessions
+                GROUP BY week_start
+                ORDER BY week_start DESC
+                LIMIT 16
+            """)
+            rows = cur.fetchall()
+
+    # 累計計算（古い順に積算）
+    rows_asc = list(reversed(rows))
+    cum = [0, 0, 0]
+    result = []
+    for row in rows_asc:
+        ws = row[0]
+        if ws is None:
+            continue
+        ws_jst = ws.replace(tzinfo=timezone.utc).astimezone(JST)
+        we_jst = ws_jst + timedelta(days=6)
+        label = (f"{ws_jst.month}/{ws_jst.day}({DAYS_JA[ws_jst.weekday()]})"
+                 f"～{we_jst.month}/{we_jst.day}({DAYS_JA[we_jst.weekday()]})")
+        p1, p2, p3 = int(row[1]), int(row[5]), int(row[9])
+        cum[0] += p1; cum[1] += p2; cum[2] += p3
+        result.append({
+            "week": label,
+            "p1": {"count": p1, "cum": cum[0], "good": int(row[2]),  "bad": int(row[3]),  "none": int(row[4])},
+            "p2": {"count": p2, "cum": cum[1], "good": int(row[6]),  "bad": int(row[7]),  "none": int(row[8])},
+            "p3": {"count": p3, "cum": cum[2], "good": int(row[10]), "bad": int(row[11]), "none": int(row[12])},
+        })
+
+    return list(reversed(result))
+
+
+@app.get("/api/admin/weekly_stats/csv", dependencies=[Depends(verify_token)])
+async def admin_weekly_stats_csv():
+    """週次集計をCSVでダウンロード"""
+    stats = await admin_weekly_stats()
+    header = (
+        "週,"
+        "a.要件定義_利用回数,a.要件定義_累計,a.要件定義_good,a.要件定義_bad,a.要件定義_未リアクション,"
+        "b.テーブル定義書_利用回数,b.テーブル定義書_累計,b.テーブル定義書_good,b.テーブル定義書_bad,b.テーブル定義書_未リアクション,"
+        "c.構築手順書_利用回数,c.構築手順書_累計,c.構築手順書_good,c.構築手順書_bad,c.構築手順書_未リアクション"
+    )
+    lines = [header]
+    for r in stats:
+        lines.append(
+            f"{r['week']},"
+            f"{r['p1']['count']},{r['p1']['cum']},{r['p1']['good']},{r['p1']['bad']},{r['p1']['none']},"
+            f"{r['p2']['count']},{r['p2']['cum']},{r['p2']['good']},{r['p2']['bad']},{r['p2']['none']},"
+            f"{r['p3']['count']},{r['p3']['cum']},{r['p3']['good']},{r['p3']['bad']},{r['p3']['none']}"
+        )
+    body = "﻿" + "\n".join(lines)  # BOM付きUTF-8（Excel対応）
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=\"weekly_stats.csv\""},
+    )
+
+
 @app.get("/api/admin/sessions", dependencies=[Depends(verify_token)])
 async def admin_list_sessions(limit: int = 100):
     """이력 조회: design_doc이 있는 세션 목록을 최신순으로 반환"""

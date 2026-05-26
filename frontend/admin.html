@@ -157,6 +157,24 @@
       font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px;
     }
 
+    /* Weekly stats */
+    .stats-section { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.08); padding: 20px; margin-bottom: 20px; }
+    .stats-section h2 { font-size: 14px; font-weight: 700; color: #1a1a2e; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; }
+    .weekly-table { width: 100%; border-collapse: collapse; font-size: 12px; overflow-x: auto; display: block; }
+    .weekly-table th, .weekly-table td { padding: 6px 10px; text-align: center; white-space: nowrap; }
+    .weekly-table thead tr:first-child th { background: #e8f0fe; color: #1a1a2e; font-weight: 700; border: 1px solid #cdd5e0; }
+    .weekly-table thead tr:last-child th { background: #f5f7ff; color: #444; font-weight: 500; border: 1px solid #dde3ee; font-size: 11px; }
+    .weekly-table tbody tr { border-bottom: 1px solid #f0f0f0; }
+    .weekly-table tbody tr:hover { background: #f8f9ff; }
+    .weekly-table td { border: 1px solid #eee; }
+    .weekly-table td.week-label { text-align: left; font-weight: 600; color: #333; background: #fafbfc; }
+    .weekly-table td.count { color: #1a1a2e; font-weight: 600; }
+    .weekly-table td.good { color: #2d6a4f; }
+    .weekly-table td.bad { color: #c0392b; }
+    .weekly-table td.none { color: #888; }
+    .csv-btn { font-size: 12px; padding: 5px 14px; border: 1px solid #4f8ef7; color: #4f8ef7; background: #fff; border-radius: 5px; cursor: pointer; }
+    .csv-btn:hover { background: #f0f4ff; }
+
     .empty { text-align: center; padding: 60px; color: #aaa; font-size: 14px; }
     .loading { text-align: center; padding: 60px; color: #aaa; }
 
@@ -179,6 +197,35 @@
 </header>
 
 <div class="container">
+
+  <!-- 週次集計 -->
+  <div class="stats-section">
+    <h2>
+      📊 週次利用集計（月〜日）
+      <button class="csv-btn" onclick="downloadWithAuth('/api/admin/weekly_stats/csv', 'weekly_stats.csv')">⬇ CSV</button>
+    </h2>
+    <div style="overflow-x:auto">
+      <table class="weekly-table" id="weekly-table">
+        <thead>
+          <tr>
+            <th rowspan="2" style="background:#1a1a2e;color:#fff;min-width:140px">週</th>
+            <th colspan="5">a. 要件定義</th>
+            <th colspan="5">b. テーブル定義書</th>
+            <th colspan="5">c. 構築手順書</th>
+          </tr>
+          <tr>
+            <th>利用回数</th><th>累計</th><th>good</th><th>bad</th><th>未リアクション</th>
+            <th>利用回数</th><th>累計</th><th>good</th><th>bad</th><th>未リアクション</th>
+            <th>利用回数</th><th>累計</th><th>good</th><th>bad</th><th>未リアクション</th>
+          </tr>
+        </thead>
+        <tbody id="weekly-body">
+          <tr><td colspan="16" style="text-align:center;color:#aaa;padding:20px">読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="stats">
     <div class="stat-card">
       <div class="label">生成数（合計）</div>
@@ -414,6 +461,47 @@ function escHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+async function loadWeeklyStats() {
+  try {
+    const res = await fetch('/api/admin/weekly_stats', { headers: authHeaders() });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    const tbody = document.getElementById('weekly-body');
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;color:#aaa;padding:20px">データなし</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(r => `
+      <tr>
+        <td class="week-label">${escHtml(r.week)}</td>
+        <td class="count">${r.p1.count}</td><td class="none">${r.p1.cum}</td>
+        <td class="good">${r.p1.good}</td><td class="bad">${r.p1.bad}</td><td class="none">${r.p1.none}</td>
+        <td class="count">${r.p2.count}</td><td class="none">${r.p2.cum}</td>
+        <td class="good">${r.p2.good}</td><td class="bad">${r.p2.bad}</td><td class="none">${r.p2.none}</td>
+        <td class="count">${r.p3.count}</td><td class="none">${r.p3.cum}</td>
+        <td class="good">${r.p3.good}</td><td class="bad">${r.p3.bad}</td><td class="none">${r.p3.none}</td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    document.getElementById('weekly-body').innerHTML =
+      `<tr><td colspan="16" style="text-align:center;color:red;padding:20px">読み込み失敗: ${e}</td></tr>`;
+  }
+}
+
+function downloadWithAuth(url, filename) {
+  const t = window.__APP_AUTH_TOKEN__;
+  const headers = t ? { 'Authorization': `Bearer ${t}` } : {};
+  fetch(url, { headers })
+    .then(r => r.blob())
+    .then(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename || 'download.csv';
+      a.click();
+    });
+}
+
+loadWeeklyStats();
 loadSessions();
 </script>
 </body>
