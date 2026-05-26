@@ -74,6 +74,10 @@
       white-space: nowrap;
     }
     .dl-btn:hover { background: #3a7be0; }
+    .test-btn { display: inline-block; background: #eee; color: #666; border: none; padding: 4px 10px; border-radius: 5px; font-size: 11px; cursor: pointer; white-space: nowrap; margin-left: 4px; }
+    .test-btn:hover { background: #ddd; }
+    .test-btn.active { background: #ffeaa7; color: #856404; }
+    tr.is-test td.date, tr.is-test td.strategy, tr.is-test td.summary { opacity: 0.4; }
 
     /* 대화 상세 패널 */
     .detail-row td { padding: 0; }
@@ -298,12 +302,13 @@ function renderTable(sessions) {
     return;
   }
   tbody.innerHTML = sessions.map(s => `
-    <tr class="data-row" data-id="${s.id}" onclick="toggleDetail('${s.id}')">
+    <tr class="data-row${s.is_test ? ' is-test' : ''}" data-id="${s.id}" onclick="toggleDetail('${s.id}')">
       <td class="date">${formatDate(s.created_at)}</td>
       <td class="strategy">${s.strategy_name || '（相談なし）'}</td>
       <td class="summary">${(s.summary || '').slice(0, 80)}${(s.summary || '').length > 80 ? '…' : ''}</td>
       <td class="dl">
         <a class="dl-btn" href="/api/download/${s.id}" onclick="event.stopPropagation()" download>⬇ Excel</a>
+        <button class="test-btn${s.is_test ? ' active' : ''}" onclick="event.stopPropagation(); toggleTest('${s.id}', this)">${s.is_test ? '🧪 テスト除外中' : '🧪 テスト'}</button>
       </td>
     </tr>
     <tr class="detail-row" id="detail-${s.id}" style="display:none">
@@ -314,6 +319,27 @@ function renderTable(sessions) {
       </td>
     </tr>
   `).join('');
+}
+
+async function toggleTest(sessionId, btn) {
+  try {
+    const res = await fetch(`/api/admin/sessions/${sessionId}/toggle_test`, {
+      method: 'POST', headers: authHeaders()
+    });
+    if (!res.ok) throw new Error(res.status);
+    const { is_test } = await res.json();
+    // allSessionsのis_testを更新
+    const s = allSessions.find(x => x.id === sessionId);
+    if (s) s.is_test = is_test;
+    // ボタンとtr表示を即時更新
+    btn.textContent = is_test ? '🧪 テスト除外中' : '🧪 テスト';
+    btn.classList.toggle('active', is_test);
+    btn.closest('tr').classList.toggle('is-test', is_test);
+    // 週次集計を再読み込み
+    loadWeeklyStats();
+  } catch (e) {
+    alert('フラグの更新に失敗しました: ' + e);
+  }
 }
 
 async function toggleDetail(sessionId) {

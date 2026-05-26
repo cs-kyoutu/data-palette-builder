@@ -3365,18 +3365,30 @@ async def admin_weekly_stats():
             cur.execute("""
                 SELECT
                   date_trunc('week', created_at AT TIME ZONE 'Asia/Tokyo') AS week_start,
-                  COUNT(*) FILTER (WHERE data ? 'consultation_result')                                          AS p1_count,
-                  COUNT(*) FILTER (WHERE data ? 'consultation_result' AND data->>'evaluation' = 'good')        AS p1_good,
-                  COUNT(*) FILTER (WHERE data ? 'consultation_result' AND data->>'evaluation' = 'bad')         AS p1_bad,
-                  COUNT(*) FILTER (WHERE data ? 'consultation_result' AND data->>'evaluation' IS NULL)         AS p1_none,
-                  COUNT(*) FILTER (WHERE data->>'finalized' = 'true')                                            AS p2_count,
-                  COUNT(*) FILTER (WHERE data->>'finalized' = 'true' AND data->>'evaluation' = 'good')         AS p2_good,
-                  COUNT(*) FILTER (WHERE data->>'finalized' = 'true' AND data->>'evaluation' = 'bad')          AS p2_bad,
-                  COUNT(*) FILTER (WHERE data->>'finalized' = 'true' AND data->>'evaluation' IS NULL)          AS p2_none,
-                  COUNT(*) FILTER (WHERE data ? 'design_doc')                                                  AS p3_count,
-                  COUNT(*) FILTER (WHERE data ? 'design_doc' AND data->>'evaluation' = 'good')                 AS p3_good,
-                  COUNT(*) FILTER (WHERE data ? 'design_doc' AND data->>'evaluation' = 'bad')                  AS p3_bad,
-                  COUNT(*) FILTER (WHERE data ? 'design_doc' AND data->>'evaluation' IS NULL)                  AS p3_none
+                  COUNT(*) FILTER (WHERE data ? 'consultation_result'
+                                     AND (data->>'is_test' IS NULL OR data->>'is_test' != 'true'))             AS p1_count,
+                  COUNT(*) FILTER (WHERE data ? 'consultation_result' AND data->>'evaluation' = 'good'
+                                     AND (data->>'is_test' IS NULL OR data->>'is_test' != 'true'))             AS p1_good,
+                  COUNT(*) FILTER (WHERE data ? 'consultation_result' AND data->>'evaluation' = 'bad'
+                                     AND (data->>'is_test' IS NULL OR data->>'is_test' != 'true'))             AS p1_bad,
+                  COUNT(*) FILTER (WHERE data ? 'consultation_result' AND data->>'evaluation' IS NULL
+                                     AND (data->>'is_test' IS NULL OR data->>'is_test' != 'true'))             AS p1_none,
+                  COUNT(*) FILTER (WHERE data->>'finalized' = 'true'
+                                     AND (data->>'is_test' IS NULL OR data->>'is_test' != 'true'))             AS p2_count,
+                  COUNT(*) FILTER (WHERE data->>'finalized' = 'true' AND data->>'evaluation' = 'good'
+                                     AND (data->>'is_test' IS NULL OR data->>'is_test' != 'true'))             AS p2_good,
+                  COUNT(*) FILTER (WHERE data->>'finalized' = 'true' AND data->>'evaluation' = 'bad'
+                                     AND (data->>'is_test' IS NULL OR data->>'is_test' != 'true'))             AS p2_bad,
+                  COUNT(*) FILTER (WHERE data->>'finalized' = 'true' AND data->>'evaluation' IS NULL
+                                     AND (data->>'is_test' IS NULL OR data->>'is_test' != 'true'))             AS p2_none,
+                  COUNT(*) FILTER (WHERE data ? 'design_doc'
+                                     AND (data->>'is_test' IS NULL OR data->>'is_test' != 'true'))             AS p3_count,
+                  COUNT(*) FILTER (WHERE data ? 'design_doc' AND data->>'evaluation' = 'good'
+                                     AND (data->>'is_test' IS NULL OR data->>'is_test' != 'true'))             AS p3_good,
+                  COUNT(*) FILTER (WHERE data ? 'design_doc' AND data->>'evaluation' = 'bad'
+                                     AND (data->>'is_test' IS NULL OR data->>'is_test' != 'true'))             AS p3_bad,
+                  COUNT(*) FILTER (WHERE data ? 'design_doc' AND data->>'evaluation' IS NULL
+                                     AND (data->>'is_test' IS NULL OR data->>'is_test' != 'true'))             AS p3_none
                 FROM sessions
                 GROUP BY week_start
                 ORDER BY week_start DESC
@@ -3448,7 +3460,8 @@ async def admin_list_sessions(limit: int = 100):
                     mode,
                     data->'consultation_result'->>'strategy_name' AS strategy_name,
                     data->'design_doc'->>'summary'               AS summary,
-                    data ? 'design_doc'                          AS has_output
+                    data ? 'design_doc'                          AS has_output,
+                    (data->>'is_test' = 'true')                  AS is_test
                 FROM sessions
                 WHERE data ? 'design_doc'
                 ORDER BY created_at DESC
@@ -3456,6 +3469,33 @@ async def admin_list_sessions(limit: int = 100):
             """, (limit,))
             rows = cur.fetchall()
     return [dict(r) for r in rows]
+
+
+@app.post("/api/admin/sessions/{session_id}/toggle_test", dependencies=[Depends(verify_token)])
+async def admin_toggle_test(session_id: str):
+    """セッションのテスト除外フラグをトグルする"""
+    with _db_conn() as conn:
+        if conn is None:
+            raise HTTPException(503, "DB未接続")
+        with conn.cursor() as cur:
+            cur.execute("SELECT data FROM sessions WHERE id = %s", (session_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(404, "セッションが見つかりません")
+            data = row[0]
+            new_val = not (data.get("is_test") is True)
+            data["is_test"] = new_val
+            cur.execute(
+                "UPDATE sessions SET data = %s, updated_at = NOW() WHERE id = %s",
+                (Json(data), session_id),
+            )
+        conn.commit()
+    # メモリ上のセッションにも反映
+    mem = sessions.get(session_id)
+    if mem:
+        mem["is_test"] = new_val
+        sessions.save(session_id, mem)
+    return {"session_id": session_id, "is_test": new_val}
 
 
 @app.get("/api/admin/sessions/{session_id}", dependencies=[Depends(verify_token)])
