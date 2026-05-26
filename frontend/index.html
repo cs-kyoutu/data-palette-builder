@@ -1767,6 +1767,7 @@
   // --- プリセット管理 ---
   let _presetMgrData = {};
   let _editingPresetId = null;
+  let _preEditSnapshot = null; // 直前の編集前スナップショット（画面内メモリのみ）
 
   async function openPresetManager() {
     document.getElementById('presetManagerModal').classList.remove('hidden');
@@ -1795,7 +1796,7 @@
       const lbl = escapeHtml(ind.label || id);
       const desc = escapeHtml(ind.description || '');
       const tCount = (ind.tables || []).length;
-      const hasPrev = !!ind.prev_data;
+      const hasPrev = _preEditSnapshot && _preEditSnapshot.id === id;
       html += `
         <div class="preset-mgr-item">
           <div class="preset-mgr-item-info">
@@ -1815,14 +1816,20 @@
   }
 
   async function _revertPreset(id, label) {
-    if (!confirm(`「${label}」を1つ前の編集状態に戻しますか？`)) return;
+    if (!_preEditSnapshot || _preEditSnapshot.id !== id) return;
+    if (!confirm(`「${label}」を編集前の状態に戻しますか？`)) return;
     try {
-      const res = await fetch(`/api/industries/${id}/revert`, { method: 'POST' });
-      if (!res.ok) { const t = await res.text(); alert('元に戻せませんでした: ' + t); return; }
+      const { label: prevLabel, description: prevDesc, tables: prevTables } = _preEditSnapshot;
+      const res = await fetch(`/api/industries/${id}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ label: prevLabel, description: prevDesc, tables: prevTables })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      _preEditSnapshot = null;
       const ind = await fetch('/api/industries').then(r => r.json());
       industriesData = ind; _presetMgrData = ind;
       _refreshPresetChips(); _renderPresetList();
-    } catch(e) { alert('エラーが発生しました'); }
+    } catch(e) { alert('元に戻せませんでした'); }
   }
 
   async function _showTrash() {
@@ -1867,6 +1874,9 @@
   function _openPresetForm(id) {
     _editingPresetId = id;
     const preset = id ? _presetMgrData[id] : null;
+    if (id && preset) {
+      _preEditSnapshot = { id, label: preset.label || '', description: preset.description || '', tables: preset.tables || [] };
+    }
     const tablesText = preset ? _tablesToText(preset.tables || []) : '';
     document.getElementById('presetMgrContent').innerHTML = `
       <button onclick="_renderPresetList()" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:12px;margin-bottom:12px;padding:0">← 一覧に戻る</button>
@@ -1934,6 +1944,7 @@
         });
       }
       if (!res.ok) throw new Error(await res.text());
+      if (!_editingPresetId) _preEditSnapshot = null; // 新規追加はスナップショット不要
       const ind = await fetch('/api/industries').then(r => r.json());
       industriesData = ind;
       _presetMgrData = ind;

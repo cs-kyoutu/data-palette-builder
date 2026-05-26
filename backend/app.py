@@ -195,7 +195,6 @@ _DDL_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_feedback_log_created_at ON feedback_log(created_at)",
     "CREATE INDEX IF NOT EXISTS idx_feedback_log_session_id ON feedback_log(session_id)",
     "ALTER TABLE industries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
-    "ALTER TABLE industries ADD COLUMN IF NOT EXISTS prev_data JSONB",
 ]
 
 
@@ -222,7 +221,6 @@ _INDUSTRY_COLS = [
     ("label", "label"),
     ("description", "description"),
     ("tables", "tables"),
-    ("prev_data", "prev_data"),
     ("created_at", "created_at"),
     ("updated_at", "updated_at"),
 ]
@@ -2800,48 +2798,11 @@ async def create_industry(entry: dict):
 
 @app.put("/api/industries/{ind_id}", dependencies=[Depends(verify_token)])
 async def update_industry(ind_id: str, update: dict):
-    """業界プリセット更新。変更前の状態を prev_data に保存する"""
-    try:
-        with _db_conn() as conn:
-            if conn is None:
-                raise RuntimeError("DB未設定")
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    "SELECT label, description, tables FROM industries WHERE id = %s", (ind_id,)
-                )
-                row = cur.fetchone()
-                if row:
-                    update["prev_data"] = {
-                        "label": row["label"],
-                        "description": row["description"],
-                        "tables": row["tables"] or [],
-                    }
-    except Exception:
-        pass
+    """業界プリセット更新"""
     update.pop("id", None)
     update["updated_at"] = datetime.now().isoformat()
     _update_row("industries", ind_id, update, _INDUSTRY_COLS)
     return {"status": "updated"}
-
-
-@app.post("/api/industries/{ind_id}/revert", dependencies=[Depends(verify_token)])
-async def revert_industry(ind_id: str):
-    """業界プリセットを1つ前の状態に戻す"""
-    with _db_conn() as conn:
-        if conn is None:
-            raise RuntimeError("DB未設定")
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT prev_data FROM industries WHERE id = %s", (ind_id,))
-            row = cur.fetchone()
-            if not row or not row["prev_data"]:
-                raise HTTPException(status_code=404, detail="前回バージョンがありません")
-            prev = row["prev_data"] if isinstance(row["prev_data"], dict) else json.loads(row["prev_data"])
-            cur.execute(
-                "UPDATE industries SET label = %s, description = %s, tables = %s::jsonb,"
-                " updated_at = NOW(), prev_data = NULL WHERE id = %s",
-                (prev.get("label"), prev.get("description"), json.dumps(prev.get("tables", [])), ind_id),
-            )
-    return {"status": "reverted"}
 
 
 @app.post("/api/industries/{ind_id}/restore", dependencies=[Depends(verify_token)])
