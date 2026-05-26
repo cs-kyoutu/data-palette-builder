@@ -218,13 +218,13 @@
             <th colspan="5">c. 構築手順書</th>
           </tr>
           <tr>
-            <th>利用回数</th><th>累計</th><th>good</th><th>bad</th><th>未リアクション</th>
-            <th>利用回数</th><th>累計</th><th>good</th><th>bad</th><th>未リアクション</th>
-            <th>利用回数</th><th>累計</th><th>good</th><th>bad</th><th>未リアクション</th>
+            <th>利用回数</th><th>good</th><th>bad</th><th>未リアクション</th>
+            <th>利用回数</th><th>good</th><th>bad</th><th>未リアクション</th>
+            <th>利用回数</th><th>good</th><th>bad</th><th>未リアクション</th>
           </tr>
         </thead>
         <tbody id="weekly-body">
-          <tr><td colspan="16" style="text-align:center;color:#aaa;padding:20px">読み込み中...</td></tr>
+          <tr><td colspan="13" style="text-align:center;color:#aaa;padding:20px">読み込み中...</td></tr>
         </tbody>
       </table>
     </div>
@@ -494,23 +494,20 @@ async function loadWeeklyStats() {
     const data = await res.json();
     const tbody = document.getElementById('weekly-body');
     if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;color:#aaa;padding:20px">データなし</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#aaa;padding:20px">データなし</td></tr>';
       return;
     }
     tbody.innerHTML = data.map(r => `
       <tr>
         <td class="week-label">${escHtml(r.week)}</td>
-        <td class="count">${r.p1.count}</td><td class="none">${r.p1.cum}</td>
-        <td class="good">${r.p1.good}</td><td class="bad">${r.p1.bad}</td><td class="none">${r.p1.none}</td>
-        <td class="count">${r.p2.count}</td><td class="none">${r.p2.cum}</td>
-        <td class="good">${r.p2.good}</td><td class="bad">${r.p2.bad}</td><td class="none">${r.p2.none}</td>
-        <td class="count">${r.p3.count}</td><td class="none">${r.p3.cum}</td>
-        <td class="good">${r.p3.good}</td><td class="bad">${r.p3.bad}</td><td class="none">${r.p3.none}</td>
+        <td class="count">${r.p1.count}</td><td class="good">${r.p1.good}</td><td class="bad">${r.p1.bad}</td><td class="none">${r.p1.none}</td>
+        <td class="count">${r.p2.count}</td><td class="good">${r.p2.good}</td><td class="bad">${r.p2.bad}</td><td class="none">${r.p2.none}</td>
+        <td class="count">${r.p3.count}</td><td class="good">${r.p3.good}</td><td class="bad">${r.p3.bad}</td><td class="none">${r.p3.none}</td>
       </tr>
     `).join('');
   } catch(e) {
     document.getElementById('weekly-body').innerHTML =
-      `<tr><td colspan="16" style="text-align:center;color:red;padding:20px">読み込み失敗: ${e}</td></tr>`;
+      `<tr><td colspan="13" style="text-align:center;color:red;padding:20px">読み込み失敗: ${e}</td></tr>`;
   }
 }
 

@@ -3460,12 +3460,11 @@ async def admin_weekly_stats():
         label = (f"{ws_jst.month}/{ws_jst.day}({DAYS_JA[ws_jst.weekday()]})"
                  f"～{we_jst.month}/{we_jst.day}({DAYS_JA[we_jst.weekday()]})")
         p1, p2, p3 = int(row[1]), int(row[5]), int(row[9])
-        cum[0] += p1; cum[1] += p2; cum[2] += p3
         result.append({
             "week": label,
-            "p1": {"count": p1, "cum": cum[0], "good": int(row[2]),  "bad": int(row[3]),  "none": int(row[4])},
-            "p2": {"count": p2, "cum": cum[1], "good": int(row[6]),  "bad": int(row[7]),  "none": int(row[8])},
-            "p3": {"count": p3, "cum": cum[2], "good": int(row[10]), "bad": int(row[11]), "none": int(row[12])},
+            "p1": {"count": p1, "good": int(row[2]),  "bad": int(row[3]),  "none": int(row[4])},
+            "p2": {"count": p2, "good": int(row[6]),  "bad": int(row[7]),  "none": int(row[8])},
+            "p3": {"count": p3, "good": int(row[10]), "bad": int(row[11]), "none": int(row[12])},
         })
 
     return list(reversed(result))
@@ -3477,17 +3476,17 @@ async def admin_weekly_stats_csv():
     stats = await admin_weekly_stats()
     header = (
         "週,"
-        "a.要件定義_利用回数,a.要件定義_累計,a.要件定義_good,a.要件定義_bad,a.要件定義_未リアクション,"
-        "b.テーブル定義書_利用回数,b.テーブル定義書_累計,b.テーブル定義書_good,b.テーブル定義書_bad,b.テーブル定義書_未リアクション,"
-        "c.構築手順書_利用回数,c.構築手順書_累計,c.構築手順書_good,c.構築手順書_bad,c.構築手順書_未リアクション"
+        "a.要件定義_利用回数,a.要件定義_good,a.要件定義_bad,a.要件定義_未リアクション,"
+        "b.テーブル定義書_利用回数,b.テーブル定義書_good,b.テーブル定義書_bad,b.テーブル定義書_未リアクション,"
+        "c.構築手順書_利用回数,c.構築手順書_good,c.構築手順書_bad,c.構築手順書_未リアクション"
     )
     lines = [header]
     for r in stats:
         lines.append(
             f"{r['week']},"
-            f"{r['p1']['count']},{r['p1']['cum']},{r['p1']['good']},{r['p1']['bad']},{r['p1']['none']},"
-            f"{r['p2']['count']},{r['p2']['cum']},{r['p2']['good']},{r['p2']['bad']},{r['p2']['none']},"
-            f"{r['p3']['count']},{r['p3']['cum']},{r['p3']['good']},{r['p3']['bad']},{r['p3']['none']}"
+            f"{r['p1']['count']},{r['p1']['good']},{r['p1']['bad']},{r['p1']['none']},"
+            f"{r['p2']['count']},{r['p2']['good']},{r['p2']['bad']},{r['p2']['none']},"
+            f"{r['p3']['count']},{r['p3']['good']},{r['p3']['bad']},{r['p3']['none']}"
         )
     body = "﻿" + "\n".join(lines)  # BOM付きUTF-8（Excel対応）
     return Response(
