@@ -868,6 +868,8 @@
     }
     .org-next-btn:hover { background: var(--primary-dark); }
     .org-next-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .org-csv-btn { display: block; width: 100%; margin-top: 8px; padding: 9px 16px; background: #fff; border: 1.5px solid var(--primary); color: var(--primary); border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .org-csv-btn:hover { background: #f0f4ff; }
 
     /* Consultation area */
     .consultation-welcome {
@@ -1143,6 +1145,7 @@
         <div class="hidden" id="orgFbWrap" style="padding:10px 14px;border-top:1px solid var(--border);font-size:12px;"></div>
         <div class="org-next-btn-wrap hidden" id="orgNextBtnWrap">
           <button class="org-next-btn" onclick="finalizeOrganization()">次へ: 手順書を生成する</button>
+          <button class="org-csv-btn" onclick="downloadOrgCsv()">⬇ CSVダウンロード</button>
         </div>
       </div>
     </div>
@@ -3988,6 +3991,22 @@
       html = '<div style="color:var(--text-muted);font-size:12px;">マッピング結果がここに表示されます</div>';
     }
     el.innerHTML = html;
+  }
+
+  async function downloadOrgCsv() {
+    if (!organizationSessionId) return;
+    const token = window.__APP_AUTH_TOKEN__;
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    const res = await fetch(`/api/organization/${organizationSessionId}/csv`, { headers });
+    if (!res.ok) { alert('CSVの取得に失敗しました'); return; }
+    const blob = await res.blob();
+    const cd = res.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename="([^"]+)"/);
+    const filename = m ? m[1] : 'output_mapping.csv';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
   }
 
   async function finalizeOrganization() {

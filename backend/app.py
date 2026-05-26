@@ -2806,6 +2806,57 @@ async def organization_update_tables(req: OrganizationUpdateTablesRequest):
     )
 
 
+@app.get("/api/organization/{session_id}/csv", dependencies=[Depends(verify_token)])
+async def organization_csv(session_id: str):
+    """Phase2完了後のアウトプット定義をCSVでダウンロード"""
+    session = sessions.get(session_id)
+    if not session:
+        # DBからも試みる
+        with _db_conn() as conn:
+            if conn is not None:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT data FROM sessions WHERE id = %s", (session_id,))
+                    row = cur.fetchone()
+                    if row:
+                        session = row[0]
+    if not session:
+        raise HTTPException(404, "セッションが見つかりません")
+
+    output_mapping = session.get("output_mapping") or {}
+    columns = output_mapping.get("columns", [])
+    if not columns:
+        raise HTTPException(404, "アウトプット定義がありません")
+
+    PURPOSE_LABEL = {"segment": "セグメント", "personalize": "差し込み"}
+    header = "カラム名,用途,定義,ソーステーブル,ソースカラム"
+
+    def escape_csv(val: str) -> str:
+        val = str(val or "")
+        if any(c in val for c in (',', '"', '\n')):
+            val = '"' + val.replace('"', '""') + '"'
+        return val
+
+    lines = [header]
+    for col in columns:
+        purpose = PURPOSE_LABEL.get(col.get("purpose", ""), col.get("purpose", ""))
+        lines.append(",".join(escape_csv(v) for v in [
+            col.get("name", ""),
+            purpose,
+            col.get("definition", ""),
+            col.get("source_table", ""),
+            col.get("source_column", ""),
+        ]))
+
+    body = "﻿" + "\n".join(lines)  # BOM付きUTF-8（Excel対応）
+    strategy = (session.get("consultation_result") or {}).get("strategy_name", "output_mapping")
+    safe_name = strategy.replace("/", "_").replace(" ", "_")[:40]
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}.csv"'},
+    )
+
+
 @app.post("/api/organization/finalize", response_model=ChatResponse, dependencies=[Depends(verify_token)])
 @limiter.limit("10/minute")
 async def organization_finalize(request: Request, req: OrganizationFinalizeRequest):
