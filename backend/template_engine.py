@@ -22,9 +22,25 @@ def _normalize_settings(op: str, settings: dict) -> dict:
 
     # 集約
     if "集約" in op:
+        # まとめる単位 → 集約キーカラム (operation_schemas.json形式)
+        if "まとめる単位" in s and "集約キーカラム" not in s:
+            keys = s.pop("まとめる単位")
+            s["集約キーカラム"] = "、".join(keys) if isinstance(keys, list) else keys
         if "group_by" in s:
             keys = s.pop("group_by")
             s["集約キーカラム"] = "、".join(keys) if isinstance(keys, list) else keys
+        # 集約定義 → aggregations (operation_schemas.json形式: 対象項目/集計方法/出力カラム名)
+        if "集約定義" in s and "aggregations" not in s:
+            raw = s.pop("集約定義")
+            if isinstance(raw, list):
+                s["aggregations"] = [
+                    {
+                        "column":     a.get("対象項目",   a.get("column", "")),
+                        "function":   a.get("集計方法",   a.get("function", "")),
+                        "new_column": a.get("出力カラム名", a.get("new_column", "")),
+                    }
+                    for a in raw if isinstance(a, dict)
+                ]
         if "aggregations" in s:
             aggs = s.pop("aggregations")
             # SQL名→b→dash名の変換
@@ -111,6 +127,14 @@ def _normalize_settings(op: str, settings: dict) -> dict:
 
     # 連結
     if "連結" in op:
+        # 連結対象がリスト形式の場合 (operation_schemas.json形式: ["姓", "名"])
+        if "連結対象" in s:
+            cols = s.pop("連結対象")
+            if isinstance(cols, list):
+                for i, c in enumerate(cols[:6]):
+                    s[f"連結対象{i+1}"] = c
+            else:
+                s["連結対象1"] = cols
         # 対象カラムがリスト形式の場合（["姓", "名"]）
         if "対象カラム" in s:
             cols = s.pop("対象カラム")
@@ -129,6 +153,16 @@ def _normalize_settings(op: str, settings: dict) -> dict:
 
     # 時刻演算
     if "時刻演算" in op:
+        # operation_schemas.json形式: 引かれる値/引く値 が {種別, カラム名/値} の dict の場合は文字列に展開
+        for key in ["引かれる値", "引く値"]:
+            if key in s and isinstance(s[key], dict):
+                d = s[key]
+                if d.get("種別") == "カラム":
+                    s[key] = d.get("カラム名", "")
+                elif d.get("種別") == "固定値":
+                    s[key] = d.get("値", "本日の日付")
+                else:
+                    s[key] = str(d)
         # キーのエイリアス変換
         for alias, target in [("target_column", "対象カラム"), ("left", "引かれる値"),
                               ("left_operand", "引かれる値"), ("right", "引く値"),
@@ -199,6 +233,16 @@ def _normalize_settings(op: str, settings: dict) -> dict:
 
     # 名寄せ
     if "名寄せ" in op:
+        # 名寄せキーがリストの場合は文字列化 (operation_schemas.json形式)
+        if "名寄せキー" in s and isinstance(s["名寄せキー"], list):
+            s["名寄せキー"] = "、".join(s["名寄せキー"])
+        # 判定項目/判定順 → 優先カラム/優先順 (operation_schemas.json形式)
+        if "判定項目" in s and "優先カラム" not in s:
+            s["優先カラム"] = s.pop("判定項目")
+        if "判定順" in s and "優先順" not in s:
+            _order_alias = {"最新": "最も新しい日時", "最古": "最も古い日時", "最大": "最大値", "最小": "最小値"}
+            v = s.pop("判定順")
+            s["優先順"] = _order_alias.get(v, v)
         if "key_columns" in s:
             keys = s.pop("key_columns")
             s["名寄せキー"] = "、".join(keys) if isinstance(keys, list) else keys
@@ -209,6 +253,18 @@ def _normalize_settings(op: str, settings: dict) -> dict:
 
     # ランキング
     if "ランキング" in op:
+        # operation_schemas.json 形式: まとめる単位/ランキング順/昇順降順/行番号同率
+        if "まとめる単位" in s and "グループカラム" not in s:
+            gc = s.pop("まとめる単位")
+            s["グループカラム"] = "、".join(gc) if isinstance(gc, list) else gc
+        if "ランキング順" in s and "ソートカラム" not in s:
+            s["ソートカラム"] = s.pop("ランキング順")
+        if "昇順降順" in s and "ソート順" not in s:
+            v = s.pop("昇順降順")
+            s["ソート順"] = "大きい順" if v == "降順" else "小さい順"
+        if "行番号同率" in s and "同率順位" not in s:
+            v = s.pop("行番号同率")
+            s["同率順位"] = {"行番号": "同率なし", "同率あり": "同率あり", "同率なし": "同率なし"}.get(v, v)
         if "group_columns" in s:
             gc = s.pop("group_columns")
             s["グループカラム"] = "、".join(gc) if isinstance(gc, list) else gc
