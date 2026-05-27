@@ -630,6 +630,123 @@ def render_all(groups: list[dict]) -> str:
     return "\n\n".join(render_processing_group(g) for g in groups if g)
 
 
+def validate_column_flow(steps: list) -> list[str]:
+    """
+    processing_stepsを走査してカラムライフサイクルの矛盾を検出する。
+    Returns: warning strings のリスト (空なら問題なし)
+    """
+    warnings = []
+    rename_map: dict[str, str] = {}  # 旧名 → 新名
+    mail_log_join_step: int | None = None
+
+    def _extract_renames(settings: dict) -> list[tuple[str, str]]:
+        """settingsからカラム名変更ペアを抽出"""
+        for key in ["changes", "renames", "rename_mappings", "column_renames", "rename_rules"]:
+            rename_list = settings.get(key)
+            if rename_list is not None:
+                break
+        else:
+            rename_list = None
+            for v in settings.values():
+                if isinstance(v, dict):
+                    rename_list = [{"from": k, "to": val} for k, val in v.items()]
+                    break
+                elif isinstance(v, list) and v and isinstance(v[0], dict):
+                    rename_list = v
+                    break
+
+        pairs: list[tuple[str, str]] = []
+        if isinstance(rename_list, list):
+            for r in rename_list:
+                if isinstance(r, dict):
+                    old = r.get("from", r.get("old", r.get("変更前", "")))
+                    new = r.get("to", r.get("new", r.get("変更後", "")))
+                    if old and new:
+                        pairs.append((str(old), str(new)))
+        elif isinstance(rename_list, dict):
+            for old, new in rename_list.items():
+                if old and new:
+                    pairs.append((str(old), str(new)))
+        return pairs
+
+    def _to_key_list(raw) -> list[str]:
+        """集約キー/統合キーの各種形式をリストに正規化"""
+        if isinstance(raw, list):
+            return [str(k).strip() for k in raw if k]
+        if isinstance(raw, str) and raw:
+            return [k.strip() for k in raw.replace(",", "、").split("、") if k.strip()]
+        return []
+
+    for i, step in enumerate(steps):
+        if not isinstance(step, dict):
+            continue
+        op = step.get("operation", "")
+        settings = step.get("settings", {})
+        if not isinstance(settings, dict):
+            settings = {}
+        step_num = step.get("step", i + 1)
+
+        # 1. カラム名変更の追跡
+        if "カラム名変更" in op or "カラム名の変更" in op:
+            for old, new in _extract_renames(settings):
+                rename_map[old] = new
+
+        # 2. 絞込み: 絞込み項目がリネーム済みでないか
+        if "絞込み" in op and "縦横" not in op and "横縦" not in op:
+            filter_col = str(settings.get("絞込み項目", ""))
+            if filter_col and filter_col in rename_map:
+                warnings.append(
+                    f"⚠ Step {step_num}（絞込み）: 「{filter_col}」はすでに"
+                    f"「{rename_map[filter_col]}」にリネームされています。絞込み項目を確認してください。"
+                )
+
+        # 3. 縦横変換（PIVOT）: 集約キーにビジターIDが抜けていないか
+        if "縦横変換" in op:
+            agg_raw = settings.get(
+                "集約キーカラム", settings.get("aggregate_keys", settings.get("group_by", ""))
+            )
+            agg_keys = _to_key_list(agg_raw)
+            has_visitor = any("ビジターID" in k for k in agg_keys)
+            if not has_visitor:
+                future_str = str(steps[i + 1:])
+                if "ビジターID" in future_str:
+                    warnings.append(
+                        f"⚠ Step {step_num}（縦横変換）: 集約キーに「ビジターID」が含まれていません。"
+                        "PIVOTはキー以外の全カラムを削除するため、後続でビジターIDが必要な場合は"
+                        "集約キーに追加してください。"
+                    )
+
+        # 4. 横統合: JOINキーがリネーム済みでないか + メール行動ログ検知
+        if "横統合" in op:
+            join_key_raw = settings.get(
+                "統合キー", settings.get("結合キー", settings.get("join_key", ""))
+            )
+            for k in _to_key_list(join_key_raw):
+                if k in rename_map:
+                    warnings.append(
+                        f"⚠ Step {step_num}（横統合）: 統合キー「{k}」はすでに"
+                        f"「{rename_map[k]}」にリネームされています。キー名を確認してください。"
+                    )
+            right_table = str(settings.get("右ファイル", settings.get("right_data", "")))
+            if "メール行動ログ" in right_table:
+                mail_log_join_step = step_num
+
+        # 5. メール行動ログJOIN後のNULLフィルタ確認
+        if mail_log_join_step is not None and "絞込み" in op and "縦横" not in op and "横縦" not in op:
+            filter_cond = str(settings.get("絞込み条件", ""))
+            if any(kw in filter_cond for kw in ["NULL", "null", "空文字", "空白", "IS NULL", "ではない", "空"]):
+                mail_log_join_step = None  # フィルタ確認済み
+
+    if mail_log_join_step is not None:
+        warnings.append(
+            f"⚠ Step {mail_log_join_step}（横統合）: メール行動ログとJOINした後、"
+            "NULL/空文字による絞込みが見当たりません。"
+            "「配信日時がNULL = 未配信」等の絞込みステップを追加してください。"
+        )
+
+    return warnings
+
+
 def generate_procedure_text(design_doc: dict) -> str:
     """設計書JSONから手順書テキストを生成（メインエントリポイント）"""
     groups = design_doc.get("processing_groups", [])

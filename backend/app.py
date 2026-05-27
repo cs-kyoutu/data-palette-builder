@@ -37,7 +37,7 @@ from .parser import (
     parse_output_excel, parse_output_csv,
 )
 from .excel_builder import build_spreadsheet
-from .template_engine import generate_procedure_text, render_step
+from .template_engine import generate_procedure_text, render_step, validate_column_flow
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -2156,7 +2156,14 @@ async def _chat_body(req: ChatRequest, session: dict):
                     filepath, filename = build_spreadsheet(excel_data)
                     session["last_file"] = filepath
                     session["last_filename"] = filename
-                    return ChatResponse(session_id=req.session_id, reply=f"手順書を生成しました！\n\n{procedure_text[:3000]}", status="done", download_url=f"/api/download/{req.session_id}")
+
+                    # カラムライフサイクル検証
+                    flow_warnings = validate_column_flow(steps)
+                    warning_block = ""
+                    if flow_warnings:
+                        warning_block = "\n\n---\n**【設計チェック】以下の点を確認してください**\n" + "\n".join(f"- {w}" for w in flow_warnings)
+
+                    return ChatResponse(session_id=req.session_id, reply=f"手順書を生成しました！\n\n{procedure_text[:3000]}{warning_block}", status="done", download_url=f"/api/download/{req.session_id}")
                 except Exception as e:
                     return ChatResponse(session_id=req.session_id, reply=f"Phase3エラー: {e}", status="asking")
         except (json.JSONDecodeError, IndexError):
