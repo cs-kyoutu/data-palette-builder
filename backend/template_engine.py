@@ -291,6 +291,35 @@ def _normalize_settings(op: str, settings: dict) -> dict:
             logic = s.pop("logic", "AND")
             s["絞込み条件"] = f"\n{logic}\n".join(parts)
 
+        # AIが {'値': ..., '演算子': ...} dict形式で出力した場合を人間が読める形式に変換
+        if "絞込み条件" in s and isinstance(s["絞込み条件"], dict):
+            cond = s["絞込み条件"]
+            val = cond.get("値", "")
+            ope = cond.get("演算子", "")
+            if val != "":
+                if isinstance(val, (int, float)):
+                    s["絞込み条件"] = f"{val}《{ope}》" if ope else str(val)
+                else:
+                    s["絞込み条件"] = f"\"{val}\"《{ope}》" if ope else f"\"{val}\""
+            elif ope:
+                s["絞込み条件"] = f"《{ope}》"
+
+        # list形式 [{'値':..., '演算子':...}, ...] の場合
+        if "絞込み条件" in s and isinstance(s["絞込み条件"], list):
+            parts = []
+            for c in s["絞込み条件"]:
+                if isinstance(c, dict):
+                    val = c.get("値", "")
+                    ope = c.get("演算子", "")
+                    if val != "":
+                        if isinstance(val, (int, float)):
+                            parts.append(f"{val}《{ope}》" if ope else str(val))
+                        else:
+                            parts.append(f"\"{val}\"《{ope}》" if ope else f"\"{val}\"")
+                    elif ope:
+                        parts.append(f"《{ope}》")
+            s["絞込み条件"] = " AND ".join(parts) if parts else str(s["絞込み条件"])
+
     # テンプレート縦横変換
     if "テンプレート" in op and ("縦持ち" in op or "横持ち" in op):
         if "aggregate_keys" in s or "group_by" in s:
