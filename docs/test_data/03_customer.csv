@@ -1,0 +1,6 @@
+顧客ID,氏名,メール,配信許可フラグ,性別,都道府県,登録日
+C001,田中太郎,tanaka@example.com,許可,男,東京都,2023-04-01
+C002,山田花子,yamada@example.com,許可,女,大阪府,2022-11-15
+C003,佐藤一郎,sato@example.com,許可,男,愛知県,2024-01-20
+C004,鈴木美咲,suzuki@example.com,停止,女,福岡県,2023-08-10
+C005,高橋健太,takahashi@example.com,許可,男,北海道,2024-03-05

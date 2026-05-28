@@ -1,0 +1,9 @@
+商品ID,商品名,カテゴリ,価格,ブランド,画像URL,詳細URL
+P001,テント,アウトドア,45000,モンベル,https://example.com/images/P001.jpg,https://example.com/products/P001
+P002,寝袋,アウトドア,12000,ナンガ,https://example.com/images/P002.jpg,https://example.com/products/P002
+P003,バックパック,アウトドア,25000,グレゴリー,https://example.com/images/P003.jpg,https://example.com/products/P003
+P004,ランタン,アウトドア,8000,スノーピーク,https://example.com/images/P004.jpg,https://example.com/products/P004
+P005,クッカーセット,アウトドア,6500,プリムス,https://example.com/images/P005.jpg,https://example.com/products/P005
+P006,レインウェア,アウトドア,15000,ゴアテックス,https://example.com/images/P006.jpg,https://example.com/products/P006
+P007,トレッキングシューズ,アウトドア,22000,サロモン,https://example.com/images/P007.jpg,https://example.com/products/P007
+P008,水筒,アウトドア,3500,サーモス,https://example.com/images/P008.jpg,https://example.com/products/P008

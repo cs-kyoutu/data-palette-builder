@@ -680,6 +680,7 @@ operations:
 
   テンプレート_縦横変換:
     カテゴリ: テンプレート
+    bdash_ui名: "顧客ごとに縦持ちのデータを横に並べて変換"
     一言説明: "縦持ちデータを横持ちに変換する（PIVOT）"
     SQL対応: "PIVOT / CASE WHEN + GROUP BY"
     入力:
@@ -711,6 +712,7 @@ operations:
 
   テンプレート_横縦変換:
     カテゴリ: テンプレート
+    bdash_ui名: "顧客ごとに横持ちのデータを縦に並べて変換"
     一言説明: "横持ちデータを縦持ちに変換する（UNPIVOT）"
     SQL対応: "UNPIVOT / UNION ALL"
     入力:
