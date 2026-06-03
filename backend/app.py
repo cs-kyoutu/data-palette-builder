@@ -38,6 +38,7 @@ from .parser import (
 )
 from .excel_builder import build_spreadsheet
 from .template_engine import generate_procedure_text, render_step, validate_column_flow
+from .procedure_engine import render_step as render_step_formal
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -1693,9 +1694,16 @@ def _build_from_design_doc(session_id: str, session: dict, generation_data: dict
             save_as = s.get("save_as", "")
 
             try:
-                template_text = render_step(s)
+                # 正式記載フォーマット・エンジン(procedure_engine)で手順書テキストを生成。
+                # 入力テーブルを渡してカラムのデータ型を逆引きさせる。失敗時は旧エンジン→『操作名』へフォールバック。
+                template_text = render_step_formal(s, {"input_tables": input_tables})["text"]
+                if not template_text:
+                    template_text = render_step(s)
             except Exception:
-                template_text = f"『{op}』"
+                try:
+                    template_text = render_step(s)
+                except Exception:
+                    template_text = f"『{op}』"
 
             param_values = []
             for v in list(settings.values())[:5]:

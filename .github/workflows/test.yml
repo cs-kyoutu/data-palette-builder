@@ -16,6 +16,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Syntax check app.py (procedure_engine wiring)
+        run: python -c "import ast; ast.parse(open('backend/app.py', encoding='utf-8').read()); print('app.py syntax OK')"
       - name: Run procedure engine golden tests
         run: python tests/test_procedure.py
       - name: Install pyyaml (for OLD engine comparison)
