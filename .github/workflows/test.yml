@@ -18,3 +18,7 @@ jobs:
           python-version: "3.11"
       - name: Run procedure engine golden tests
         run: python tests/test_procedure.py
+      - name: Install pyyaml (for OLD engine comparison)
+        run: pip install pyyaml
+      - name: Compare OLD vs NEW engine output
+        run: python tests/compare_engines.py
