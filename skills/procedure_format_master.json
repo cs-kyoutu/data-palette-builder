@@ -1,0 +1,4838 @@
+{
+  "連結": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{col1}と{col2}を選択 クレンジングタスクの保存名を{val1}にする 表示方法{choice1}を選択",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "残す",
+            "残さない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "[テキスト挿入]",
+      "skeleton": "{col1}と{col2}を選択 [テキスト挿入]を押下し、カラムとカラムの間に{val1}を挿入し、[適用]を押下する クレンジングタスクの保存名を{val2}にする 表示方法{choice1}を選択",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "残す",
+            "残さない"
+          ]
+        }
+      ]
+    }
+  ],
+  "テキスト挿入": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{col1}の{choice1}に{val1}を挿入 {choice2}にて保存 クレンジングタスクの保存名を{val2}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "文頭",
+            "文末"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "名前を付けて保存",
+            "上書き保存"
+          ]
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "分割": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{col1}を[区切り文字]{val1}で、[開始位置]{choice1}から{num1}列に分割する",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "左",
+            "右"
+          ]
+        },
+        {
+          "id": "num1",
+          "kind": "number",
+          "range": [
+            2,
+            10
+          ]
+        }
+      ]
+    }
+  ],
+  "四則演算": [
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "インプットカラムが1カラム",
+      "skeleton": "{col1}{choice1}{val1}、[端数処理]は小数第{choice2}位を、{choice3}する クレンジングタスクの保存名を{val2}にする 表示方法{choice4}を選択",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "+",
+            "-",
+            "…",
+            "÷"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "四捨五入",
+            "切り上げ",
+            "切り捨て"
+          ]
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice4",
+          "kind": "choice",
+          "options": [
+            "残す",
+            "残さない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "インプットカラムが2カラム",
+      "skeleton": "{col1}{choice1}{col2}、[端数処理]は小数第{choice2}位を、{choice3}する クレンジングタスクの保存名を{val1}にする 表示方法{choice4}を選択",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "+",
+            "-",
+            "…",
+            "÷"
+          ]
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "四捨五入",
+            "切り上げ",
+            "切り捨て"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice4",
+          "kind": "choice",
+          "options": [
+            "残す",
+            "残さない"
+          ]
+        }
+      ]
+    }
+  ],
+  "時刻演算": [
+    {
+      "data_types": [
+        "日付型"
+      ],
+      "branch": "《本日の日付/特定の日付》",
+      "skeleton": "{choice1}{choice2}{col1} [計算結果]を{choice3}で算出 {col2}{choice4}{choice5} [計算結果]を{choice6}で算出 クレンジングタスクの保存名を{val1}にする 表示方法{choice7}を選択",
+      "slots": [
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "本日の日付",
+            "特定の日付：\"…\"",
+            "カスタム："
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "+",
+            "-"
+          ]
+        },
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "年",
+            "ヶ月",
+            "日"
+          ]
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice4",
+          "kind": "choice",
+          "options": [
+            "+",
+            "-"
+          ]
+        },
+        {
+          "id": "choice5",
+          "kind": "choice",
+          "options": [
+            "本日の日付",
+            "特定の日付：\"…\"",
+            "カスタム：\"…\""
+          ]
+        },
+        {
+          "id": "choice6",
+          "kind": "choice",
+          "options": [
+            "年",
+            "ヶ月",
+            "日"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice7",
+          "kind": "choice",
+          "options": [
+            "残す",
+            "残さない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日時型"
+      ],
+      "branch": "《本日の日時/特定の日時》",
+      "skeleton": "{choice1}{choice2}{col1} [計算結果]を{choice3}で算出 {col2}{choice4}{choice5} [計算結果]を{choice6}で算出 クレンジングタスクの保存名を{val1}にする 表示方法{choice7}を選択",
+      "slots": [
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "本日の日時",
+            "特定の日時：\"…\""
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "+",
+            "-"
+          ]
+        },
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "年",
+            "ヶ月",
+            "日",
+            "時間",
+            "分",
+            "秒"
+          ]
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice4",
+          "kind": "choice",
+          "options": [
+            "+",
+            "-"
+          ]
+        },
+        {
+          "id": "choice5",
+          "kind": "choice",
+          "options": [
+            "本日の日時",
+            "特定の日時：\"…\"",
+            "カスタム：\"…\""
+          ]
+        },
+        {
+          "id": "choice6",
+          "kind": "choice",
+          "options": [
+            "年",
+            "ヶ月",
+            "日",
+            "時間",
+            "分",
+            "秒"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice7",
+          "kind": "choice",
+          "options": [
+            "残す",
+            "残さない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型",
+        "日時型"
+      ],
+      "branch": "インプットカラムが2カラム",
+      "skeleton": "{col1}《-》{col2}、[計算結果]を{choice1}で算出 クレンジングタスクの保存名を{val1}にする 表示方法{choice2}を選択",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "年",
+            "ヶ月",
+            "日",
+            "時間",
+            "分",
+            "秒"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "残す",
+            "残さない"
+          ]
+        }
+      ]
+    }
+  ],
+  "IF文": [
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次を含む》",
+      "skeleton": "{col1}が{val1}《次を含む》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次を含む(カンマ区切りで複数指定)》",
+      "skeleton": "{col1}が{val1}《次を含む(カンマ区切りで複数指定)》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次を含まない》",
+      "skeleton": "{col1}が{val1}《次を含まない》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次を含まない(カンマ区切りで複数指定)》",
+      "skeleton": "{col1}が{val1}《次を含まない(カンマ区切りで複数指定)》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次で始まる》",
+      "skeleton": "{col1}が{val1}《次で始まる》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次で終わる》",
+      "skeleton": "{col1}が{val1}《次で終わる》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次に完全一致》",
+      "skeleton": "{col1}が{val1}《次に完全一致》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次に完全一致(カンマ区切りで複数指定)》",
+      "skeleton": "{col1}が{val1}《次に完全一致(カンマ区切りで複数指定)》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次に完全一致しない》",
+      "skeleton": "{col1}が{val1}《次に完全一致しない》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次に完全一致しない(カンマ区切りで複数指定)》",
+      "skeleton": "{col1}が{val1}《次に完全一致しない(カンマ区切りで複数指定)》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次のカラムの値を含む》",
+      "skeleton": "{col1}が{col2}《次のカラムの値を含む》の場合、{val1}/{col3}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col4}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次のカラムの値を含まない》",
+      "skeleton": "{col1}が{col2}《次のカラムの値を含まない》の場合、{val1}/{col3}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col4}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次のカラムの値で始まる》",
+      "skeleton": "{col1}が{col2}《次のカラムの値で始まる》の場合、{val1}/{col3}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col4}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次のカラムの値で終わる》",
+      "skeleton": "{col1}が{col2}《次のカラムの値で終わる》の場合、{val1}/{col3}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col4}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次のカラムの値に完全一致》",
+      "skeleton": "{col1}が{col2}《次のカラムの値に完全一致》の場合、{val1}/{col3}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col4}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次のカラムの値に完全一致しない》",
+      "skeleton": "{col1}が{col2}《次のカラムの値に完全一致しない》の場合、{val1}/{col3}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col4}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《空文字》",
+      "skeleton": "{col1}が《空文字》の場合、{val1}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《空文字ではない》",
+      "skeleton": "{col1}が《空文字ではない》の場合、{val1}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次より大きい》",
+      "skeleton": "{col1}が{val1}《次より大きい》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次より小さい》",
+      "skeleton": "{col1}が{val1}《次より小さい》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《以上》",
+      "skeleton": "{col1}が{val1}《以上》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《以下》",
+      "skeleton": "{col1}が{val1}《以下》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次の値の間》",
+      "skeleton": "{col1}が{val1}～{val2}《次の値の間》の場合、{val3}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val4}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val4",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次の値の間にない》",
+      "skeleton": "{col1}が{val1}～{val2}《次の値の間にない》の場合、{val3}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val4}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val4",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次と等しい》",
+      "skeleton": "{col1}が{val1}《次と等しい》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次と等しくない》",
+      "skeleton": "{col1}が{val1}《次と等しくない》の場合、{val2}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val3}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次のカラムの値より大きい》",
+      "skeleton": "{col1}が{col2}《次のカラムの値より大きい》の場合、{val1}/{col3}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col4}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次のカラムの値より小さい》",
+      "skeleton": "{col1}が{col2}《次のカラムの値より小さい》の場合、{val1}/{col3}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col4}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次のカラムの値以上》",
+      "skeleton": "{col1}が{col2}《次のカラムの値以上》の場合、{val1}/{col3}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col4}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次のカラムの値以下》",
+      "skeleton": "{col1}が{col2}《次のカラムの値以下》の場合、{val1}/{col3}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col4}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次のカラムの値の間》",
+      "skeleton": "{col1}が{col2}～{col3}《次のカラムの値の間》の場合、{val1}/{col4}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col5}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col5",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次のカラムの値の間にない》",
+      "skeleton": "{col1}が{col2}～{col3}《次のカラムの値の間にない》の場合、{val1}/{col4}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col5}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col5",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次のカラムの値と等しい》",
+      "skeleton": "{col1}が{col2}《次のカラムの値と等しい》の場合、{val1}/{col3}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col4}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次のカラムの値と等しくない》",
+      "skeleton": "{col1}が{col2}《次のカラムの値と等しくない》の場合、{val1}/{col3}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col4}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型",
+        "日付型",
+        "日時型",
+        "真偽値型"
+      ],
+      "branch": "《NULL》",
+      "skeleton": "{col1}が《NULL》の場合、{val1}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型",
+        "日付型",
+        "日時型",
+        "真偽値型"
+      ],
+      "branch": "《NULLではない》",
+      "skeleton": "{col1}が《NULLではない》の場合、{val1}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型"
+      ],
+      "branch": "《絶対期間》 《指定の期間に一致する》",
+      "skeleton": "《絶対期間》を選択 {col1}が[開始日]{val1}/{col2}と[終了日]{val2}/{col3}《指定の期間に一致する》の場合、{val3}/{col4}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val4}/{col5}/《空白》に変換 [開始日/終了日を含めない]にチェックを入れる/入れない [期間指定にカラムを使用する]にチェックを入れる/入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        },
+        {
+          "id": "val4",
+          "kind": "value"
+        },
+        {
+          "id": "col5",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型"
+      ],
+      "branch": "《絶対期間》 《指定の期間に一致しない》",
+      "skeleton": "《絶対期間》を選択 {col1}が[開始日]{val1}/{col2}と[終了日]{val2}/{col3}《指定の期間に一致しない》の場合、{val3}/{col4}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val4}/{col5}/《空白》に変換 [開始日/終了日を含めない]にチェックを入れる/入れない [期間指定にカラムを使用する]にチェックを入れる/入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        },
+        {
+          "id": "val4",
+          "kind": "value"
+        },
+        {
+          "id": "col5",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型"
+      ],
+      "branch": "《相対期間》 《指定の期間に一致する》",
+      "skeleton": "《相対期間》を選択 {col1}が[開始日]{num1}{choice1}{choice2}～[終了日]{num2}{choice3}{choice4}《指定の期間に一致する》の場合、{val1}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col3}/《空白》に変換 [開始日/終了日を含めない]にチェックを入れる/入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "num1",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "num2",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice4",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型"
+      ],
+      "branch": "《相対期間》 《指定の期間に一致しない》",
+      "skeleton": "《相対期間》を選択 {col1}が[開始日]{num1}{choice1}{choice2}～[終了日]{num2}{choice3}{choice4}《指定の期間に一致しない》の場合、{val1}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col3}/《空白》に変換 [開始日/終了日を含めない]にチェックを入れる/入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "num1",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "num2",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice4",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日時型"
+      ],
+      "branch": "《絶対期間》 《指定の期間に一致する》",
+      "skeleton": "《絶対期間》を選択 {col1}が[開始日]{val1}/{col2}と[終了日]{val2}/{col3}《指定の期間に一致する》の場合、{val3}/{col4}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val4}/{col5}/《空白》に変換 [開始日時/終了日時を含めない]にチェックを入れる/入れない [期間指定にカラムを使用する]にチェックを入れる/入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        },
+        {
+          "id": "val4",
+          "kind": "value"
+        },
+        {
+          "id": "col5",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日時型"
+      ],
+      "branch": "《絶対期間》 《指定の期間に一致しない》",
+      "skeleton": "《絶対期間》を選択 {col1}が[開始日]{val1}/{col2}と[終了日]{val2}/{col3}《指定の期間に一致しない》の場合、{val3}/{col4}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val4}/{col5}/《空白》に変換 [開始日時/終了日時を含めない]にチェックを入れる/入れない [期間指定にカラムを使用する]にチェックを入れる/入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        },
+        {
+          "id": "val4",
+          "kind": "value"
+        },
+        {
+          "id": "col5",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日時型"
+      ],
+      "branch": "《相対期間》 《指定の期間に一致する》",
+      "skeleton": "《相対期間》を選択 {col1}が[開始日]{num1}{choice1}{choice2}～[終了日]{num2}{choice3}{choice4}《指定の期間に一致する》の場合、{val1}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col3}/《空白》に変換 [開始日時/終了日時を含めない]にチェックを入れる/入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "num1",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "num2",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice4",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日時型"
+      ],
+      "branch": "《相対期間》 《指定の期間に一致しない》",
+      "skeleton": "《相対期間》を選択 {col1}が[開始日]{num1}{choice1}{choice2}～[終了日]{num2}{choice3}{choice4}《指定の期間に一致しない》の場合、{val1}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col3}/《空白》に変換 [開始日時/終了日時を含めない]にチェックを入れる/入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "num1",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "num2",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice4",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "真偽値型"
+      ],
+      "branch": "《true》",
+      "skeleton": "{col1}が《true》の場合、{val1}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "真偽値型"
+      ],
+      "branch": "《false》",
+      "skeleton": "{col1}が《false》の場合、{val1}/{col2}/《空白》に変換 いずれの条件分岐にも該当しない場合、{val2}/{col3}/《空白》に変換",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    }
+  ],
+  "追加": [
+    {
+      "data_types": [],
+      "branch": "《テキスト型/整数型/小数型》",
+      "skeleton": "{col1}の{choice1}を選択 {choice2}の{val1}を追加",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "左に追加",
+            "右に追加"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "テキスト型",
+            "整数型",
+            "小数型"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "《日付型/日付型》 [加工処理実行日のカラムを追加する]にチェックを入れない",
+      "skeleton": "{col1}の{choice1}を選択 {choice2}の{val1}を追加 [加工処理実行日のカラムを追加する]にチェックを入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "左に追加",
+            "右に追加"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "日付型",
+            "日時型"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "《日付型/日付型》 [加工処理実行日のカラムを追加する]にチェックを入れる",
+      "skeleton": "{col1}の{choice1}を選択 {choice2}を選択し、[加工処理実行日のカラムを追加する]にチェックを入れる",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "左に追加",
+            "右に追加"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "日付型",
+            "日時型"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "《真偽値型》",
+      "skeleton": "{col1}の{choice1}を選択 《真偽値型》の{choice2}を追加",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "左に追加",
+            "右に追加"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "True",
+            "False"
+          ]
+        }
+      ]
+    }
+  ],
+  "複製": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{col1}を複製",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        }
+      ]
+    }
+  ],
+  "削除": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{col1}を削除",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        }
+      ]
+    }
+  ],
+  "ランキング": [
+    {
+      "data_types": [],
+      "branch": "列を選択して順位付け",
+      "skeleton": "{col1}を{choice1}に{choice2}で順位付けする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "大きい順",
+            "小さい順"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "同率あり(順位飛ばしあり)",
+            "同率あり(順位飛ばしなし)",
+            "同率なし"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "グループ内で順位付け （各1カラムずつ選択する場合）",
+      "skeleton": "{col1}をグループ化する単位として、{col2}を{choice1}に{choice2}で順位付けする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "大きい順",
+            "小さい順"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "同率あり(順位飛ばしあり)",
+            "同率あり(順位飛ばしなし)",
+            "同率なし"
+          ]
+        }
+      ]
+    }
+  ],
+  "集約": [
+    {
+      "data_types": [],
+      "branch": "集約のまとめる単位",
+      "skeleton": "集約のキーとなるカラム",
+      "slots": []
+    },
+    {
+      "data_types": [
+        "テキスト型",
+        "真偽値型"
+      ],
+      "branch": "《カウント/ユニークカウント》",
+      "skeleton": "{col1}を集約のキーとして、{col2}を{choice1}で集約",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "カウント",
+            "ユニークカウント"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《合計/平均/最大/最小/カウント/ユニークカウント》",
+      "skeleton": "{col1}を集約のキーとして、{col2}を{choice1}で集約",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "合計",
+            "平均",
+            "最大",
+            "最小",
+            "カウント",
+            "ユニークカウント"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型",
+        "日時型"
+      ],
+      "branch": "《最新/最古/カウント/ユニークカウント》",
+      "skeleton": "{col1}を集約のキーとして、{col2}を{choice1}で集約",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "最新",
+            "最古",
+            "カウント",
+            "ユニークカウント"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "《行結合》",
+      "skeleton": "{col1}を集約のキーとして、{col2}を《行結合》で集約 {col3}の{choice1} 区切り文字は{choice2}で設定",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "昇順",
+            "降順"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            ",(カンマ)",
+            "(スペース)",
+            "(スラッシュ)",
+            "-(ハイフン)",
+            "_(アンダーバー)",
+            "なし"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "《行結合》 [区切り文字を自由入力する]にチェックを入れる",
+      "skeleton": "{col1}を集約のキーとして、{col2}を《行結合》で集約 {col3}の{choice1} 区切り文字は[区切り文字を自由入力する]にチェックを入れ{val1}で設定",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "昇順",
+            "降順"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "置換": [
+    {
+      "data_types": [],
+      "branch": "《次の値/正規表現》",
+      "skeleton": "{col1}の{choice1}{val1}を{val2}に置換 {choice2}にて保存 クレンジングタスクの保存名を{val3}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "次の値",
+            "正規表現"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "《空白/NULL》",
+      "skeleton": "{col1}の{choice1}を{val1}に置換 {choice2}にて保存 クレンジングタスクの保存名を{val2}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "空白",
+            "NULL"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "型変換": [
+    {
+      "data_types": [],
+      "branch": "《テキスト型》",
+      "skeleton": "{col1}を《テキスト型》に変換 {choice1}にて保存 クレンジングタスクの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "エラーの処理は《クレンジングを中止する/Nullに変換する》",
+      "skeleton": "{col1}を{choice1}に変換 型変換エラーの処理は、{choice2}を選択 {choice3}にて保存 クレンジングタスクの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "整数型",
+            "小数型",
+            "日付型",
+            "日時型",
+            "真偽値型"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "クレンジングを中止する",
+            "Nullに変換する"
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "エラーの処理は《指定した値に変換する》",
+      "skeleton": "{col1}を{choice1}に変換 型変換エラーの処理は、《指定した値に変換する》を選択し、値は{val1}にする {choice2}にて保存 クレンジングタスクの保存名を{val2}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "整数型",
+            "小数型",
+            "日付型",
+            "日時型",
+            "真偽値型"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "抽出": [
+    {
+      "data_types": [],
+      "branch": "《先頭/末尾》 《テキスト型》",
+      "skeleton": "{col1}の{choice1}から{val1}文字目までを《テキスト型》で抽出 {choice2}にて保存 クレンジングタスクの保存名を{val2}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "先頭",
+            "末尾"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "《先頭/末尾》 エラーの処理は《Nullに変換する/クレンジングを中止する》",
+      "skeleton": "{col1}の{choice1}から{val1}文字目までを{choice2}で抽出 型変換エラーの処理は、{choice3}を選択 {choice4}にて保存 クレンジングタスクの保存名を{val2}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "先頭",
+            "末尾"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "整数型",
+            "小数型",
+            "日付型",
+            "日時型",
+            "真偽値型"
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "Nullに変換する",
+            "クレンジングを中止する"
+          ]
+        },
+        {
+          "id": "choice4",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "《先頭/末尾》 エラーの処理は《指定した値に変換する》",
+      "skeleton": "{col1}の{choice1}から{val1}文字目までを{choice2}で抽出 型変換エラーの処理は、《指定した値に変換する》を選択し、値は{val2}にする {choice3}にて保存 クレンジングタスクの保存名を{val3}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "先頭",
+            "末尾"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "整数型",
+            "小数型",
+            "日付型",
+            "日時型",
+            "真偽値型"
+          ]
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "《中間》 《テキスト型》",
+      "skeleton": "{col1}の《中間》の{val1}文字目〜{val2}文字目を《テキスト型》で抽出 {choice1}にて保存 クレンジングタスクの保存名を{val3}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "《中間》 エラーの処理は《Nullに変換する/クレンジングを中止する》",
+      "skeleton": "{col1}の《中間》の{val1}文字目〜{val2}文字目を{choice1}で抽出 型変換エラーの処理は、{choice2}を選択 {choice3}にて保存 クレンジングタスクの保存名を{val3}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "整数型",
+            "小数型",
+            "日付型",
+            "日時型",
+            "真偽値型"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "Nullに変換する",
+            "クレンジングを中止する"
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "《中間》 エラーの処理は《指定した値に変換する》",
+      "skeleton": "{col1}の《中間》の{val1}文字目〜{val2}文字目を{choice1}で抽出 型変換エラーの処理は、《指定した値に変換する》を選択し、値は{val3} {choice2}にて保存 クレンジングタスクの保存名を{val4}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "整数型",
+            "小数型",
+            "日付型",
+            "日時型",
+            "真偽値型"
+          ]
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val4",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "除外": [
+    {
+      "data_types": [],
+      "branch": "テキスト指定",
+      "skeleton": "{col1}の{choice1}{val1}を除外 {choice2}にて保存 クレンジングタスクの保存名を{val2}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "全ての",
+            "右から",
+            "左から"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "文字数指定",
+      "skeleton": "{col1}の{choice1}{val1}文字を除外 {choice2}にて保存 クレンジングタスクの保存名を{val2}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "右から",
+            "左から"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "書式変換": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{col1}を{choice1}に変換 {choice2}にて保存 クレンジングタスクの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "半角",
+            "全角"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "オプション(歯車アイコン)を押下する",
+      "skeleton": "{col1}を選択、[オプション(歯車アイコン)]を押下し、{choice1}に変換 {choice2}にて保存 クレンジングタスクの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "半角英小文字",
+            "半角英大文字",
+            "全角英小文字",
+            "全角英大文字",
+            "半角数字",
+            "全角数字",
+            "半角カタカナ",
+            "全角カタカナ",
+            "全角ひらがな",
+            "半角記号",
+            "全角記号",
+            "半角スペース",
+            "全角スペース"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "0埋め": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{col1}を0埋めして{num1}桁にする {choice1}にて保存 クレンジングタスクの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "num1",
+          "kind": "number",
+          "range": [
+            1,
+            50
+          ]
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "絞り込み": [
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次を含む/次を含まない/次で始まる/次で終わる/次に完全一致/次に完全一致しない》",
+      "skeleton": "{col1}が{val1}{choice1}に絞り込む",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "次を含む",
+            "次を含まない",
+            "次で始まる",
+            "次で終わる",
+            "次に完全一致",
+            "次に完全一致しない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《次を含む(カンマ区切りで複数指定)/次を含まない(カンマ区切りで複数指定)/次に完全一致(カンマ区切りで複数指定)/次に完全一致しない(カンマ区切りで複数指定)》",
+      "skeleton": "{col1}が{val1}{choice1}に絞り込む",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "次を含む(カンマ区切りで複数指定)",
+            "次を含まない(カンマ区切りで複数指定)",
+            "次に完全一致(カンマ区切りで複数指定)",
+            "次に完全一致しない(カンマ区切りで複数指定)"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": "《空文字/空文字ではない》",
+      "skeleton": "{col1}が{choice1}に絞り込む",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "空文字",
+            "空文字ではない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "真偽値型"
+      ],
+      "branch": null,
+      "skeleton": "{col1}が{choice1}に絞り込む",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "true",
+            "false",
+            "NULL",
+            "NULLではない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次より大きい/以上/次より小さい/以下/次と等しい/次と等しくない》",
+      "skeleton": "{col1}が{val1}{choice1}に絞り込む",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "次より大きい",
+            "以上",
+            "次より小さい",
+            "以下",
+            "次と等しい",
+            "次と等しくない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型",
+        "日付型",
+        "日時型"
+      ],
+      "branch": "《NULL/NULLではない》",
+      "skeleton": "{col1}が{choice1}に絞り込む",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "NULL",
+            "NULLではない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《次の値の間/次の値の間にない》",
+      "skeleton": "{col1}が{val1}～{val2}{choice1}に絞り込む",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "次の値の間",
+            "次の値の間にない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型"
+      ],
+      "branch": "《絶対期間》 《次より前の日付/次より後の日付/次の日付》",
+      "skeleton": "《絶対期間》を選択 {col1}が{val1}{choice1}に絞り込む",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "次より前の日付",
+            "次より後の日付",
+            "次の日付"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型"
+      ],
+      "branch": "《絶対期間》 《次の期間にある/次の期間にない》",
+      "skeleton": "《絶対期間》を選択 {col1}が[開始日]{val1}と[終了日]{val2}{choice1}に絞り込む [開始日/終了日を含めない]にチェックを入れる/入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "次の期間にある",
+            "次の期間にない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型"
+      ],
+      "branch": "《相対期間》 《次より前の日付/次より後の日付/次の日付》",
+      "skeleton": "《相対期間》を選択 {col1}が{num1}{choice1}{choice2}{choice3}に絞り込む",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "num1",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "次より前の日付",
+            "次より後の日付",
+            "次の日付"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型"
+      ],
+      "branch": "《相対期間》 《次の期間にある/次の期間にない》",
+      "skeleton": "《相対期間》を選択 {col1}が[開始日]{num1}{choice1}{choice2}と[終了日]{num2}{choice3}{choice4}{choice5}に絞り込む [開始日/終了日を含めない]にチェックを入れる/入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "num1",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "num2",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice4",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "choice5",
+          "kind": "choice",
+          "options": [
+            "次の期間にある",
+            "次の期間にない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日時型"
+      ],
+      "branch": "《絶対期間》 《次より前の日時/次より後の日時/次の日時》",
+      "skeleton": "《絶対期間》を選択 {col1}が{val1}{choice1}に絞り込む",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "次より前の日時",
+            "次より後の日時",
+            "次の日時"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日時型"
+      ],
+      "branch": "《絶対期間》 《次の期間にある/次の期間にない》",
+      "skeleton": "《絶対期間》を選択 {col1}が[開始日]{val1}と[終了日]{val2}{choice1}に絞り込む [開始日時/終了日時を含めない]にチェックを入れる/入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "次の期間にある",
+            "次の期間にない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日時型"
+      ],
+      "branch": "《相対期間》 《次より前の日時/次より後の日時/次の日時》",
+      "skeleton": "《相対期間》を選択 {col1}が{num1}{choice1}{choice2}{choice3}に絞り込む",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "num1",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "次より前の日時",
+            "次より後の日時",
+            "次の日時"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日時型"
+      ],
+      "branch": "《相対期間》 《次の期間にある/次の期間にない》",
+      "skeleton": "《相対期間》を選択 {col1}が[開始日]{num1}{choice1}{choice2}と[終了日]{num2}{choice3}{choice4}{choice5}に絞り込む [開始日時/終了日時を含めない]にチェックを入れる/入れない",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "num1",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "num2",
+          "kind": "number",
+          "range": [
+            0,
+            999
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "年",
+            "月",
+            "日"
+          ]
+        },
+        {
+          "id": "choice4",
+          "kind": "choice",
+          "options": [
+            "前",
+            "後"
+          ]
+        },
+        {
+          "id": "choice5",
+          "kind": "choice",
+          "options": [
+            "次の期間にある",
+            "次の期間にない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "OR条件",
+      "skeleton": "※1つめの絞り込み条件を記載する OR ※2つめの絞り込み条件を記載する",
+      "slots": []
+    },
+    {
+      "data_types": [],
+      "branch": "AND条件",
+      "skeleton": "※1つめの絞り込み条件を記載する AND ※2つめの絞り込み条件を記載する",
+      "slots": []
+    }
+  ],
+  "名寄せ": [
+    {
+      "data_types": [
+        "テキスト型",
+        "真偽値"
+      ],
+      "branch": "《50音順/逆50音順》",
+      "skeleton": "{col1}を名寄せするキーとして、{col2}を{choice1}で名寄せする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "50音順",
+            "逆50音順"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "テキスト型",
+        "真偽値"
+      ],
+      "branch": "《指定の値と一致する》",
+      "skeleton": "{col1}を名寄せするキーとして、{col2}を《指定の値と一致する》{val1}を優先として名寄せする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《最も大きい値/最も小さい値》",
+      "skeleton": "{col1}を名寄せするキーとして、{col2}を{choice1}に名寄せする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "最も大きい値",
+            "最も小さい値"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型"
+      ],
+      "branch": "《指定の値と一致する》",
+      "skeleton": "{col1}を名寄せするキーとして、{col2}を《指定の値と一致する》{val1}を優先として名寄せする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型"
+      ],
+      "branch": "《最も新しい日付/最も古い日付》",
+      "skeleton": "{col1}を名寄せするキーとして、{col2}を{choice1}に名寄せする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "最も新しい日付",
+            "最も古い日付"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型"
+      ],
+      "branch": "《指定の日付と一致する》",
+      "skeleton": "{col1}を名寄せするキーとして、{col2}を《指定の日付と一致する》{val1}を優先として名寄せする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日時型"
+      ],
+      "branch": "《最も新しい日時/最も古い日時》",
+      "skeleton": "{col1}を名寄せするキーとして、{col2}を{choice1}に名寄せする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "最も新しい日時",
+            "最も古い日時"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日時型"
+      ],
+      "branch": "《指定の日付と一致する》",
+      "skeleton": "{col1}を名寄せするキーとして、{col2}を《指定の日付と一致する》{val1}を優先として名寄せする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "参照": [
+    {
+      "data_types": [],
+      "branch": "《最初の値/最後の値/前の行の値/後ろの行の値》",
+      "skeleton": "{choice1}を選択し、[適用]を押下する {col1}でグループ化、{col2}の{choice2}でソートを行い {col3}を参照する 空文字/Nullの値を{choice3}を選択し[適用]を押下する クレンジングタスクの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "最初の値",
+            "最後の値",
+            "前の行の値",
+            "後ろの行の値"
+          ]
+        },
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "昇順",
+            "降順"
+          ]
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "無視する",
+            "無視しない"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "《特定の順番の値》",
+      "skeleton": "《特定の順番の値》を選択し、[適用]を押下する {col1}でグループ化、{col2}の{choice1}でソートを行い {col3}の上から{val1}番目の値を参照する [空文字/Nullの値を無視する]にチェックを入れる/入れない クレンジングタスクの保存名を{val2}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "昇順",
+            "降順"
+          ]
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "整数型",
+        "小数型 (《累計の値》に設定するカラム)"
+      ],
+      "branch": "《累計の値》",
+      "skeleton": "《累計の値》を選択し、[適用]を押下する {col1}でグループ化、{col2}の{choice1}でソートを行い {col3}の累計の値を参照する クレンジングタスクの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "昇順",
+            "降順"
+          ]
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "並び替え": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "並び替えたいカラムを以下の並び順にドラッグ&ドロップし[適用]をクリックする 並び順：{col1}{col2}{col3}{col4}{col5}{col6}{col7}",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        },
+        {
+          "id": "col5",
+          "kind": "column"
+        },
+        {
+          "id": "col6",
+          "kind": "column"
+        },
+        {
+          "id": "col7",
+          "kind": "column"
+        }
+      ]
+    }
+  ],
+  "テンプレート 『3つ以上のカラムやテキストを連結した値を追加』": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{col1}{col2}{col3}を選択する ※選択したカラム全てを記載する [適用]を押下する クレンジングタスクの保存名を{val1}にする 表示方法{choice1}を選択",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "残す",
+            "残さない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": "[テキスト挿入]",
+      "skeleton": "{col1}{col2}{col3}を選択する ※選択したカラム全てを記載する [テキスト挿入]を押下し、カラムの文頭/カラムとカラムの間/カラムの文末に{val1}を挿入し、[適用]を押下する クレンジングタスクの保存名を{val2}にする 表示方法{choice1}を選択",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "残す",
+            "残さない"
+          ]
+        }
+      ]
+    }
+  ],
+  "テンプレート 『「生年月日」から「当月誕生日フラグ」を追加』": [
+    {
+      "data_types": [
+        "日付型 (《生年月日》に設定するカラム)"
+      ],
+      "branch": null,
+      "skeleton": "{col1}を選択し、[適用]を押下する {choice1}にて保存 クレンジングタスクの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "テンプレート 『「生年月日」から「年代」を算出』": [
+    {
+      "data_types": [
+        "日付型 (《生年月日》に設定するカラム)"
+      ],
+      "branch": null,
+      "skeleton": "{col1}を選択し、[適用]を押下する [刻み値]を{choice1}に設定する [最大値]を{val1}歳以上の場合、{val2}に変換 [最小値]を{val3}歳以下の場合、{val4}に変換 [カラムに値がない場合]、{val5}に変換し、[適用]を押下する {choice2}にて保存 クレンジングタスクの保存名を{val6}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "10歳刻み(10代,20代)",
+            "5歳刻み(10代前半,10代後半)"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "val3",
+          "kind": "value"
+        },
+        {
+          "id": "val4",
+          "kind": "value"
+        },
+        {
+          "id": "val5",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val6",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "テンプレート 『「生年月日」から「年齢」を算出』": [
+    {
+      "data_types": [
+        "日付型 (《生年月日》に設定するカラム)"
+      ],
+      "branch": null,
+      "skeleton": "{col1}を選択し、[適用]を押下する {choice1}にて保存 クレンジングタスクの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "テンプレート 『値が入っているかどうかを判定する真偽値型の「値ありフラグ」を追加 』": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{col1}を選択し、[適用]を押下する {choice1}にて保存 クレンジングタスクの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "テンプレート 『顧客ごとに「累計購入回数」や「累計購入金額」などを算出』": [
+    {
+      "data_types": [
+        "テキスト型 (《顧客ID》に設定するカラム) テキスト型 (《受注ID》に設定するカラム) 整数型 (《受注金額》に設定するカラム) 日付型",
+        "日時型 (《受注日》に設定するカラム)"
+      ],
+      "branch": null,
+      "skeleton": "[顧客IDに該当するカラム]に{col1}を選択し、[適用]を押下する [受注IDに該当するカラム]に{col2}を選択し、[適用]を押下する [受注金額に該当するカラム]に{col3}を選択し、[適用]を押下する [受注日に該当するカラム]に{col4}を選択し、[適用]を押下する",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    }
+  ],
+  "テンプレート 『「ページ閲覧時間」を算出』": [
+    {
+      "data_types": [
+        "テキスト型 (《セッションID》に設定するカラム) テキスト型 (《PV",
+        "Click》に設定するカラム) 日時型 (《閲覧日時》に設定するカラム)"
+      ],
+      "branch": null,
+      "skeleton": "[セッションIDに該当するカラム]に{col1}を選択し、[適用]を押下する [PV/Clickに該当するカラム]に{col2}を選択し、[適用]を押下する [閲覧日時に該当するカラム]に{col3}を選択し、[適用]を押下する",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    }
+  ],
+  "テンプレート 『過去の購入商品をカンマ区切りでまとめたカラムを算出』": [
+    {
+      "data_types": [
+        "テキスト型 (《顧客ID》に設定するカラム) 日付型",
+        "日時型 (《受注日または受注日時》に設定するカラム) テキスト型 (《商品ID",
+        "商品名》に設定するカラム)"
+      ],
+      "branch": null,
+      "skeleton": "[顧客IDに該当するカラム]に{col1}を選択し、[適用]を押下する [受注日または受注日時に該当するカラム]に{col2}を選択し、[適用]を押下する [商品ID/商品名に該当するカラム]に{col3}を選択し、[適用]を押下する",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        }
+      ]
+    }
+  ],
+  "テンプレート 『連番(昇順)を追加』": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{col1}を選択し、[適用]を押下する {choice1}にて保存 クレンジングタスクの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "テンプレート 『顧客ごとに縦持ちのデータを横に並べて変換』": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{col1}を集約のキーとして選択し、[適用]を押下する [横並びにしたいカラム]に{col2}、{col3}、{col4}の順で選択し、[適用]を押下する [並び順カラム]に{col5}{choice1}を選択し、[適用]を押下する ※[並び順カラム]を設定した数繰り返す [横並びにしたいカラムの数]を、カラムの並び順で設定した順番をもとに、上位{num1}位まで横に並べるとし、[適用]を押下する",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        },
+        {
+          "id": "col5",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "昇順",
+            "降順"
+          ]
+        },
+        {
+          "id": "num1",
+          "kind": "number",
+          "range": [
+            1,
+            5
+          ]
+        }
+      ]
+    }
+  ],
+  "テンプレート 『顧客ごとに横持ちのデータを縦に並べて変換』": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "[縦持ちにしたいカラム]に{col1}、{col2}を選択し、[適用]を押下する [縦持ちにしたいカラム以外に残したいカラム]に{col3}、{col4}を選択し、[適用]を押下する",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        }
+      ]
+    }
+  ],
+  "テンプレート 『「都道府県」を「地域」に変換』": [
+    {
+      "data_types": [
+        "テキスト型"
+      ],
+      "branch": null,
+      "skeleton": "[都道府県に該当するカラム]に{col1}を選択し、[適用]を押下する {choice1}にて保存 クレンジングタスクの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "上書き保存",
+            "名前を付けて保存"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "横統合": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{file1}と{file2}を{col1}と{col2}を統合キーとして、{choice1} 残すカラムは、 {file3}：{col3}、{col4} {file4}：{col5} データファイルの保存名を{val1}にする レコードが重複した際の処理方法は {choice2}を選択し、[適用]を押下する 統合データの更新設定は{choice3}を選択し、[適用]を押下する",
+      "slots": [
+        {
+          "id": "file1",
+          "kind": "file"
+        },
+        {
+          "id": "file2",
+          "kind": "file"
+        },
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "全てのデータを統合する",
+            "共通のデータのみ統合する",
+            "先に選択したデータに対して統合する",
+            "後に選択したデータに対して統合する"
+          ]
+        },
+        {
+          "id": "file3",
+          "kind": "file"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        },
+        {
+          "id": "file4",
+          "kind": "file"
+        },
+        {
+          "id": "col5",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "統合処理をエラーにする",
+            "統合処理をエラーにせず実行する"
+          ]
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "更新する",
+            "更新しない"
+          ]
+        }
+      ]
+    }
+  ],
+  "縦統合": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{file1}と{file2}を縦統合 重複データの設定は [重複データを除外する/重複データを除外しない]を選択し、[適用]を押下する データファイルの保存名を{val1}にする 統合データの更新設定は{choice1}を選択し、[適用]を押下する",
+      "slots": [
+        {
+          "id": "file1",
+          "kind": "file"
+        },
+        {
+          "id": "file2",
+          "kind": "file"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "更新する",
+            "更新しない"
+          ]
+        }
+      ]
+    }
+  ],
+  "カラム名の変更": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{col1}を{val1}に変更する",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "不要カラムの削除の 必要がない場合": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "[削除しない]",
+      "slots": []
+    }
+  ],
+  "加工不要": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "加工せずにそのまま残す",
+      "slots": []
+    }
+  ],
+  "加工テンプレート": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "※加工テンプレート名をそのまま記載する ※加工テンプレートの選択とインプットカラムの選択のみの場合は、こちらを利用する",
+      "slots": []
+    }
+  ],
+  "統合テンプレート": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{val1}の{val2}に設定する",
+      "slots": [
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "ID紐づけ(web×biz)": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "【webアクセスログデータ】として{file1}を設定し、必須カラム「webアクセスログID」に{col1}、「ビジターID」に{col2}、「PV/Click日時」に{col3}、「ページURL（パラメータ付き）」に{col4}を選択し、任意のカラム「受注ID」に{col5}、「顧客ID」に{col6}を選択し、[適用]を押下する 任意のDF【受注データ】として{file2}を設定し、任意のカラム「受注ID」に{col7}、「顧客ID」に{col8}を選択し、[適用]を押下する（※受注データを使用する場合は必須） 任意のDF【メール行動ログデータ】として{file3}を設定し、任意のカラム「メール行動ログID」に「」、「顧客ID」に{col9}、「行動日時」に{col10}、「リンクURL」に{col11}を選択し、[適用]を押下する 任意のDF【SMS行動ログデータ】として{file4}を設定し、任意のカラム「SMS行動ID」に{col12}、「顧客ID」に{col13}、「行動日時」に{col14}、「リンクURL」に{col15}を選択し、[適用]を押下する 任意のDF【LINE行動ログデータ】として{file5}を設定し、任意のカラム「LINE行動ログID」に{col16}、「顧客ID」に{col17}、「行動日時」に{col18}、「リンクURL」に{col19}を選択し[適用]を押下する 個人情報カラムに{col20}を選択し、[適用]を押下する 統合タイミングに《毎日,毎週,毎月》《時》《分》を指定し、[保存]を押下する データファイルの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "file1",
+          "kind": "file"
+        },
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "col2",
+          "kind": "column"
+        },
+        {
+          "id": "col3",
+          "kind": "column"
+        },
+        {
+          "id": "col4",
+          "kind": "column"
+        },
+        {
+          "id": "col5",
+          "kind": "column"
+        },
+        {
+          "id": "col6",
+          "kind": "column"
+        },
+        {
+          "id": "file2",
+          "kind": "file"
+        },
+        {
+          "id": "col7",
+          "kind": "column"
+        },
+        {
+          "id": "col8",
+          "kind": "column"
+        },
+        {
+          "id": "file3",
+          "kind": "file"
+        },
+        {
+          "id": "col9",
+          "kind": "column"
+        },
+        {
+          "id": "col10",
+          "kind": "column"
+        },
+        {
+          "id": "col11",
+          "kind": "column"
+        },
+        {
+          "id": "file4",
+          "kind": "file"
+        },
+        {
+          "id": "col12",
+          "kind": "column"
+        },
+        {
+          "id": "col13",
+          "kind": "column"
+        },
+        {
+          "id": "col14",
+          "kind": "column"
+        },
+        {
+          "id": "col15",
+          "kind": "column"
+        },
+        {
+          "id": "file5",
+          "kind": "file"
+        },
+        {
+          "id": "col16",
+          "kind": "column"
+        },
+        {
+          "id": "col17",
+          "kind": "column"
+        },
+        {
+          "id": "col18",
+          "kind": "column"
+        },
+        {
+          "id": "col19",
+          "kind": "column"
+        },
+        {
+          "id": "col20",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ],
+  "編集方法": [
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "{file1}を{choice1}を選択する",
+      "slots": [
+        {
+          "id": "file1",
+          "kind": "file"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "本加工データファイルを編集し上書き保存",
+            "本加工データファイルを編集し別データファイルとして保存",
+            "既存の加工データファイルをインプットとし新規加工データファイルとして保存"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [],
+      "branch": null,
+      "skeleton": "統合データの更新設定は{choice1}を選択し、[適用]を押下する データファイルの保存名を{val1}にする",
+      "slots": [
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "更新する",
+            "更新しない"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        }
+      ]
+    }
+  ]
+}
