@@ -437,12 +437,15 @@ _cleanup_thread = threading.Thread(target=_cleanup_old_files, daemon=True)
 _cleanup_thread.start()
 
 # --- Claude APIクライアント ---
+# 全リクエストハンドラは async。ブロッキングする同期クライアント(client.messages.create)を
+# 使うと uvicorn の単一イベントループが止まり、誰か 1 人の生成中は他ユーザーの要求も待たされる。
+# そのため await 可能な AsyncAnthropic に一本化し、生成を真に同時実行できるようにする。
+#
 # timeout はリクエスト全体(Step1+Step2)が ALB の idle_timeout(本番=300s, 2026-06-04 に
 # 120s→300s へ引き上げ)を超えると 504 になるため、その壁の手前に収める。max_retries=0 が重要:
-# 生成途中の遅い呼び出しを timeout で打ち切って再試行すると合計時間が 2 倍になり、
-# 単発なら間に合う生成まで ALB の壁を越えて 504 を誘発するため再試行しない。
-client = anthropic.Anthropic(max_retries=0, timeout=280.0)
-async_client = anthropic.AsyncAnthropic(max_retries=1, timeout=180.0)
+# 遅い単発生成を timeout で打ち切って再試行すると合計時間が 2 倍になり、ALB の壁を越えて
+# 504 を誘発するため再試行しない。
+async_client = anthropic.AsyncAnthropic(max_retries=0, timeout=280.0)
 
 # --- データモデル ---
 class GenerateRequest(BaseModel):
@@ -1817,7 +1820,7 @@ async def regenerate(request: Request, req: RegenerateRequest):
         # 修正指示をsystemプロンプトに追記することでStep2の元制約より優先させる
         step2_prompt = get_system_prompt_step2(input_tables, output_mapping, plan)
         step2_prompt += SYSTEM_PROMPT_REGEN_SUFFIX.format(correction=req.correction)
-        response2 = client.messages.create(
+        response2 = await async_client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=16000,
             system=step2_prompt,
@@ -1923,7 +1926,7 @@ async def _generate_impl_body(req: GenerateRequest, session_id: str, session: di
     session["messages"].append({"role": "user", "content": user_message})
 
     try:
-        response = client.messages.create(
+        response = await async_client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=4000,
             system=get_system_prompt_step1(req.input_tables, req.output_mapping),
@@ -1955,7 +1958,7 @@ async def _generate_impl_body(req: GenerateRequest, session_id: str, session: di
                     {"role": "user", "content": "処理方針に基づいて設計書JSONを出力してください。"}
                 ]
                 try:
-                    response2 = client.messages.create(
+                    response2 = await async_client.messages.create(
                         model="claude-sonnet-4-6",
                         max_tokens=16000,
                         system=step2_prompt,
@@ -2045,7 +2048,7 @@ async def _chat_body(req: ChatRequest, session: dict):
         base_prompt += f"\n\n## これまでの技術確認の回答\n{qa_summary}\n\n上記で回答済みの質問は絶対に繰り返さないこと。未確認の項目があれば次の質問をする。全て確認済みならplan JSONを出力する。"
 
     try:
-        response = client.messages.create(
+        response = await async_client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=2000,
             system=base_prompt,
@@ -2073,7 +2076,7 @@ async def _chat_body(req: ChatRequest, session: dict):
                 step2_user_msg = f"技術確認完了。回答内容:\n{qa_summary}\n\n設計書JSONを出力してください。"
                 session["messages_step2"] = [{"role": "user", "content": step2_user_msg}]
                 try:
-                    response2 = client.messages.create(
+                    response2 = await async_client.messages.create(
                         model="claude-sonnet-4-6",
                         max_tokens=16000,
                         system=step2_prompt,
@@ -2103,7 +2106,7 @@ async def _chat_body(req: ChatRequest, session: dict):
                     {"role": "user", "content": "処理方針に基づいて設計書JSONを出力してください。"}
                 ]
                 try:
-                    response2 = client.messages.create(
+                    response2 = await async_client.messages.create(
                         model="claude-sonnet-4-6",
                         max_tokens=16000,
                         system=step2_prompt,
@@ -2591,7 +2594,7 @@ async def _consultation_start_body(req: ConsultationStartRequest, session_id: st
     session["messages"].append({"role": "user", "content": user_message})
 
     try:
-        response = client.messages.create(
+        response = await async_client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=16000,
             system=system_prompt,
@@ -2941,7 +2944,7 @@ async def _handle_consultation_chat(req: ChatRequest, session: dict) -> ChatResp
     system_prompt = get_consultation_system_prompt(industry)
 
     try:
-        response = client.messages.create(
+        response = await async_client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=16000,
             system=system_prompt,
