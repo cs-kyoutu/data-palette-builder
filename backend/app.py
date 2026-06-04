@@ -437,7 +437,11 @@ _cleanup_thread = threading.Thread(target=_cleanup_old_files, daemon=True)
 _cleanup_thread.start()
 
 # --- Claude APIクライアント ---
-client = anthropic.Anthropic(max_retries=1, timeout=60.0)
+# timeout はリクエスト全体(Step1+Step2)が ALB の idle_timeout(本番=300s, 2026-06-04 に
+# 120s→300s へ引き上げ)を超えると 504 になるため、その壁の手前に収める。max_retries=0 が重要:
+# 生成途中の遅い呼び出しを timeout で打ち切って再試行すると合計時間が 2 倍になり、
+# 単発なら間に合う生成まで ALB の壁を越えて 504 を誘発するため再試行しない。
+client = anthropic.Anthropic(max_retries=0, timeout=280.0)
 async_client = anthropic.AsyncAnthropic(max_retries=1, timeout=180.0)
 
 # --- データモデル ---
