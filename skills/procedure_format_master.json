@@ -458,6 +458,56 @@
           ]
         }
       ]
+    },
+    {
+      "data_types": [
+        "日付型",
+        "日時型"
+      ],
+      "branch": "カスタム加減算",
+      "skeleton": "{col1}{choice1}《カスタム》{val1}{choice2}、[計算結果]を算出 クレンジングタスクの保存名を{val2}にする 表示方法{choice3}を選択",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "+",
+            "-"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "年",
+            "ヶ月",
+            "日",
+            "時間",
+            "分",
+            "秒"
+          ]
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice3",
+          "kind": "choice",
+          "options": [
+            "残す",
+            "残さない"
+          ]
+        }
+      ]
     }
   ],
   "IF文": [

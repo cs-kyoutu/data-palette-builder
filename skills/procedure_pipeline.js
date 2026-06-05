@@ -45,7 +45,12 @@ const firstColOf = s => s.対象カラム || s.絞込み項目 || s.抽出対象
 const EXTRACTORS = {
   連結(s) {
     const cols = asList(s.連結対象).length ? asList(s.連結対象) : [s.連結対象1, s.連結対象2, s.連結対象3].filter(Boolean);
-    return { hints: [], columns: cols, values: [s.保存名 || s.new_column || ''].filter(Boolean),
+    const save = s.保存名 || s.new_column || '';
+    if (s.区切り文字) {
+      return { hints: ['[テキスト挿入]'], columns: cols, values: [s.区切り文字, save],
+               choices: [s.表示方法 || '残さない'] };
+    }
+    return { hints: [], columns: cols, values: [save].filter(Boolean),
              choices: [s.表示方法 || '残さない'] };
   },
   削除: s => ({ hints: [], columns: asList(s.columns).length ? asList(s.columns) : [s.削除対象項目] }),
@@ -114,7 +119,13 @@ const EXTRACTORS = {
   置換: s => ({ hints: [s.検索種別 || '次の値'], columns: [s.置換対象項目], values: [s.置換前, s.置換後, s.保存名 || ''], choices: [s.検索種別 || '次の値', '上書き保存'] }),
   時刻演算(s) {
     const u = s.算出単位 || s.unit || '日';
-    return { hints: ['2カラム'], columns: [s.引かれる値?.カラム名 || s.引かれる値, s.引く値?.カラム名 || s.引く値], choices: [u, '残さない'], values: [s.保存名 || ''] };
+    const col = x => (x && typeof x === 'object') ? x.カラム名 : x;
+    if (s.演算種別 === '加算' || s.演算種別 === '減算') {
+      const sign = s.演算種別 === '加算' ? '+' : '-';
+      return { hints: ['カスタム加減算'], columns: [col(s.基準日時)],
+               choices: [sign, u, '残さない'], values: [String(s.加減算量 || ''), s.保存名 || ''] };
+    }
+    return { hints: ['2カラム'], columns: [col(s.引かれる値), col(s.引く値)], choices: [u, '残さない'], values: [s.保存名 || ''] };
   },
   並び替え: s => ({ hints: [], columns: asList(s.並び順) }),
 

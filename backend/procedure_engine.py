@@ -188,8 +188,12 @@ def _generic_template(s, col_type=None, ctx=None):
 # ============ 操作別 抽出器 ============
 def _ex_renketsu(s, col_type=None, ctx=None):
     cols = as_list(s.get("連結対象")) or [c for c in [s.get("連結対象1"), s.get("連結対象2"), s.get("連結対象3")] if c]
-    vals = [v for v in [s.get("保存名") or s.get("new_column") or ""] if v]
-    return {"hints": [], "columns": cols, "values": vals, "choices": [s.get("表示方法") or "残さない"]}
+    save = s.get("保存名") or s.get("new_column") or ""
+    if s.get("区切り文字"):
+        return {"hints": ["[テキスト挿入]"], "columns": cols, "values": [s.get("区切り文字"), save],
+                "choices": [s.get("表示方法") or "残さない"]}
+    return {"hints": [], "columns": cols, "values": [v for v in [save] if v],
+            "choices": [s.get("表示方法") or "残さない"]}
 
 
 def _ex_filter(s, col_type=None, ctx=None):
@@ -282,6 +286,10 @@ def _ex_jikoku(s, col_type=None, ctx=None):
     u = s.get("算出単位") or s.get("unit") or "日"
     def col(x):
         return x.get("カラム名") if isinstance(x, dict) else x
+    if s.get("演算種別") in ("加算", "減算"):
+        sign = "+" if s.get("演算種別") == "加算" else "-"
+        return {"hints": ["カスタム加減算"], "columns": [col(s.get("基準日時"))],
+                "choices": [sign, u, "残さない"], "values": [str(s.get("加減算量") or ""), s.get("保存名") or ""]}
     return {"hints": ["2カラム"], "columns": [col(s.get("引かれる値")), col(s.get("引く値"))],
             "choices": [u, "残さない"], "values": [s.get("保存名") or ""]}
 
