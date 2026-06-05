@@ -508,6 +508,86 @@
           ]
         }
       ]
+    },
+    {
+      "data_types": [
+        "日付型",
+        "日時型"
+      ],
+      "branch": "本日との差分",
+      "skeleton": "{col1}《-》《本日の日付》、[計算結果]を{choice1}で算出 クレンジングタスクの保存名を{val1}にする 表示方法{choice2}を選択",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "年",
+            "ヶ月",
+            "日",
+            "時間",
+            "分",
+            "秒"
+          ]
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "残す",
+            "残さない"
+          ]
+        }
+      ]
+    },
+    {
+      "data_types": [
+        "日付型",
+        "日時型"
+      ],
+      "branch": "特定日付との差分",
+      "skeleton": "{col1}《-》《特定の日付》{val1}、[計算結果]を{choice1}で算出 クレンジングタスクの保存名を{val2}にする 表示方法{choice2}を選択",
+      "slots": [
+        {
+          "id": "col1",
+          "kind": "column"
+        },
+        {
+          "id": "val1",
+          "kind": "value"
+        },
+        {
+          "id": "choice1",
+          "kind": "choice",
+          "options": [
+            "年",
+            "ヶ月",
+            "日",
+            "時間",
+            "分",
+            "秒"
+          ]
+        },
+        {
+          "id": "val2",
+          "kind": "value"
+        },
+        {
+          "id": "choice2",
+          "kind": "choice",
+          "options": [
+            "残す",
+            "残さない"
+          ]
+        }
+      ]
     }
   ],
   "IF文": [

@@ -125,6 +125,14 @@ const EXTRACTORS = {
       return { hints: ['カスタム加減算'], columns: [col(s.基準日時)],
                choices: [sign, u, '残さない'], values: [String(s.加減算量 || ''), s.保存名 || ''] };
     }
+    const hiku = s.引く値;
+    const htype = (hiku && typeof hiku === 'object') ? hiku.種別 : null;
+    if (htype === '本日') {
+      return { hints: ['本日との差分'], columns: [col(s.引かれる値)], choices: [u, '残さない'], values: [s.保存名 || ''] };
+    }
+    if (htype === '固定値') {
+      return { hints: ['特定日付との差分'], columns: [col(s.引かれる値)], choices: [u, '残さない'], values: [String((hiku && hiku.値) || ''), s.保存名 || ''] };
+    }
     return { hints: ['2カラム'], columns: [col(s.引かれる値), col(s.引く値)], choices: [u, '残さない'], values: [s.保存名 || ''] };
   },
   並び替え: s => ({ hints: [], columns: asList(s.並び順) }),

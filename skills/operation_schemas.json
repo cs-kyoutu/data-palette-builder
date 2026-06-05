@@ -332,15 +332,15 @@
             },
             {
               "type": "object",
-              "required": ["種別", "値"],
+              "required": ["種別"],
               "additionalProperties": false,
               "properties": {
-                "種別": { "type": "string", "const": "固定値" },
-                "値":   { "type": "string", "description": "ISO 8601形式（YYYY-MM-DD または YYYY-MM-DDTHH:MM:SS）" }
+                "種別": { "type": "string", "enum": ["固定値", "本日"] },
+                "値":   { "type": "string", "description": "種別=固定値のときISO 8601形式（特定の日付）。種別=本日のとき省略（処理実行日=本日の日付を使用）" }
               }
             }
           ],
-          "description": "減数（開始日時）。カラム参照または固定日時値"
+          "description": "減数（開始日時=第2項）。カラム / 固定値(特定の日付) / 本日(本日の日付) のいずれか"
         },
         "基準日時": {
           "oneOf": [
@@ -601,6 +601,279 @@
         "昇順降順": "昇順",
         "出力カラム名": "初回購買金額"
       }
+    },
+
+    "四則演算": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "四則演算_settings",
+      "description": "2つのカラムまたは値で加減乗除し新規カラムを作成",
+      "type": "object",
+      "required": ["演算対象_左側", "演算対象_右側", "四則演算種別"],
+      "additionalProperties": false,
+      "properties": {
+        "演算対象_左側": { "type": "string", "description": "カラム名または固定数値" },
+        "演算対象_右側": { "type": "string", "description": "カラム名または固定数値" },
+        "四則演算種別": { "type": "string", "enum": ["+", "-", "×", "÷"], "description": "加算/減算/乗算/除算" },
+        "小数点": { "type": "string", "description": "端数処理する小数位（例: 1=小数第1位）" },
+        "端数処理": { "type": "string", "enum": ["四捨五入", "切り上げ", "切り捨て"] }
+      },
+      "x-sql": "col1 +/-/* col2。除算は CASE WHEN 分母=0 THEN NULL ELSE col1/col2 END（ゼロ除算は自動NULL保護、ソース確認済）。丸めは ROUND/CEIL/FLOOR(値, 小数位)。",
+      "x-constraints": [
+        "ゼロ除算は自動でNULLになるためIF文での事前処理は不要（ソース確認済）",
+        "文字列型カラムは事前に型変換（数値型）してから演算",
+        "NULLを含む演算結果はNULL"
+      ],
+      "x-example": { "演算対象_左側": "単価", "演算対象_右側": "数量", "四則演算種別": "×", "小数点": "0", "端数処理": "切り捨て" }
+    },
+
+    "型変換": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "型変換_settings",
+      "description": "カラムのデータ型を変換（TRY_CASTベース、失敗時挙動を選択可）",
+      "type": "object",
+      "required": ["変換対象項目", "変換後の型"],
+      "additionalProperties": false,
+      "properties": {
+        "変換対象項目": { "type": "string" },
+        "変換後の型": { "type": "string", "enum": ["テキスト型", "整数型", "小数型", "日付型", "日時型", "真偽値型"] },
+        "フォーマット": { "type": "string", "description": "日付/日時変換時の入力フォーマット（最大5個、例: YYYY/MM/DD, YYYYMMDD）" },
+        "変換失敗時": { "type": "string", "enum": ["NULL", "元の値", "指定値"], "description": "TRY_CAST失敗時の挙動" }
+      },
+      "x-sql": "TRY_CAST(col AS type) ベース。失敗時は CASE で NULL/元の値/指定値 を返す。日付/日時は社内UDF BD_TRY_TO_DATE/BD_TRY_TO_TIMESTAMP で多フォーマット認識。空文字は NULLIF(col,'') でNULL化（ソース確認済）。",
+      "x-constraints": [
+        "TRY_CASTのため変換不能値があってもハードエラーで停止しない（変換失敗時の挙動で制御）",
+        "変換は上書きのため元の値を残すには事前に複製"
+      ],
+      "x-example": { "変換対象項目": "購買金額", "変換後の型": "整数型" }
+    },
+
+    "置換": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "置換_settings",
+      "description": "カラム内の文字列または正規表現パターンを別の文字列に置換",
+      "type": "object",
+      "required": ["置換対象項目", "検索種別", "置換前", "置換後"],
+      "additionalProperties": false,
+      "properties": {
+        "置換対象項目": { "type": "string" },
+        "検索種別": { "type": "string", "enum": ["文字列", "正規表現"] },
+        "置換前": { "type": "string", "description": "置換前の文字列またはパターン" },
+        "置換後": { "type": "string", "description": "置換後の文字列（空文字で削除相当）" }
+      },
+      "x-sql": "文字列=REPLACE(col,'置換前','置換後') / 正規表現=REGEXP_REPLACE(col, pattern, repl)。空白・NULLの置換にも対応（ソース確認済）。",
+      "x-constraints": [
+        "置換後に空文字（削除）を指定するとUIが空欄を受け付けないことがある（その場合は型変換で代替）"
+      ],
+      "x-example": { "置換対象項目": "電話番号", "検索種別": "文字列", "置換前": "-", "置換後": "" }
+    },
+
+    "分割": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "分割_settings",
+      "description": "1カラムを区切り文字で複数カラムに分割",
+      "type": "object",
+      "required": ["分割対象項目", "分割条件", "何項目に分けるか"],
+      "additionalProperties": false,
+      "properties": {
+        "分割対象項目": { "type": "string" },
+        "分割条件": { "type": "string", "description": "区切り文字（例: \"-\", \"@\", スペース）" },
+        "何項目に分けるか": { "type": "integer", "minimum": 2, "maximum": 10 },
+        "開始位置": { "type": "string", "enum": ["左", "右"], "description": "どちらから数えて分割するか" }
+      },
+      "x-sql": "SPLIT_PART(col, delimiter, n)。複雑なケースは SUBSTR + REGEXP_INSTR の組合せ（ソース確認済）。",
+      "x-constraints": [
+        "小数型カラムを「.」で分割すると整数部と空文字に分かれることがある"
+      ],
+      "x-example": { "分割対象項目": "生年月日", "分割条件": "-", "何項目に分けるか": 3 }
+    },
+
+    "IF文": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "IF文_settings",
+      "description": "条件に応じて値を格納する新規カラムを作成（CASE WHEN）",
+      "type": "object",
+      "required": ["対象項目", "条件", "格納値", "その他の格納値"],
+      "additionalProperties": false,
+      "properties": {
+        "対象項目": { "type": "string" },
+        "条件": { "type": "string", "description": "例: 含む/含まない/完全一致/以上/以下/より大きい/より小さい/空白/NULL/true/false" },
+        "比較値": { "type": "string", "description": "条件の比較値" },
+        "格納値": { "type": "string", "description": "条件成立時に格納する値" },
+        "その他の格納値": { "type": "string", "description": "ELSE句（条件不成立時）" }
+      },
+      "x-sql": "ネストした CASE WHEN cond THEN 格納値 ELSE その他の格納値 END（ソース確認済 FUNC_BRANCH_*）。",
+      "x-constraints": [
+        "3値以上の分岐はIF文を複数回連続適用する（1ステップ内のネスト分岐は非対応）",
+        "カラム同士の値比較はIF文でフラグ化してから絞込みで実現（絞込みでは直接比較不可）"
+      ],
+      "x-example": { "対象項目": "購買金額", "条件": "以上", "比較値": "10000", "格納値": "優良顧客", "その他の格納値": "一般顧客" }
+    },
+
+    "書式変換": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "書式変換_settings",
+      "description": "全角↔半角・大文字↔小文字・ひらがな↔カタカナ等の表記変換",
+      "type": "object",
+      "required": ["変換対象項目", "変換後"],
+      "additionalProperties": false,
+      "properties": {
+        "変換対象項目": { "type": "string" },
+        "変換前": { "type": "string", "description": "現在の書式（例: 全角, ひらがな, 大文字）" },
+        "変換後": { "type": "string", "description": "変換後の書式（例: 半角, カタカナ, 小文字）" }
+      },
+      "x-sql": "TRANSLATE / UPPER / LOWER の組合せ。全角⇔半角・大⇔小・ひらがな⇔カタカナ・記号・スペースに対応（ソース確認済）。",
+      "x-constraints": [
+        "データ型は変わらない（表記のみ変換）。型変換とは別物"
+      ],
+      "x-example": { "変換対象項目": "電話番号", "変換前": "全角", "変換後": "半角" }
+    },
+
+    "テキスト挿入": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "テキスト挿入_settings",
+      "description": "カラムの文頭または文末に固定文字列を付加",
+      "type": "object",
+      "required": ["対象カラム", "位置", "挿入テキスト"],
+      "additionalProperties": false,
+      "properties": {
+        "対象カラム": { "type": "string" },
+        "位置": { "type": "string", "enum": ["文頭", "文末"] },
+        "挿入テキスト": { "type": "string" }
+      },
+      "x-sql": "文頭=CONCAT('挿入テキスト', col) / 文末=CONCAT(col, '挿入テキスト')。",
+      "x-constraints": [
+        "動的な値（他カラムの値）を挿入したい場合は連結を使う",
+        "文頭・文末の両方に挿入するには2回実行"
+      ],
+      "x-example": { "対象カラム": "金額", "位置": "文末", "挿入テキスト": "円" }
+    },
+
+    "除外": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "除外_settings",
+      "description": "カラムの先頭・末尾・全体から指定文字列を削除",
+      "type": "object",
+      "required": ["除外対象項目", "除外方法", "除外文字列"],
+      "additionalProperties": false,
+      "properties": {
+        "除外対象項目": { "type": "string" },
+        "除外方法": { "type": "string", "enum": ["すべて", "先頭", "後方"] },
+        "除外文字列": { "type": "string" }
+      },
+      "x-sql": "SUBSTR ベースの文字除去（FUNC_SUBSTR_START_WITH/END_WITH/LEN、ソース確認済）。",
+      "x-constraints": [
+        "桁数可変の先頭0の一括除去には不向き→型変換（テキスト→数値）を使う"
+      ],
+      "x-example": { "除外対象項目": "金額", "除外方法": "すべて", "除外文字列": "円" }
+    },
+
+    "0埋め": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "0埋め_settings",
+      "description": "先頭に0を挿入して桁数を統一",
+      "type": "object",
+      "required": ["対象カラム", "桁数"],
+      "additionalProperties": false,
+      "properties": {
+        "対象カラム": { "type": "string" },
+        "桁数": { "type": "integer", "minimum": 1, "description": "0埋め後の総桁数" }
+      },
+      "x-sql": "CONCAT(REPEAT('0', 桁数 - LEN(col)), col)（ソース確認済 FUNC_ZERO_PADDING）。",
+      "x-constraints": [
+        "主キーは先頭ゼロ保持のためテキスト型で扱う"
+      ],
+      "x-example": { "対象カラム": "顧客ID", "桁数": 8 }
+    },
+
+    "追加": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "追加_settings",
+      "description": "全行に同じ固定値を持つ新規カラムを追加",
+      "type": "object",
+      "required": ["格納値", "データ型"],
+      "additionalProperties": false,
+      "properties": {
+        "カラム名": { "type": "string", "description": "追加するカラム名" },
+        "格納値": { "type": "string", "description": "全行に入れる固定値" },
+        "データ型": { "type": "string", "enum": ["テキスト型", "整数型", "小数型", "日付型", "日時型", "真偽値型"] },
+        "位置": { "type": "string", "enum": ["左に追加", "右に追加"] }
+      },
+      "x-sql": "SELECT *, '格納値' AS new_col。",
+      "x-constraints": [
+        "行によって値が異なる場合はIF文・参照・集約で算出する",
+        "縦統合前のデータソース識別カラム付与によく使う"
+      ],
+      "x-example": { "カラム名": "店舗", "格納値": "A店", "データ型": "テキスト型", "位置": "右に追加" }
+    },
+
+    "複製": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "複製_settings",
+      "description": "既存カラムをコピーして別名の新規カラムを作成",
+      "type": "object",
+      "required": ["複製対象項目"],
+      "additionalProperties": false,
+      "properties": {
+        "複製対象項目": { "type": "string" }
+      },
+      "x-sql": "SELECT *, col AS col_copy。",
+      "x-example": { "複製対象項目": "購買日" }
+    },
+
+    "削除": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "削除_settings",
+      "description": "不要なカラムをテーブルから除去",
+      "type": "object",
+      "required": ["削除対象項目"],
+      "additionalProperties": false,
+      "properties": {
+        "削除対象項目": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ],
+          "description": "削除するカラム（複数選択可）"
+        }
+      },
+      "x-sql": "SELECT （対象カラムを列挙から省略）。",
+      "x-constraints": [
+        "行を除去したい場合は絞込み。カラム内の文字を除去したい場合は除外",
+        "非可逆操作のため必要なら事前に複製でバックアップ"
+      ],
+      "x-example": { "削除対象項目": "購買日_バックアップ" }
+    },
+
+    "並び替え": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "並び替え_settings",
+      "description": "テーブルのカラム表示順を変更（値・行順は不変）",
+      "type": "object",
+      "required": ["並び順"],
+      "additionalProperties": false,
+      "properties": {
+        "並び順": { "type": "array", "items": { "type": "string" }, "description": "並び替え後のカラム名リスト" }
+      },
+      "x-sql": "SELECT col1, col2, col3, ...（列を希望順に列挙）。",
+      "x-constraints": [
+        "カラム順の変更のみ。行の並び順は変わらない。手順書には載せないのが原則"
+      ],
+      "x-example": { "並び順": ["顧客ID", "氏名", "購買日", "購買金額"] }
+    },
+
+    "カラム名変更": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "カラム名変更_settings",
+      "description": "カラム名を変更（AS エイリアス相当、値は不変）",
+      "type": "object",
+      "required": ["変更前", "変更後"],
+      "additionalProperties": false,
+      "properties": {
+        "変更前": { "type": "string" },
+        "変更後": { "type": "string" }
+      },
+      "x-sql": "SELECT col AS new_name。",
+      "x-example": { "変更前": "COUNT_購買ID", "変更後": "購買回数" }
     }
 
   }

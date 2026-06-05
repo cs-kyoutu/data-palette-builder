@@ -290,6 +290,14 @@ def _ex_jikoku(s, col_type=None, ctx=None):
         sign = "+" if s.get("演算種別") == "加算" else "-"
         return {"hints": ["カスタム加減算"], "columns": [col(s.get("基準日時"))],
                 "choices": [sign, u, "残さない"], "values": [str(s.get("加減算量") or ""), s.get("保存名") or ""]}
+    hiku = s.get("引く値")
+    htype = hiku.get("種別") if isinstance(hiku, dict) else None
+    if htype == "本日":
+        return {"hints": ["本日との差分"], "columns": [col(s.get("引かれる値"))],
+                "choices": [u, "残さない"], "values": [s.get("保存名") or ""]}
+    if htype == "固定値":
+        return {"hints": ["特定日付との差分"], "columns": [col(s.get("引かれる値"))],
+                "choices": [u, "残さない"], "values": [str(hiku.get("値") or ""), s.get("保存名") or ""]}
     return {"hints": ["2カラム"], "columns": [col(s.get("引かれる値")), col(s.get("引く値"))],
             "choices": [u, "残さない"], "values": [s.get("保存名") or ""]}
 
