@@ -1,0 +1,30 @@
+# 期間設定語彙 — レポートの集計対象期間。
+# 原典: BI_.md 2-4 (bi.yml:17-26, config/locales/period.yml)。
+# 用途:
+#   1) design_doc の 期間設定 の許可語彙 (Step2 Claude が参照)
+#   2) sql_builder の日付WHERE生成。期間WHERE適用前に必ずタイムゾーン補正をかける。
+
+# 期間タイプ (集計のリズム)
+types:
+  - {key: daily,   ui: 日時指定 / 毎日}
+  - {key: weekly,  ui: 曜日指定 / 毎週}
+  - {key: monthly, ui: 日付指定 / 毎月}
+
+# 相対期間の単位と方向。例: 「過去12ヶ月」= {amount: 12, unit: month, direction: before}
+units:
+  - {key: day,   ui: 日}
+  - {key: week,  ui: 週間}
+  - {key: month, ui: ヶ月}
+  - {key: year,  ui: 年}
+directions:
+  - {key: before, ui: 前}
+  - {key: after,  ui: 後}
+
+# タイムゾーン補正 (bi.yml:28-31)。Snowflake は UTC 格納のため JST 等へ変換後に日付比較。
+timezone:
+  default: Asia/Tokyo                                    # data_view.time_zone 既定 (kirby-analytics-dwh)
+  sql_convert: "CONVERT_TIMEZONE('UTC', '{tz}', {col})"  # {col} を補正後の式に置換
+  # 相対期間 → WHERE 生成テンプレート。{converted_col}=sql_convert適用後の式。
+  # unit は Snowflake DATEADD の単位 (day/week/month/year)。
+  relative_before: "{converted_col} >= DATEADD({unit}, -{amount}, CURRENT_DATE)"
+  relative_after:  "{converted_col} <= DATEADD({unit}, {amount}, CURRENT_DATE)"

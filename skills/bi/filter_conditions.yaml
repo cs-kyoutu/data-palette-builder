@@ -1,0 +1,44 @@
+# 抽出条件語彙 — カスタムレポートの「抽出条件」とセグメントの「顧客抽出」で共有。
+# 原典: BI_.md 2-3 (bi.yml:1134-1172, query_builders/builders/helpers/filter_helper.rb)。
+# 用途:
+#   1) design_doc の 抽出条件[].op の許可値 (Step2 Claude が参照)
+#   2) sql_builder の WHERE 句生成マッピング
+# プレースホルダ: {col}=カラム / {v}=単一値 / {a}{b}=範囲 / {values}=多値(カンマ区切り) /
+#                {regex}=RLIKE用パターン / {base}=既存条件式。
+
+# --- 文字列条件 ---
+string:
+  - {key: contains,     ui: 次を含む,       sql: "{col} LIKE '%{v}%'"}
+  - {key: not_contains, ui: 次を含まない,   sql: "{col} NOT LIKE '%{v}%'"}
+  - {key: starts_with,  ui: 次で始まる,     sql: "{col} LIKE '{v}%'"}
+  - {key: ends_with,    ui: 次で終わる,     sql: "{col} LIKE '%{v}'"}
+  - {key: equals,       ui: 次に完全一致,   sql: "{col} = '{v}'"}
+  - {key: not_equals,   ui: 完全一致しない, sql: "{col} <> '{v}'"}
+  - {key: empty,        ui: 空文字,         sql: "{col} = ''"}
+  - {key: not_empty,    ui: 空文字ではない, sql: "{col} <> ''"}
+
+# --- 数値条件 ---
+numeric:
+  - {key: gt,          ui: 次より大きい,  sql: "{col} > {v}"}
+  - {key: gte,         ui: 以上,          sql: "{col} >= {v}"}
+  - {key: lt,          ui: 次より小さい,  sql: "{col} < {v}"}
+  - {key: lte,         ui: 以下,          sql: "{col} <= {v}"}
+  - {key: between,     ui: 次の値の間,    sql: "{col} BETWEEN {a} AND {b}"}
+  - {key: not_between, ui: 間にない,      sql: "{col} NOT BETWEEN {a} AND {b}"}
+  - {key: eq,          ui: 次と等しい,    sql: "{col} = {v}"}
+  - {key: ne,          ui: 等しくない,    sql: "{col} <> {v}"}
+  - {key: is_null,     ui: NULL,          sql: "{col} IS NULL"}
+  - {key: not_null,    ui: NULLではない,  sql: "{col} IS NOT NULL"}
+
+# --- 日付条件 ---
+date:
+  - {key: before,   ui: 次より前の日付, sql: "{col} < '{v}'"}
+  - {key: after,    ui: 次より後の日付, sql: "{col} > '{v}'"}
+  - {key: in_range, ui: 次の期間にある, sql: "{col} BETWEEN '{a}' AND '{b}'"}
+
+# --- 多値処理 (filter_helper.rb の特異点) ---
+multi_value:
+  - {key: in_numeric,    ui: 複数値(数値),         sql: "{col} IN ({values})"}
+  - {key: in_string,     ui: 複数値(文字),         sql: "{col} RLIKE '({regex})'",   note: "values を | で連結。例 (value1|value2)"}
+  - {key: contain_multi, ui: 複数部分一致,         sql: "{col} RLIKE '({regex})'",   note: "各値を .*v.* に変換し | 連結。例 (.*検索1.*|.*検索2.*)"}
+  - {key: include_null,  ui: NULLを含むオプション, sql: "({base}) OR {col} IS NULL", note: "他条件に OR で付加するモディファイア"}

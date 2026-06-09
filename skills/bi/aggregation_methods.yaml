@@ -1,0 +1,22 @@
+# 集計メソッド語彙 — カスタムレポートの「指標」で選べる集計方法。
+# 原典: BI_.md 2-2 (zelda-bi4th components.yml:110-122)。
+# 用途:
+#   1) design_doc の 指標[].method の許可値 (Step2 Claude が参照)
+#   2) sql_builder の SELECT 句生成マッピング
+# プレースホルダ: {col}=対象カラム / {cond}=~IFS系の条件式 (抽出条件DSLをWHERE化したもの)。
+
+methods:
+  - {key: SUM,         ui: 合計(SUM),                       sql: "SUM({col})"}
+  - {key: COUNT,       ui: カウント(COUNT),                 sql: "COUNT({col})"}
+  - {key: COUNTUNIQUE, ui: ユニークカウント(COUNTUNIQUE),   sql: "COUNT(DISTINCT {col})"}
+  - {key: AVERAGE,     ui: 平均(AVERAGE),                   sql: "AVG({col})"}
+  - {key: MAX,         ui: 最大値(MAX),                     sql: "MAX({col})"}
+  - {key: MIN,         ui: 最小値(MIN),                     sql: "MIN({col})"}
+
+  # ~IFS 系: 条件に合致する行だけを対象に集計 (CASE WHEN)。requires_condition=true は {cond} 必須。
+  - {key: SUMIFS,         ui: 特定の値を合計(SUMIFS),                 sql: "SUM(CASE WHEN {cond} THEN {col} END)",            requires_condition: true}
+  - {key: COUNTIFS,       ui: 特定の値をカウント(COUNTIFS),           sql: "COUNT(CASE WHEN {cond} THEN {col} END)",          requires_condition: true}
+  - {key: COUNTUNIQUEIFS, ui: 特定の値をユニークカウント(COUNTUNIQUEIFS), sql: "COUNT(DISTINCT CASE WHEN {cond} THEN {col} END)", requires_condition: true}
+  - {key: AVERAGEIFS,     ui: 特定の値を平均(AVARAGEIFS),             sql: "AVG(CASE WHEN {cond} THEN {col} END)",            requires_condition: true}
+  - {key: MAXIFS,         ui: 特定の値の最大値(MAXIFS),               sql: "MAX(CASE WHEN {cond} THEN {col} END)",            requires_condition: true}
+  - {key: MINIFS,         ui: 特定の値の最小値(MINIFS),               sql: "MIN(CASE WHEN {cond} THEN {col} END)",            requires_condition: true}

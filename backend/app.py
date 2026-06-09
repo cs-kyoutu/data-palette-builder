@@ -58,6 +58,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# BI モード (/api/bi/*) を登録。bi パッケージは _shared のみ参照し app を import しない（循環なし）。
+from .bi.routes import router as bi_router  # noqa: E402
+app.include_router(bi_router)
+
 
 @app.middleware("http")
 async def log_client_ip(request: Request, call_next):

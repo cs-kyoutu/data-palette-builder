@@ -1,0 +1,11 @@
+# グラフタイプ語彙 — カスタムレポートの可視化形式。
+# 原典: BI_.md 2-6 (bi.yml:695-701)。
+# 注: グラフ種別は手順書 (report_engine) にのみ反映。集計SQLには影響しない
+#     (グラフデータは本体では CustomReports::Charts::DataService が別クエリで取得)。
+
+charts:
+  - {key: table,     ui: 表}
+  - {key: bar,       ui: 棒グラフ}
+  - {key: pie,       ui: 円グラフ}
+  - {key: line,      ui: 折れ線グラフ}
+  - {key: composite, ui: 複合グラフ}
