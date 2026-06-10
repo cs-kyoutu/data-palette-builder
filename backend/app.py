@@ -3422,6 +3422,19 @@ async def export_sessions_csv():
     )
 
 
+# admin 週次集計の表示値オーバーライド（一時対応）。
+# 本番 RDS へ直接アクセスできない運用事情により、特定週の表示値のみコード側で固定する。
+# キー = その週の開始日(月曜, JST)の ISO 日付。値 = p1/p2/p3 の表示値。
+# 不要になったらこの dict を空にする（{}）だけで即座に実集計値へ戻る。
+_WEEKLY_OVERRIDES = {
+    "2026-06-01": {  # 6/1(月)～6/7(日)
+        "p1": {"count": 28, "good": 5, "bad": 3, "none": 20},
+        "p2": {"count": 13, "good": 1, "bad": 2, "none": 10},
+        "p3": {"count": 13, "good": 1, "bad": 2, "none": 10},
+    },
+}
+
+
 @app.get("/api/admin/weekly_stats", dependencies=[Depends(verify_token)])
 async def admin_weekly_stats():
     """週次利用集計（月〜日単位）。最大16週分を返す。"""
@@ -3480,12 +3493,16 @@ async def admin_weekly_stats():
         label = (f"{ws_jst.month}/{ws_jst.day}({DAYS_JA[ws_jst.weekday()]})"
                  f"～{we_jst.month}/{we_jst.day}({DAYS_JA[we_jst.weekday()]})")
         p1, p2, p3 = int(row[1]), int(row[5]), int(row[9])
-        result.append({
+        entry = {
             "week": label,
             "p1": {"count": p1, "good": int(row[2]),  "bad": int(row[3]),  "none": int(row[4])},
             "p2": {"count": p2, "good": int(row[6]),  "bad": int(row[7]),  "none": int(row[8])},
             "p3": {"count": p3, "good": int(row[10]), "bad": int(row[11]), "none": int(row[12])},
-        })
+        }
+        _ov = _WEEKLY_OVERRIDES.get(ws_jst.date().isoformat())
+        if _ov:
+            entry["p1"], entry["p2"], entry["p3"] = _ov["p1"], _ov["p2"], _ov["p3"]
+        result.append(entry)
 
     return list(reversed(result))
 
