@@ -72,6 +72,15 @@
   .input-row button{border:none;background:var(--primary);color:#fff;border-radius:8px;padding:0 16px;font-size:16px;cursor:pointer}
   .hidden{display:none}
   .typing{display:inline-block;color:var(--text-muted)}
+  /* loading indicator (生成中) */
+  .loading-row{display:flex;align-items:center;gap:8px}
+  .loading-text{font-size:13px;color:var(--text);font-weight:600}
+  .loading-sub{font-size:11px;color:var(--text-muted);margin-top:6px}
+  .dots{display:inline-flex;gap:4px;flex-shrink:0}
+  .dots span{width:7px;height:7px;border-radius:50%;background:var(--primary);display:inline-block;animation:dotpulse 1.2s infinite ease-in-out}
+  .dots span:nth-child(2){animation-delay:.2s}
+  .dots span:nth-child(3){animation-delay:.4s}
+  @keyframes dotpulse{0%,80%,100%{transform:scale(.5);opacity:.35}40%{transform:scale(1);opacity:1}}
 </style>
 </head>
 <body>
@@ -210,16 +219,41 @@
     c.appendChild(msg);
     c.scrollTop = c.scrollHeight;
   }
-  function addTyping(containerId) {
+  // 生成中インジケータ。Claude を複数回呼ぶため最大40秒ほどかかる。
+  // 静止表示だと固まって見えるので、アニメーションのドット + 段階文言 + 経過秒を出す。
+  const _typingTimers = {};
+  const BI_STAGES = ['レポートを解析しています', '手順書と等価SQLを生成しています'];
+  const DS_STAGES = ['レポートを解析しています', 'テーブル定義を逆算しています', 'サンプルデータで検算しています'];
+
+  function addTyping(containerId, stages) {
     const c = document.getElementById(containerId);
     const msg = document.createElement('div');
     msg.className = 'msg ai';
     msg.id = containerId + '_typing';
-    msg.innerHTML = '<div class="avatar">🧑‍🔬</div><div class="bubble"><span class="typing">考え中…</span></div>';
+    msg.innerHTML =
+      '<div class="avatar">🧑‍🔬</div>' +
+      '<div class="bubble">' +
+        '<div class="loading-row">' +
+          '<span class="dots"><span></span><span></span><span></span></span>' +
+          '<span class="loading-text"></span>' +
+        '</div>' +
+        '<div class="loading-sub">生成には最大40秒ほどかかります。そのままお待ちください。</div>' +
+      '</div>';
     c.appendChild(msg);
     c.scrollTop = c.scrollHeight;
+
+    const steps = (stages && stages.length) ? stages : ['処理しています'];
+    const textEl = msg.querySelector('.loading-text');
+    let elapsed = 0;
+    const render = () => {
+      const idx = Math.min(Math.floor(elapsed / 8), steps.length - 1);
+      textEl.textContent = `${steps[idx]}…（${elapsed}秒）`;
+    };
+    render();
+    _typingTimers[containerId] = setInterval(() => { elapsed += 1; render(); }, 1000);
   }
   function removeTyping(containerId) {
+    if (_typingTimers[containerId]) { clearInterval(_typingTimers[containerId]); delete _typingTimers[containerId]; }
     const t = document.getElementById(containerId + '_typing');
     if (t) t.remove();
   }
@@ -276,7 +310,7 @@
     document.getElementById('biAssistant').classList.remove('hidden');
     document.getElementById('biMessages').innerHTML = '';
     addMsg('biMessages', 'user', 'BIレポートの生成を開始します...');
-    addTyping('biMessages');
+    addTyping('biMessages', BI_STAGES);
     try {
       const res = await fetch('/api/bi/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -299,7 +333,7 @@
     if (!text || biLoading || !biSession) return;
     biLoading = true; input.value = '';
     addMsg('biMessages', 'user', text);
-    addTyping('biMessages');
+    addTyping('biMessages', BI_STAGES);
     try {
       const res = await fetch('/api/bi/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -331,7 +365,7 @@
     document.getElementById('dsAssistant').classList.remove('hidden');
     document.getElementById('dsMessages').innerHTML = '';
     addMsg('dsMessages', 'user', 'レポートからテーブル定義を逆算します...');
-    addTyping('dsMessages');
+    addTyping('dsMessages', DS_STAGES);
     try {
       const res = await fetch('/api/bi/design/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -354,7 +388,7 @@
     if (!text || dsLoading || !dsSession) return;
     dsLoading = true; input.value = '';
     addMsg('dsMessages', 'user', text);
-    addTyping('dsMessages');
+    addTyping('dsMessages', DS_STAGES);
     try {
       const res = await fetch('/api/bi/design/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
