@@ -149,6 +149,16 @@
           placeholder="作りたいレポートを説明してください（複数可）。例:&#10;・自社EC売上分析「年/月/日」: 表側=年・月、表頭=日、指標=売上金額の合計&#10;・商品別売上分析: 表側=商品名、指標=購入者数・購入回数・売上金額&#10;・顧客属性別売上分析: 表側=性別×年代、指標=購入者数・購入回数・売上金額"></textarea>
         <div class="hint">レポートのイメージ（表側=行軸 / 表頭=列軸 / 指標）を書くほど精度が上がります。これらを1つのテーブルで満たす定義を逆算します。</div>
       </div>
+
+      <div class="field">
+        <label class="label">データファイル<span class="hint" style="font-weight:400;margin-left:6px;">任意</span></label>
+        <div class="drop" id="dsDrop" onclick="document.getElementById('dsFile').click()">
+          📄 実データ（Excel / CSV・複数可）をクリックして選択
+          <input type="file" id="dsFile" accept=".xlsx,.xls,.csv" multiple onchange="handleDsFiles(this.files)">
+        </div>
+        <div class="file-status" id="dsFileStatus">未選択 — アップロードすると実カラムで設計します（なければ要件のみで設計）</div>
+      </div>
+
       <button class="gen-btn" id="dsGen" onclick="dsGenerate()" disabled>レポートからテーブル定義を逆算する</button>
     </div>
 
@@ -361,10 +371,34 @@
 
   // ===== 設計（逆算）モード =====
   let dsSession = null, dsLoading = false;
+  let dsDataFiles = [];  // 任意。アップロードした実テーブル {table_name, columns}
 
   function updateDsBtn() {
     const hasReq = document.getElementById('dsReq').value.trim().length > 0;
     document.getElementById('dsGen').disabled = !(hasReq && !dsLoading);
+  }
+  async function handleDsFiles(files) {
+    if (!files || !files.length) return;
+    const status = document.getElementById('dsFileStatus');
+    status.classList.remove('ok');
+    status.textContent = '読み込み中...';
+    try {
+      for (const file of files) {
+        const content = await fileToBase64(file);
+        const res = await fetch('/api/parse', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, content, file_type: 'input' }),
+        });
+        if (!res.ok) throw new Error('解析に失敗しました');
+        const data = await res.json();
+        (data.tables || []).forEach(t => dsDataFiles.push(t));
+      }
+      status.classList.add('ok');
+      const names = dsDataFiles.map(t => `${t.table_name}(${t.columns.length}列)`).join(' / ');
+      status.textContent = `✓ ${dsDataFiles.length}テーブル: ${names} — 実カラムで設計します`;
+    } catch (e) {
+      status.textContent = 'エラー: ' + (e.message || '読み込み失敗') + '（要件のみで設計します）';
+    }
   }
   async function dsGenerate() {
     const requirement = document.getElementById('dsReq').value.trim();
@@ -372,12 +406,13 @@
     dsLoading = true; dsSession = null; updateDsBtn();
     document.getElementById('dsAssistant').classList.remove('hidden');
     document.getElementById('dsMessages').innerHTML = '';
-    addMsg('dsMessages', 'user', 'レポートからテーブル定義を逆算します...');
+    const dataNote = dsDataFiles.length ? `（実データ ${dsDataFiles.length}テーブルを使用）` : '（要件のみ）';
+    addMsg('dsMessages', 'user', 'レポートからテーブル定義を逆算します...' + dataNote);
     addTyping('dsMessages', DS_STAGES);
     try {
       const res = await fetch('/api/bi/design/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: null, report_requirement: requirement }),
+        body: JSON.stringify({ session_id: null, report_requirement: requirement, data_files: dsDataFiles }),
       });
       const data = await res.json();
       removeTyping('dsMessages');

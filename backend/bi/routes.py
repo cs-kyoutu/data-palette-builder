@@ -145,12 +145,13 @@ async def bi_download(session_id: str):
 
 async def _run_design_pipeline(session_id: str, session: dict) -> DesignResponse:
     """Step1(plan) → 質問あれば中断 / 無ければ Step2(design) → 決定論レンダ。
-    BIモードの _run_pipeline をミラーリング。data_file は使わない(逆算するため)。"""
+    BIモードの _run_pipeline をミラーリング。data_files があれば実カラム基準で逆算する。"""
     requirement = session["requirement"]
+    data_files = session.get("data_files") or []
 
     # === Step1: 方針(各レポートのBI設定・想定粒度) ===
     step1_text = await _claude(
-        prompts.get_design_prompt_step1(requirement),
+        prompts.get_design_prompt_step1(requirement, data_files),
         [{"role": "user", "content": requirement}],
         max_tokens=2000,
     )
@@ -162,7 +163,7 @@ async def _run_design_pipeline(session_id: str, session: dict) -> DesignResponse
 
     # === Step2: テーブル定義の逆算 ===
     step2_text = await _claude(
-        prompts.get_design_prompt_step2(requirement, step1_text),
+        prompts.get_design_prompt_step2(requirement, step1_text, data_files),
         [{"role": "user", "content": "テーブル定義の design(JSON)を出力してください。"}],
         max_tokens=8000,
     )
@@ -198,6 +199,7 @@ async def design_generate(request: Request, req: DesignGenerateRequest = Body(..
     session = {
         "mode": "design",
         "requirement": "\n".join(filter(None, [req.report_requirement, req.additional_context])),
+        "data_files": req.data_files or [],
         "created_at": _time.time(),
     }
     try:

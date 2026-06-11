@@ -41,6 +41,8 @@ class DesignGenerateRequest(BaseModel):
     session_id: str | None = None
     report_requirement: str = ""                    # 目標レポートの自然文(複数レポート可)
     additional_context: str = ""
+    data_files: list[dict] = []                     # 任意。{table_name, columns:[...]} の配列。
+    #   あり → 実カラムで設計(データ基準) / なし → 要件のみで設計(従来どおり)
 
 
 class DesignChatRequest(BaseModel):
