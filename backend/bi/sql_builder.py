@@ -35,6 +35,31 @@ def _esc(v) -> str:
     return str(v).replace("'", "''")
 
 
+# 日付条件で相対日付を DATEADD 式に変換する対象 op
+_DATE_OPS = {"before", "after", "in_range"}
+_REL_DATE_RE = re.compile(r"^\s*(\d+)\s*(日|週間|週|ヶ月|か月|カ月|月|年)\s*(前|後)\s*$")
+_TODAY_EXPR_RE = re.compile(r"^\s*(?:TODAY\(\)|CURRENT_DATE)\s*([+-])\s*(\d+)\s*$", re.I)
+
+
+def _relative_date_sql(value) -> str | None:
+    """「90日前」「3ヶ月後」や TODAY()-90 等の相対日付 → DATEADD 式。
+    絶対日付('2026-01-01')や解釈不能な値は None(=従来どおりリテラル扱い)。"""
+    if value is None:
+        return None
+    s = str(value).strip()
+    m = _REL_DATE_RE.match(s)
+    if m:
+        amount = int(m.group(1))
+        unit = _JP_UNIT[m.group(2)]
+        sign = "-" if m.group(3) == "前" else ""
+        return f"DATEADD({unit}, {sign}{amount}, CURRENT_DATE)"
+    m2 = _TODAY_EXPR_RE.match(s)
+    if m2:
+        sign = "-" if m2.group(1) == "-" else ""
+        return f"DATEADD(day, {sign}{m2.group(2)}, CURRENT_DATE)"
+    return None
+
+
 def _build_condition(cond: dict, warnings: list) -> str | None:
     """1件の抽出条件 dict → WHERE 式文字列。op は全カテゴリ横断で解決。"""
     col = cond.get("column")
@@ -46,6 +71,16 @@ def _build_condition(cond: dict, warnings: list) -> str | None:
 
     sql = entry["sql"]
     sql = sql.replace("{col}", str(col))
+
+    # 日付 op の相対日付値は DATEADD 式へ(リテラル文字列にしない)。
+    # 絶対日付はそのまま下の {v}/{a}/{b} 置換でクォート付きリテラルになる。
+    if entry.get("key") in _DATE_OPS:
+        rel_v = _relative_date_sql(cond.get("value"))
+        rel_b = _relative_date_sql(cond.get("value2"))
+        if rel_v is not None:
+            sql = sql.replace("'{v}'", rel_v).replace("'{a}'", rel_v)
+        if rel_b is not None:
+            sql = sql.replace("'{b}'", rel_b)
 
     # 多値: values を | / カンマで展開
     if "{values}" in sql:

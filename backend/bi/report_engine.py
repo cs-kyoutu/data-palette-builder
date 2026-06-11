@@ -14,7 +14,9 @@ def _fmt_metric(m: dict) -> str:
     name = m.get("name") or col
     s = f"{name} = {col} の {method_ui}"
     cond = m.get("condition")
-    if cond:
+    # Claude が空 placeholder ({"column":"","op":"","value":""}) を返すことがあるため、
+    # 実質的な中身 (column か op) がある時だけ条件を描画する。
+    if cond and (cond.get("column") or cond.get("op")):
         s += f"（条件: {_fmt_condition(cond)}）"
     return s
 
@@ -24,7 +26,7 @@ def _fmt_condition(c: dict) -> str:
     op_ui = vocab.ui_of(vocab.ALL_FILTERS, c.get("op"))
     if c.get("values"):
         val = " / ".join(str(v) for v in c["values"])
-    elif "value2" in c:
+    elif c.get("value2"):  # 範囲(between)。空 placeholder の value2:"" は単値扱いにする
         val = f"{c.get('value', '')}〜{c.get('value2', '')}"
     else:
         val = c.get("value", "")
