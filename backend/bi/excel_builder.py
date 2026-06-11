@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font
+from openpyxl.styles import Alignment, Font, PatternFill
 
 _OUTPUT_DIR = Path(__file__).parent.parent / "output"
 _OUTPUT_DIR.mkdir(exist_ok=True)
@@ -61,6 +61,8 @@ def build_design_spreadsheet(design: dict, design_text: str) -> tuple[str, str]:
     wb = Workbook()
     title = Font(bold=True, size=12)
     header = Font(bold=True, color="FFFFFF")
+    # ヘッダは白文字。背景色を付けないと白地に白文字で見えなくなるため塗りを必ず設定する。
+    header_fill = PatternFill("solid", fgColor="E8323D")
     used_names = {"設計書"}
 
     # シート① 設計書(全文)
@@ -91,6 +93,7 @@ def build_design_spreadsheet(design: dict, design_text: str) -> tuple[str, str]:
         ws.append(["カラム名", "データ型", "主キー", "派生", "派生方法", "用途"])
         for c in ws[ws.max_row]:
             c.font = header
+            c.fill = header_fill
         for col in t.get("カラム", []) or []:
             ws.append([
                 col.get("name", ""), col.get("type", ""),
@@ -110,6 +113,7 @@ def build_design_spreadsheet(design: dict, design_text: str) -> tuple[str, str]:
             wss.append(list(cols_order))
             for c in wss[1]:
                 c.font = header
+                c.fill = header_fill
             for row in rows:
                 wss.append(list(row))
 
