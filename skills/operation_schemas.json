@@ -1,7 +1,9 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "generated": "2026-05-22",
-  "note": "b→dash Data Palette 操作設定 JSON Schema 精密定義。x-constraints=確定制約, x-confirm=実UI要確認項目, x-example=正常系設定例。",
+  "updated": "2026-06-05",
+  "note": "b→dash Data Palette 操作設定 JSON Schema 精密定義。x-constraints=確定制約, x-confirm=実UI要確認項目, x-sql=対応するSQL/関数(ソース由来), x-example=正常系設定例。",
+  "changelog": "v1.1(2026-06-05): ソースリポジトリ zelda-preparation4th(加工SQL生成) を根拠に、(A)x-confirm の主要項目を確定して x-constraints へ昇格し x-sql を付与、(B)不一致(連結の上限6→10・区切り文字対応、時刻演算の加減算モード欠落)を修正。",
   "operations": {
 
     "横統合": {
@@ -223,15 +225,16 @@
           }
         }
       },
+      "x-sql": "WHERE句。文字列は IFNULL(col,'') の後に比較。演算子マッピング: gteq→>= / 含む→LIKE '%value%' / empty(空白)→ = '' / not_empty(空白でない)→ != '' / 日付period→BETWEEN。ブロック内はAND、ブロック間はORで1ステップにネスト可能。",
       "x-constraints": [
         "日付型での期間絞込みはカラムが日付型であることが前提（文字列型では正確な比較不可）",
-        "「含む」は部分一致（LIKE %value%）相当と推定",
-        "数値型カラムに「含む/含まない」を使うと型エラーになる可能性がある"
+        "「含む」は部分一致（LIKE '%value%'）。文字列比較は IFNULL(col,'') で正規化してから評価される（ソース確認済）",
+        "数値型カラムに「含む/含まない」を使うと型エラーになる可能性がある",
+        "複数条件のAND/ORは1ステップで設定可能（ブロック内=AND、ブロック間=OR のネスト構造。ソース確認済）"
       ],
       "x-confirm": [
         "演算子の完全なリスト（「先頭が一致」「末尾が一致」等が存在するか）",
         "「含む」の大文字小文字区別の有無",
-        "複数条件のAND/OR組み合わせは1ステップで設定できるか、複数の絞込みステップが必要か",
         "「過去N日以内」の基準日は処理実行日（動的）か固定日付か"
       ],
       "x-example": {
@@ -254,36 +257,45 @@
         "連結対象": {
           "type": "array",
           "minItems": 2,
-          "maxItems": 6,
+          "maxItems": 10,
           "items": { "type": "string" },
-          "description": "連結するカラム名リスト（順番が連結順序。最大6カラム）"
+          "description": "連結するカラム名リスト（順番が連結順序。最大10カラム）"
+        },
+        "区切り文字": {
+          "type": "string",
+          "description": "各カラムの間に挿入する区切り文字（例: \"-\", \" \"）。省略時は区切りなしで直結。"
         }
       },
+      "x-sql": "CONCAT(...)。区切り文字ありは CONCAT(\"姓\", '-', \"名\")。各カラムは IFNULL(col,'') で正規化されるため、NULLを含んでも結果はNULLにならず空文字として連結される。",
       "x-constraints": [
         "数値型カラムは事前に型変換（文字列型）してから連結する",
-        "連結対象は最大6カラムまで（YAMLより。実UIの制約は要確認）",
-        "NULLを含むカラムの連結結果はNULLになる可能性がある（DBエンジン依存）",
-        "区切り文字の挿入は非対応。区切り文字が必要な場合は「追加」で区切り文字カラムを作成してから連結する"
+        "連結対象は最大10カラムまで（ソース確認済。旧記載の6は誤り）",
+        "区切り文字の挿入に対応（区切り文字フィールドで指定。例: \"姓\"と\"名\"を\"-\"区切りで連結 → CONCAT(\"姓\",'-',\"名\")。ソース確認済）",
+        "NULLを含むカラムも IFNULL(col,'') で空文字扱いとなり、連結結果はNULLにならない（ソース確認済）"
       ],
       "x-confirm": [
-        "UIの設定フィールドが「連結対象1〜6」という個別フィールドか、配列形式かを実UI確認",
-        "連結対象の上限が本当に6カラムか（実UI確認）",
-        "カラム名ではなく固定文字列リテラルを連結対象に含めることができるか（テキスト挿入との違い）",
-        "NULL値を空文字として扱うオプション（COALESCE相当）があるか"
+        "UIの設定フィールドが個別フィールドか配列形式かを実UI確認",
+        "カラム名ではなく固定文字列リテラルを連結対象に含めることができるか（テキスト挿入との違い）"
       ],
       "x-example": {
-        "連結対象": ["姓", "名"]
+        "連結対象": ["姓", "名"],
+        "区切り文字": " "
       }
     },
 
     "時刻演算": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "時刻演算_settings",
-      "description": "2つの日時カラムの差分を指定単位で算出（DATEDIFF）",
+      "description": "日時の差分算出（DATEDIFF）または日時への期間の加減算（TIMEADD）。演算種別で2モードを切り替える。",
       "type": "object",
-      "required": ["引かれる値", "引く値", "算出単位"],
+      "required": ["演算種別"],
       "additionalProperties": false,
       "properties": {
+        "演算種別": {
+          "type": "string",
+          "enum": ["差分", "加算", "減算"],
+          "description": "差分=2つの日時の差を算出（DATEDIFF、引かれる値/引く値を使用）/ 加算・減算=基準日時に期間を足し引き（TIMEADD、基準日時/加減算量を使用）"
+        },
         "引かれる値": {
           "oneOf": [
             {
@@ -320,37 +332,85 @@
             },
             {
               "type": "object",
-              "required": ["種別", "値"],
+              "required": ["種別"],
               "additionalProperties": false,
               "properties": {
-                "種別": { "type": "string", "const": "固定値" },
-                "値":   { "type": "string", "description": "ISO 8601形式（YYYY-MM-DD または YYYY-MM-DDTHH:MM:SS）" }
+                "種別": { "type": "string", "enum": ["固定値", "本日"] },
+                "値":   { "type": "string", "description": "種別=固定値のときISO 8601形式（特定の日付）。種別=本日のとき省略（処理実行日=本日の日付を使用）" }
               }
             }
           ],
-          "description": "減数（開始日時）。カラム参照または固定日時値"
+          "description": "減数（開始日時=第2項）。カラム / 固定値(特定の日付) / 本日(本日の日付) のいずれか"
+        },
+        "基準日時": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["種別", "カラム名"],
+              "additionalProperties": false,
+              "properties": {
+                "種別":    { "type": "string", "const": "カラム" },
+                "カラム名": { "type": "string", "description": "加減算の基準となる日時カラム名" }
+              }
+            },
+            {
+              "type": "object",
+              "required": ["種別", "値"],
+              "additionalProperties": false,
+              "properties": {
+                "種別": { "type": "string", "enum": ["固定値", "本日"] },
+                "値":   { "type": "string", "description": "種別=固定値のときISO 8601形式。種別=本日のとき省略（処理実行日を使用）" }
+              }
+            }
+          ],
+          "description": "加減算の基準日時（演算種別=加算/減算のとき必須）。カラム参照・固定値・本日のいずれか"
+        },
+        "加減算量": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "基準日時に足し引きする量（演算種別=加算/減算のとき必須）。正の整数で指定し、足し引きの方向は演算種別で決まる"
         },
         "算出単位": {
           "type": "string",
           "enum": ["年", "月", "日", "時間", "分", "秒"],
-          "description": "差分の算出単位"
+          "description": "差分の算出単位（差分モード）／加減算する期間の単位（加減算モード）"
         }
       },
+      "allOf": [
+        {
+          "if":   { "properties": { "演算種別": { "const": "差分" } } },
+          "then": { "required": ["引かれる値", "引く値", "算出単位"] }
+        },
+        {
+          "if":   { "properties": { "演算種別": { "enum": ["加算", "減算"] } } },
+          "then": { "required": ["基準日時", "加減算量", "算出単位"] }
+        }
+      ],
+      "x-sql": "差分=DATEDIFF(単位, 引く値, 引かれる値)。加算/減算=TIMEADD(単位, ±加減算量, 基準日時)（減算は負符号）。固定値「本日」は CONVERT_TIMEZONE('UTC','Asia/Tokyo', CURRENT_TIMESTAMP) を基準にする。",
       "x-constraints": [
-        "両カラムとも日付型または日時型である必要がある（文字列型は型変換が必要）",
-        "引かれる値 < 引く値 の場合、結果は負の値になる",
+        "差分モード: 両カラムとも日付型または日時型である必要がある（文字列型は型変換が必要）",
+        "差分モード: 引かれる値 < 引く値 の場合、結果は負の値になる",
         "算出単位「月」は月の日数差により直感と異なる結果になる場合がある（例: 1/31→3/1 は1ヶ月）",
-        "算出結果は整数（切り捨て）と推定。小数が必要な場合は「日」で算出して四則演算で換算する"
+        "差分の算出結果は整数（切り捨て）と推定。小数が必要な場合は「日」で算出して四則演算で換算する",
+        "固定値として「本日」（処理実行日、JSTのCURRENT_TIMESTAMP基準）を指定可能（ソース確認済）",
+        "加減算モード（基準日時にN単位を足し引き）に対応。TIMEADDで実装される（ソース確認済）"
       ],
       "x-confirm": [
-        "固定値として「現在日時」（CURRENT_DATE/NOW()相当）を特別な値で指定できるか",
-        "引かれる値・引く値のUIがドロップダウン（カラム選択）＋テキスト入力（固定値）の切り替え形式かを実UI確認",
-        "算出結果の型は整数か小数か（特に時間・分・秒単位の場合）"
+        "引かれる値・引く値・基準日時のUIがドロップダウン（カラム選択）＋テキスト入力（固定値）の切り替え形式かを実UI確認",
+        "算出結果の型は整数か小数か（特に時間・分・秒単位の場合）",
+        "加減算モードのUI上の入力フィールド名（基準日時/加減算量/単位）が実UI表記と一致するか"
       ],
       "x-example": {
+        "演算種別": "差分",
         "引かれる値": { "種別": "カラム", "カラム名": "最終購買日" },
         "引く値":     { "種別": "カラム", "カラム名": "初回購買日" },
         "算出単位":   "日"
+      },
+      "x-example-加算": {
+        "演算種別": "加算",
+        "基準日時": { "種別": "カラム", "カラム名": "申込日" },
+        "加減算量": 7,
+        "算出単位": "日"
       }
     },
 
@@ -471,14 +531,15 @@
           "description": "最新=判定項目の最大日時 / 最古=最小日時 / 最大=最大数値 / 最小=最小数値"
         }
       },
+      "x-sql": "task_type=name_collecting の独立操作。キーごとに優先順位（判定項目・判定順）で代表レコードを選択するdedup（サブクエリ + ROW_NUMBER/QUALIFY相当）。ソース(zelda-preparation4th §3-6)で確認済。",
       "x-constraints": [
+        "名寄せは独立した操作（name_collecting）として存在する。「ランキング+絞込み」での代替は不要（ソース確認済）",
         "名寄せ後は代表行の値がそのまま保持される（SUM/AVG等の集計値ではなく元の行の値）",
         "「最新/最古」は判定項目が日付型・日時型のとき使用。「最大/最小」は数値型のとき使用",
         "複数カラムを組み合わせたキーは事前に連結で1カラムにまとめると設定しやすい",
         "判定項目が同値（タイ）のときに選ばれる行は不定（挿入順等に依存する可能性あり）"
       ],
       "x-confirm": [
-        "名寄せが独立した操作として存在するか、「ランキング(ROW_NUMBER)+絞込み」で実現するかを実UI確認（最重要）",
         "判定項目が同値のときにどの行が選ばれるか（不定か、挿入順か）",
         "複数の判定項目（タイブレーク用の第2優先カラム）を設定できるか"
       ],
@@ -519,7 +580,11 @@
           "description": "付与する新規カラムの名前（省略時はb→dashが自動命名）"
         }
       },
+      "x-sql": "task_type=analyze の独立操作（ウィンドウ関数）。func: first_value / last_value / nth_value / LAG(前の行) / LEAD(後ろの行)。一般形: func(col) [IGNORE NULLS] OVER (PARTITION BY まとめる単位 ORDER BY 参照する順 ASC/DESC)。ソース(zelda-preparation4th §3-4)で確認済。",
       "x-constraints": [
+        "参照は独立した操作（analyze）として存在する。「ランキング+横統合+絞込み」での代替は不要（ソース確認済）",
+        "first_value/last_value だけでなく、nth_value（N番目の値）・LAG（前の行）・LEAD（後ろの行）も参照可能（ソース確認済）",
+        "NULL無視（IGNORE NULLS）オプションがあり、直近の非NULL値を参照できる（ソース確認済）",
         "参照する順カラムに一意性がない場合、取得される値が不定になる",
         "出力テーブルの行数は変わらない（全行に同じグループの代表値が付与される）",
         "全件参照（グループなし）が必要な場合は「追加」で定数カラムを作成してまとめる単位に使用する"
@@ -527,8 +592,7 @@
       "x-confirm": [
         "YAMLの「入力する値」フィールドが何を意味するか（出力カラム名の別名か、参照元の追加指定か）要確認",
         "「まとめる単位」に複数カラムを指定できるか",
-        "グループ内の2番目・3番目の値（FIRST_VALUE以外のオフセット）を参照できるか",
-        "この操作が独立した操作として存在するか、「ランキング+横統合+絞込み」の組み合わせで実現するかを実UI確認"
+        "各func（first_value/last_value/nth_value/LAG/LEAD/IGNORE NULLS）のUI上の選択肢表記が実UIと一致するか"
       ],
       "x-example": {
         "まとめる単位": "顧客ID",
@@ -537,6 +601,279 @@
         "昇順降順": "昇順",
         "出力カラム名": "初回購買金額"
       }
+    },
+
+    "四則演算": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "四則演算_settings",
+      "description": "2つのカラムまたは値で加減乗除し新規カラムを作成",
+      "type": "object",
+      "required": ["演算対象_左側", "演算対象_右側", "四則演算種別"],
+      "additionalProperties": false,
+      "properties": {
+        "演算対象_左側": { "type": "string", "description": "カラム名または固定数値" },
+        "演算対象_右側": { "type": "string", "description": "カラム名または固定数値" },
+        "四則演算種別": { "type": "string", "enum": ["+", "-", "×", "÷"], "description": "加算/減算/乗算/除算" },
+        "小数点": { "type": "string", "description": "端数処理する小数位（例: 1=小数第1位）" },
+        "端数処理": { "type": "string", "enum": ["四捨五入", "切り上げ", "切り捨て"] }
+      },
+      "x-sql": "col1 +/-/* col2。除算は CASE WHEN 分母=0 THEN NULL ELSE col1/col2 END（ゼロ除算は自動NULL保護、ソース確認済）。丸めは ROUND/CEIL/FLOOR(値, 小数位)。",
+      "x-constraints": [
+        "ゼロ除算は自動でNULLになるためIF文での事前処理は不要（ソース確認済）",
+        "文字列型カラムは事前に型変換（数値型）してから演算",
+        "NULLを含む演算結果はNULL"
+      ],
+      "x-example": { "演算対象_左側": "単価", "演算対象_右側": "数量", "四則演算種別": "×", "小数点": "0", "端数処理": "切り捨て" }
+    },
+
+    "型変換": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "型変換_settings",
+      "description": "カラムのデータ型を変換（TRY_CASTベース、失敗時挙動を選択可）",
+      "type": "object",
+      "required": ["変換対象項目", "変換後の型"],
+      "additionalProperties": false,
+      "properties": {
+        "変換対象項目": { "type": "string" },
+        "変換後の型": { "type": "string", "enum": ["テキスト型", "整数型", "小数型", "日付型", "日時型", "真偽値型"] },
+        "フォーマット": { "type": "string", "description": "日付/日時変換時の入力フォーマット（最大5個、例: YYYY/MM/DD, YYYYMMDD）" },
+        "変換失敗時": { "type": "string", "enum": ["NULL", "元の値", "指定値"], "description": "TRY_CAST失敗時の挙動" }
+      },
+      "x-sql": "TRY_CAST(col AS type) ベース。失敗時は CASE で NULL/元の値/指定値 を返す。日付/日時は社内UDF BD_TRY_TO_DATE/BD_TRY_TO_TIMESTAMP で多フォーマット認識。空文字は NULLIF(col,'') でNULL化（ソース確認済）。",
+      "x-constraints": [
+        "TRY_CASTのため変換不能値があってもハードエラーで停止しない（変換失敗時の挙動で制御）",
+        "変換は上書きのため元の値を残すには事前に複製"
+      ],
+      "x-example": { "変換対象項目": "購買金額", "変換後の型": "整数型" }
+    },
+
+    "置換": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "置換_settings",
+      "description": "カラム内の文字列または正規表現パターンを別の文字列に置換",
+      "type": "object",
+      "required": ["置換対象項目", "検索種別", "置換前", "置換後"],
+      "additionalProperties": false,
+      "properties": {
+        "置換対象項目": { "type": "string" },
+        "検索種別": { "type": "string", "enum": ["文字列", "正規表現"] },
+        "置換前": { "type": "string", "description": "置換前の文字列またはパターン" },
+        "置換後": { "type": "string", "description": "置換後の文字列（空文字で削除相当）" }
+      },
+      "x-sql": "文字列=REPLACE(col,'置換前','置換後') / 正規表現=REGEXP_REPLACE(col, pattern, repl)。空白・NULLの置換にも対応（ソース確認済）。",
+      "x-constraints": [
+        "置換後に空文字（削除）を指定するとUIが空欄を受け付けないことがある（その場合は型変換で代替）"
+      ],
+      "x-example": { "置換対象項目": "電話番号", "検索種別": "文字列", "置換前": "-", "置換後": "" }
+    },
+
+    "分割": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "分割_settings",
+      "description": "1カラムを区切り文字で複数カラムに分割",
+      "type": "object",
+      "required": ["分割対象項目", "分割条件", "何項目に分けるか"],
+      "additionalProperties": false,
+      "properties": {
+        "分割対象項目": { "type": "string" },
+        "分割条件": { "type": "string", "description": "区切り文字（例: \"-\", \"@\", スペース）" },
+        "何項目に分けるか": { "type": "integer", "minimum": 2, "maximum": 10 },
+        "開始位置": { "type": "string", "enum": ["左", "右"], "description": "どちらから数えて分割するか" }
+      },
+      "x-sql": "SPLIT_PART(col, delimiter, n)。複雑なケースは SUBSTR + REGEXP_INSTR の組合せ（ソース確認済）。",
+      "x-constraints": [
+        "小数型カラムを「.」で分割すると整数部と空文字に分かれることがある"
+      ],
+      "x-example": { "分割対象項目": "生年月日", "分割条件": "-", "何項目に分けるか": 3 }
+    },
+
+    "IF文": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "IF文_settings",
+      "description": "条件に応じて値を格納する新規カラムを作成（CASE WHEN）",
+      "type": "object",
+      "required": ["対象項目", "条件", "格納値", "その他の格納値"],
+      "additionalProperties": false,
+      "properties": {
+        "対象項目": { "type": "string" },
+        "条件": { "type": "string", "description": "例: 含む/含まない/完全一致/以上/以下/より大きい/より小さい/空白/NULL/true/false" },
+        "比較値": { "type": "string", "description": "条件の比較値" },
+        "格納値": { "type": "string", "description": "条件成立時に格納する値" },
+        "その他の格納値": { "type": "string", "description": "ELSE句（条件不成立時）" }
+      },
+      "x-sql": "ネストした CASE WHEN cond THEN 格納値 ELSE その他の格納値 END（ソース確認済 FUNC_BRANCH_*）。",
+      "x-constraints": [
+        "3値以上の分岐はIF文を複数回連続適用する（1ステップ内のネスト分岐は非対応）",
+        "カラム同士の値比較はIF文でフラグ化してから絞込みで実現（絞込みでは直接比較不可）"
+      ],
+      "x-example": { "対象項目": "購買金額", "条件": "以上", "比較値": "10000", "格納値": "優良顧客", "その他の格納値": "一般顧客" }
+    },
+
+    "書式変換": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "書式変換_settings",
+      "description": "全角↔半角・大文字↔小文字・ひらがな↔カタカナ等の表記変換",
+      "type": "object",
+      "required": ["変換対象項目", "変換後"],
+      "additionalProperties": false,
+      "properties": {
+        "変換対象項目": { "type": "string" },
+        "変換前": { "type": "string", "description": "現在の書式（例: 全角, ひらがな, 大文字）" },
+        "変換後": { "type": "string", "description": "変換後の書式（例: 半角, カタカナ, 小文字）" }
+      },
+      "x-sql": "TRANSLATE / UPPER / LOWER の組合せ。全角⇔半角・大⇔小・ひらがな⇔カタカナ・記号・スペースに対応（ソース確認済）。",
+      "x-constraints": [
+        "データ型は変わらない（表記のみ変換）。型変換とは別物"
+      ],
+      "x-example": { "変換対象項目": "電話番号", "変換前": "全角", "変換後": "半角" }
+    },
+
+    "テキスト挿入": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "テキスト挿入_settings",
+      "description": "カラムの文頭または文末に固定文字列を付加",
+      "type": "object",
+      "required": ["対象カラム", "位置", "挿入テキスト"],
+      "additionalProperties": false,
+      "properties": {
+        "対象カラム": { "type": "string" },
+        "位置": { "type": "string", "enum": ["文頭", "文末"] },
+        "挿入テキスト": { "type": "string" }
+      },
+      "x-sql": "文頭=CONCAT('挿入テキスト', col) / 文末=CONCAT(col, '挿入テキスト')。",
+      "x-constraints": [
+        "動的な値（他カラムの値）を挿入したい場合は連結を使う",
+        "文頭・文末の両方に挿入するには2回実行"
+      ],
+      "x-example": { "対象カラム": "金額", "位置": "文末", "挿入テキスト": "円" }
+    },
+
+    "除外": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "除外_settings",
+      "description": "カラムの先頭・末尾・全体から指定文字列を削除",
+      "type": "object",
+      "required": ["除外対象項目", "除外方法", "除外文字列"],
+      "additionalProperties": false,
+      "properties": {
+        "除外対象項目": { "type": "string" },
+        "除外方法": { "type": "string", "enum": ["すべて", "先頭", "後方"] },
+        "除外文字列": { "type": "string" }
+      },
+      "x-sql": "SUBSTR ベースの文字除去（FUNC_SUBSTR_START_WITH/END_WITH/LEN、ソース確認済）。",
+      "x-constraints": [
+        "桁数可変の先頭0の一括除去には不向き→型変換（テキスト→数値）を使う"
+      ],
+      "x-example": { "除外対象項目": "金額", "除外方法": "すべて", "除外文字列": "円" }
+    },
+
+    "0埋め": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "0埋め_settings",
+      "description": "先頭に0を挿入して桁数を統一",
+      "type": "object",
+      "required": ["対象カラム", "桁数"],
+      "additionalProperties": false,
+      "properties": {
+        "対象カラム": { "type": "string" },
+        "桁数": { "type": "integer", "minimum": 1, "description": "0埋め後の総桁数" }
+      },
+      "x-sql": "CONCAT(REPEAT('0', 桁数 - LEN(col)), col)（ソース確認済 FUNC_ZERO_PADDING）。",
+      "x-constraints": [
+        "主キーは先頭ゼロ保持のためテキスト型で扱う"
+      ],
+      "x-example": { "対象カラム": "顧客ID", "桁数": 8 }
+    },
+
+    "追加": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "追加_settings",
+      "description": "全行に同じ固定値を持つ新規カラムを追加",
+      "type": "object",
+      "required": ["格納値", "データ型"],
+      "additionalProperties": false,
+      "properties": {
+        "カラム名": { "type": "string", "description": "追加するカラム名" },
+        "格納値": { "type": "string", "description": "全行に入れる固定値" },
+        "データ型": { "type": "string", "enum": ["テキスト型", "整数型", "小数型", "日付型", "日時型", "真偽値型"] },
+        "位置": { "type": "string", "enum": ["左に追加", "右に追加"] }
+      },
+      "x-sql": "SELECT *, '格納値' AS new_col。",
+      "x-constraints": [
+        "行によって値が異なる場合はIF文・参照・集約で算出する",
+        "縦統合前のデータソース識別カラム付与によく使う"
+      ],
+      "x-example": { "カラム名": "店舗", "格納値": "A店", "データ型": "テキスト型", "位置": "右に追加" }
+    },
+
+    "複製": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "複製_settings",
+      "description": "既存カラムをコピーして別名の新規カラムを作成",
+      "type": "object",
+      "required": ["複製対象項目"],
+      "additionalProperties": false,
+      "properties": {
+        "複製対象項目": { "type": "string" }
+      },
+      "x-sql": "SELECT *, col AS col_copy。",
+      "x-example": { "複製対象項目": "購買日" }
+    },
+
+    "削除": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "削除_settings",
+      "description": "不要なカラムをテーブルから除去",
+      "type": "object",
+      "required": ["削除対象項目"],
+      "additionalProperties": false,
+      "properties": {
+        "削除対象項目": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ],
+          "description": "削除するカラム（複数選択可）"
+        }
+      },
+      "x-sql": "SELECT （対象カラムを列挙から省略）。",
+      "x-constraints": [
+        "行を除去したい場合は絞込み。カラム内の文字を除去したい場合は除外",
+        "非可逆操作のため必要なら事前に複製でバックアップ"
+      ],
+      "x-example": { "削除対象項目": "購買日_バックアップ" }
+    },
+
+    "並び替え": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "並び替え_settings",
+      "description": "テーブルのカラム表示順を変更（値・行順は不変）",
+      "type": "object",
+      "required": ["並び順"],
+      "additionalProperties": false,
+      "properties": {
+        "並び順": { "type": "array", "items": { "type": "string" }, "description": "並び替え後のカラム名リスト" }
+      },
+      "x-sql": "SELECT col1, col2, col3, ...（列を希望順に列挙）。",
+      "x-constraints": [
+        "カラム順の変更のみ。行の並び順は変わらない。手順書には載せないのが原則"
+      ],
+      "x-example": { "並び順": ["顧客ID", "氏名", "購買日", "購買金額"] }
+    },
+
+    "カラム名変更": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "カラム名変更_settings",
+      "description": "カラム名を変更（AS エイリアス相当、値は不変）",
+      "type": "object",
+      "required": ["変更前", "変更後"],
+      "additionalProperties": false,
+      "properties": {
+        "変更前": { "type": "string" },
+        "変更後": { "type": "string" }
+      },
+      "x-sql": "SELECT col AS new_name。",
+      "x-example": { "変更前": "COUNT_購買ID", "変更後": "購買回数" }
     }
 
   }

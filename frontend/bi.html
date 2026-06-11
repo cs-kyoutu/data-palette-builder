@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BI / 設計コンソール — b→dash</title>
+<style>
+  :root{
+    /* BIコンソールは赤系トーン (データパレット本体の青と区別する) */
+    --primary:#e8323d; --primary-bg:#fdecee; --surface:#ffffff; --bg:#f9f5f6;
+    --text:#1f2937; --text-muted:#6b7280; --border:#e7e2e3; --ok:#059669; --warn:#b91c1c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:14px}
+  .topbar h1{font-size:16px;margin:0;font-weight:800}
+  .topbar .badge{font-size:11px;color:var(--text-muted);border:1px solid var(--border);border-radius:999px;padding:2px 10px}
+  .topbar a.home{margin-left:auto;font-size:12px;color:var(--text-muted);text-decoration:none}
+  .topbar a.home:hover{color:var(--primary)}
+
+  .wrap{max-width:1100px;margin:18px auto;padding:0 20px}
+
+  /* sub-tab toggle */
+  .tabs{display:flex;gap:6px;justify-content:center;margin-bottom:16px}
+  .tab-btn{padding:9px 24px;border:1px solid var(--border);border-radius:999px;font-size:13px;font-weight:700;
+    cursor:pointer;background:var(--surface);color:var(--text-muted);transition:all .2s}
+  .tab-btn:hover{color:var(--text)}
+  .tab-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:0 2px 6px rgba(232,50,61,.25)}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:16px}
+  .field{margin-bottom:16px}
+  .label{display:block;font-size:13px;font-weight:700;margin-bottom:8px}
+  .req{color:var(--warn);font-size:11px;margin-left:4px}
+  .hint{font-size:12px;color:var(--text-muted);margin-top:6px}
+
+  .rtype{display:flex;gap:10px}
+  .rtype label{flex:1;border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px;
+    display:flex;align-items:flex-start;gap:8px;transition:all .15s}
+  .rtype label:hover{border-color:var(--primary)}
+  .rtype label.selected{border-color:var(--primary);background:var(--primary-bg)}
+  .rtype input{margin-top:3px}
+  .rt-title{font-weight:700}
+  .rt-desc{font-size:11px;color:var(--text-muted);margin-top:2px;display:block}
+
+  .drop{border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer;color:var(--text-muted);font-size:13px}
+  .drop:hover{border-color:var(--primary);color:var(--text)}
+  .drop input{display:none}
+  .file-status{font-size:12px;color:var(--text-muted);margin-top:6px}
+  .file-status.ok{color:var(--ok)}
+
+  textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box}
+  textarea:focus{border-color:var(--primary);outline:none}
+
+  .gen-btn{width:100%;padding:12px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-size:14px;font-weight:700;cursor:pointer}
+  .gen-btn:disabled{opacity:.4;cursor:not-allowed}
+
+  /* assistant area */
+  .assistant{margin-top:16px}
+  .assistant-header{font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:8px}
+  .messages{display:flex;flex-direction:column;gap:12px}
+  .msg{display:flex;gap:10px}
+  .msg.user{flex-direction:row-reverse}
+  .bubble{max-width:85%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;white-space:pre-wrap;word-break:break-word}
+  .msg.user .bubble{background:var(--primary-bg);border-color:#f5c2c7}
+  .avatar{width:30px;height:30px;border-radius:50%;background:var(--primary-bg);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+  .sql-label{font-size:11px;font-weight:700;color:var(--text-muted);margin:12px 0 4px}
+  .sql-block{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:12px;font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;overflow-x:auto}
+  .download-btn{display:inline-block;margin-top:10px;padding:8px 14px;background:var(--primary);color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600}
+  .input-row{display:none;gap:8px;margin-top:10px}
+  .input-row.visible{display:flex}
+  .input-row textarea{flex:1}
+  .input-row button{border:none;background:var(--primary);color:#fff;border-radius:8px;padding:0 16px;font-size:16px;cursor:pointer}
+  .hidden{display:none}
+  .typing{display:inline-block;color:var(--text-muted)}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>BI / 設計コンソール</h1>
+  <span class="badge">分離環境（β）</span>
+  <a class="home" href="/">← データパレットへ戻る</a>
+</div>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab-btn active" id="tabBi" onclick="switchTab('bi')">📈 BI レポート設定</button>
+    <button class="tab-btn" id="tabDesign" onclick="switchTab('design')">🧩 設計（レポート→テーブル逆算）</button>
+  </div>
+
+  <!-- ===== BI レポート設定 ===== -->
+  <div id="biPane">
+    <div class="card">
+      <div class="field">
+        <label class="label">レポート種類<span class="req">必須</span></label>
+        <div class="rtype" id="biRtype">
+          <label class="selected" onclick="selectRtype('custom', this)">
+            <input type="radio" name="biRtype" value="custom" checked>
+            <span><span class="rt-title">カスタムレポート</span><span class="rt-desc">表頭/表側/指標で集計・可視化</span></span>
+          </label>
+          <label onclick="selectRtype('segment', this)">
+            <input type="radio" name="biRtype" value="segment">
+            <span><span class="rt-title">セグメント</span><span class="rt-desc">抽出条件で対象顧客リストを定義</span></span>
+          </label>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label">データファイル<span class="req">必須</span></label>
+        <div class="drop" id="biDrop" onclick="document.getElementById('biFile').click()">
+          📄 集計対象のデータファイルをクリックして選択（Excel / CSV）
+          <input type="file" id="biFile" accept=".xlsx,.xls,.csv" onchange="handleBiFile(this.files)">
+        </div>
+        <div class="file-status" id="biFileStatus">ファイル未選択</div>
+      </div>
+      <div class="field">
+        <label class="label">レポート要件（自然文）<span class="req">必須</span></label>
+        <textarea id="biReq" rows="4" oninput="updateBiBtn()"
+          placeholder="例: 商品カテゴリ別・月別の売上を棒グラフで。ステータスが確定のものだけ、過去12ヶ月。"></textarea>
+      </div>
+      <button class="gen-btn" id="biGen" onclick="biGenerate()" disabled>BIレポートの手順書と等価SQLを生成する</button>
+    </div>
+
+    <div class="assistant hidden" id="biAssistant">
+      <div class="assistant-header">BI アシスタント</div>
+      <div class="messages" id="biMessages"></div>
+      <div class="input-row" id="biInputRow">
+        <textarea id="biChatInput" rows="1" placeholder="回答・修正要望を入力..."></textarea>
+        <button onclick="biChat()">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 設計（逆算） ===== -->
+  <div id="designPane" class="hidden">
+    <div class="card">
+      <div class="field">
+        <label class="label">作りたいレポート（自然文）<span class="req">必須</span></label>
+        <textarea id="dsReq" rows="6" oninput="updateDsBtn()"
+          placeholder="作りたいレポートを説明してください（複数可）。例:&#10;・自社EC売上分析「年/月/日」: 表側=年・月、表頭=日、指標=売上金額の合計&#10;・商品別売上分析: 表側=商品名、指標=購入者数・購入回数・売上金額&#10;・顧客属性別売上分析: 表側=性別×年代、指標=購入者数・購入回数・売上金額"></textarea>
+        <div class="hint">レポートのイメージ（表側=行軸 / 表頭=列軸 / 指標）を書くほど精度が上がります。これらを1つのテーブルで満たす定義を逆算します。</div>
+      </div>
+      <button class="gen-btn" id="dsGen" onclick="dsGenerate()" disabled>レポートからテーブル定義を逆算する</button>
+    </div>
+
+    <div class="assistant hidden" id="dsAssistant">
+      <div class="assistant-header">設計アシスタント</div>
+      <div class="messages" id="dsMessages"></div>
+      <div class="input-row" id="dsInputRow">
+        <textarea id="dsChatInput" rows="1" placeholder="回答・修正要望を入力..."></textarea>
+        <button onclick="dsChat()">➤</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --- Auth: 全 /api/ fetch に Bearer Token を自動付与 (index.html と同方式) ---
+  (function () {
+    const _orig = window.fetch;
+    window.fetch = function (url, opts = {}) {
+      const token = window.__APP_AUTH_TOKEN__;
+      if (token && typeof url === 'string' && url.startsWith('/api/')) {
+        opts.headers = opts.headers || {};
+        if (opts.headers instanceof Headers) opts.headers.set('Authorization', 'Bearer ' + token);
+        else opts.headers['Authorization'] = 'Bearer ' + token;
+      }
+      return _orig.call(this, url, opts);
+    };
+  })();
+
+  function switchTab(tab) {
+    const isBi = tab === 'bi';
+    document.getElementById('tabBi').classList.toggle('active', isBi);
+    document.getElementById('tabDesign').classList.toggle('active', !isBi);
+    document.getElementById('biPane').classList.toggle('hidden', !isBi);
+    document.getElementById('designPane').classList.toggle('hidden', isBi);
+  }
+
+  // 共通: メッセージ描画
+  function addMsg(containerId, role, text, opts = {}) {
+    const c = document.getElementById(containerId);
+    const msg = document.createElement('div');
+    msg.className = 'msg ' + role;
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = role === 'ai' ? '🧑‍🔬' : '🙂';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    const span = document.createElement('span');
+    span.textContent = text;
+    bubble.appendChild(span);
+    if (opts.sql) {
+      const lbl = document.createElement('div');
+      lbl.className = 'sql-label';
+      lbl.textContent = '等価SQL（参考・実行はされません）';
+      bubble.appendChild(lbl);
+      const pre = document.createElement('div');
+      pre.className = 'sql-block';
+      pre.textContent = opts.sql;
+      bubble.appendChild(pre);
+    }
+    if (opts.downloadUrl) {
+      const dl = document.createElement('a');
+      dl.href = opts.downloadUrl;
+      dl.className = 'download-btn';
+      dl.textContent = opts.downloadLabel || '📥 ダウンロード';
+      bubble.appendChild(dl);
+    }
+    msg.appendChild(avatar);
+    msg.appendChild(bubble);
+    c.appendChild(msg);
+    c.scrollTop = c.scrollHeight;
+  }
+  function addTyping(containerId) {
+    const c = document.getElementById(containerId);
+    const msg = document.createElement('div');
+    msg.className = 'msg ai';
+    msg.id = containerId + '_typing';
+    msg.innerHTML = '<div class="avatar">🧑‍🔬</div><div class="bubble"><span class="typing">考え中…</span></div>';
+    c.appendChild(msg);
+    c.scrollTop = c.scrollHeight;
+  }
+  function removeTyping(containerId) {
+    const t = document.getElementById(containerId + '_typing');
+    if (t) t.remove();
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result.split(',')[1]);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+
+  // ===== BI モード =====
+  let biDataFile = null, biReportType = 'custom', biSession = null, biLoading = false;
+
+  function selectRtype(rtype, label) {
+    biReportType = rtype;
+    document.querySelectorAll('#biRtype label').forEach(l => l.classList.remove('selected'));
+    label.classList.add('selected');
+    label.querySelector('input').checked = true;
+  }
+  function updateBiBtn() {
+    const hasReq = document.getElementById('biReq').value.trim().length > 0;
+    document.getElementById('biGen').disabled = !(biDataFile && hasReq && !biLoading);
+  }
+  async function handleBiFile(files) {
+    if (!files || !files.length) return;
+    const status = document.getElementById('biFileStatus');
+    status.classList.remove('ok');
+    status.textContent = '読み込み中...';
+    try {
+      const content = await fileToBase64(files[0]);
+      const res = await fetch('/api/parse', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: files[0].name, content, file_type: 'input' }),
+      });
+      if (!res.ok) throw new Error('解析に失敗しました');
+      const data = await res.json();
+      if (!data.tables || !data.tables.length) throw new Error('テーブルを検出できませんでした');
+      biDataFile = data.tables[0];
+      status.classList.add('ok');
+      status.textContent = `✓ ${biDataFile.table_name}（${biDataFile.columns.length} カラム）`;
+    } catch (e) {
+      biDataFile = null;
+      status.textContent = 'エラー: ' + (e.message || '読み込み失敗');
+    }
+    updateBiBtn();
+  }
+  async function biGenerate() {
+    const requirement = document.getElementById('biReq').value.trim();
+    if (!biDataFile || !requirement || biLoading) return;
+    biLoading = true; biSession = null; updateBiBtn();
+    document.getElementById('biAssistant').classList.remove('hidden');
+    document.getElementById('biMessages').innerHTML = '';
+    addMsg('biMessages', 'user', 'BIレポートの生成を開始します...');
+    addTyping('biMessages');
+    try {
+      const res = await fetch('/api/bi/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: null, report_type: biReportType, data_file: biDataFile, report_requirement: requirement }),
+      });
+      const data = await res.json();
+      removeTyping('biMessages');
+      biSession = data.session_id;
+      addMsg('biMessages', 'ai', data.reply, { sql: data.sql, downloadUrl: data.download_url, downloadLabel: '📥 手順書をダウンロード' });
+      document.getElementById('biInputRow').classList.toggle('visible', data.status === 'asking');
+    } catch (e) {
+      removeTyping('biMessages');
+      addMsg('biMessages', 'ai', 'エラーが発生しました。');
+    }
+    biLoading = false; updateBiBtn();
+  }
+  async function biChat() {
+    const input = document.getElementById('biChatInput');
+    const text = input.value.trim();
+    if (!text || biLoading || !biSession) return;
+    biLoading = true; input.value = '';
+    addMsg('biMessages', 'user', text);
+    addTyping('biMessages');
+    try {
+      const res = await fetch('/api/bi/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: biSession, message: text }),
+      });
+      const data = await res.json();
+      removeTyping('biMessages');
+      biSession = data.session_id;
+      addMsg('biMessages', 'ai', data.reply, { sql: data.sql, downloadUrl: data.download_url, downloadLabel: '📥 手順書をダウンロード' });
+      document.getElementById('biInputRow').classList.toggle('visible', data.status === 'asking');
+    } catch (e) {
+      removeTyping('biMessages');
+      addMsg('biMessages', 'ai', 'エラーが発生しました。');
+    }
+    biLoading = false;
+  }
+
+  // ===== 設計（逆算）モード =====
+  let dsSession = null, dsLoading = false;
+
+  function updateDsBtn() {
+    const hasReq = document.getElementById('dsReq').value.trim().length > 0;
+    document.getElementById('dsGen').disabled = !(hasReq && !dsLoading);
+  }
+  async function dsGenerate() {
+    const requirement = document.getElementById('dsReq').value.trim();
+    if (!requirement || dsLoading) return;
+    dsLoading = true; dsSession = null; updateDsBtn();
+    document.getElementById('dsAssistant').classList.remove('hidden');
+    document.getElementById('dsMessages').innerHTML = '';
+    addMsg('dsMessages', 'user', 'レポートからテーブル定義を逆算します...');
+    addTyping('dsMessages');
+    try {
+      const res = await fetch('/api/bi/design/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: null, report_requirement: requirement }),
+      });
+      const data = await res.json();
+      removeTyping('dsMessages');
+      dsSession = data.session_id;
+      addMsg('dsMessages', 'ai', data.reply, { downloadUrl: data.download_url, downloadLabel: '📥 設計書をダウンロード' });
+      document.getElementById('dsInputRow').classList.toggle('visible', data.status === 'asking');
+    } catch (e) {
+      removeTyping('dsMessages');
+      addMsg('dsMessages', 'ai', 'エラーが発生しました。');
+    }
+    dsLoading = false; updateDsBtn();
+  }
+  async function dsChat() {
+    const input = document.getElementById('dsChatInput');
+    const text = input.value.trim();
+    if (!text || dsLoading || !dsSession) return;
+    dsLoading = true; input.value = '';
+    addMsg('dsMessages', 'user', text);
+    addTyping('dsMessages');
+    try {
+      const res = await fetch('/api/bi/design/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: dsSession, message: text }),
+      });
+      const data = await res.json();
+      removeTyping('dsMessages');
+      dsSession = data.session_id;
+      addMsg('dsMessages', 'ai', data.reply, { downloadUrl: data.download_url, downloadLabel: '📥 設計書をダウンロード' });
+      document.getElementById('dsInputRow').classList.toggle('visible', data.status === 'asking');
+    } catch (e) {
+      removeTyping('dsMessages');
+      addMsg('dsMessages', 'ai', 'エラーが発生しました。');
+    }
+    dsLoading = false;
+  }
+
+  // Enter で送信
+  document.getElementById('biChatInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); biChat(); }
+  });
+  document.getElementById('dsChatInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dsChat(); }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+name: Procedure engine tests
+
+# 検証専用。master へは push せず、feature ブランチ or 手動実行でのみ走る。
+# ローカルに python/docker が無いため、Linux ランナーの python3 で
+# backend/procedure_engine.py を node参照実装(golden)と突き合わせる。
+on:
+  workflow_dispatch: {}
+  push:
+    branches-ignore: [master]
+
+jobs:
+  procedure-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Syntax check app.py (procedure_engine wiring)
+        run: python -c "import ast; ast.parse(open('backend/app.py', encoding='utf-8').read()); print('app.py syntax OK')"
+      - name: Run procedure engine golden tests
+        run: python tests/test_procedure.py
+      - name: Install pyyaml (for OLD engine comparison)
+        run: pip install pyyaml
+      - name: Compare OLD vs NEW engine output
+        run: python tests/compare_engines.py

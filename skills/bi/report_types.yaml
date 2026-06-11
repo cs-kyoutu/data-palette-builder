@@ -1,0 +1,46 @@
+# レポート種類語彙 — 初期スコープ = custom + segment のみ。
+# 原典: BI_.md 2-1 (カスタムレポート), 2-9 (セグメント)。
+# 対象外 (将来拡張): 定型レポート / サマリレポート / 配信設定。
+# 用途:
+#   1) report_type の許可値 (ユーザーがフォームで明示選択。Step1 は自動判別しない)
+#   2) 各タイプのウィザード手順ステップ (report_engine)
+#   3) SQL骨格 (sql_builder)
+# プレースホルダ: {report_id} {data_file} {axes}=表頭+表側 {measures}=指標SQL列
+#                {where} {group_by} {customer_id_col}。
+
+custom:
+  ui: カスタムレポート
+  wizard_steps:                 # components.yml / bi.yml
+    - データファイル選択
+    - カラム選択・配置          # 表頭 / 表側 / 指標
+    - 更新頻度設定
+  table_components:             # bi.yml:588-636
+    - {key: col_header,  ui: 表頭,   role: 列軸 → GROUP BY}
+    - {key: row_header,  ui: 表側,   role: 行軸 → GROUP BY}
+    - {key: measure,     ui: 指標,   role: 測定値 → 集計メソッド}
+    - {key: calc_metric, ui: 計算指標, role: 数式}
+    - {key: grand_total, ui: 総計列 / 総計行}
+    - {key: subtotal,    ui: 小計列 / 小計行}
+    - {key: ratio,       ui: 割合列 / 割合行}
+  # データマート生成相当の等価SQL (builders/custom_reports/base.rb: bi_custom_{id} 命名規則)
+  sql_skeleton: |
+    CREATE OR REPLACE TRANSIENT TABLE bi_custom_{report_id} AS
+    SELECT {axes}, {measures}
+    FROM {data_file}
+    {where}
+    GROUP BY {group_by}
+
+segment:
+  ui: セグメント
+  wizard_steps:                 # bi.yml:1183-1188
+    - セグメント選択
+    - カラム選択
+    - セグメント抽出の設定内容
+  columns:                      # UI列
+    - {key: customer_id, ui: 顧客IDカラム}
+    - {key: conditions,  ui: 抽出条件, ref: filter_conditions.yaml}
+  # 対象顧客の抽出 (集計せず DISTINCT で顧客IDを取得)
+  sql_skeleton: |
+    SELECT DISTINCT {customer_id_col}
+    FROM {data_file}
+    {where}
