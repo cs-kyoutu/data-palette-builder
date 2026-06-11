@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BI / 設計コンソール — b→dash</title>
+<!-- 本体(index.html)とフォントを揃える: Noto Sans JP -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
     /* BIコンソールは赤系トーン (データパレット本体の青と区別する) */
@@ -11,7 +15,7 @@
     --text:#1f2937; --text-muted:#6b7280; --border:#e7e2e3; --ok:#059669; --warn:#b91c1c;
   }
   *{box-sizing:border-box}
-  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
+  body{margin:0;font-family:"Noto Sans JP",sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
   .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:14px}
   .topbar h1{font-size:16px;margin:0;font-weight:800}
   .topbar .badge{font-size:11px;color:var(--text-muted);border:1px solid var(--border);border-radius:999px;padding:2px 10px}
@@ -29,8 +33,11 @@
 
   .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:16px}
   .field{margin-bottom:16px}
-  .label{display:block;font-size:13px;font-weight:700;margin-bottom:8px}
-  .req{color:var(--warn);font-size:11px;margin-left:4px}
+  .label{display:block;font-size:14px;font-weight:800;color:var(--text);margin-bottom:9px;letter-spacing:.01em}
+  /* 必須 / 任意 はピル型バッジで統一 */
+  .req,.opt{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;margin-left:8px;vertical-align:middle;line-height:1.5}
+  .req{color:#fff;background:var(--warn)}
+  .opt{color:var(--text-muted);background:var(--border)}
   .hint{font-size:12px;color:var(--text-muted);margin-top:6px}
 
   .rtype{display:flex;gap:10px}
@@ -151,7 +158,7 @@
       </div>
 
       <div class="field">
-        <label class="label">データファイル<span class="hint" style="font-weight:400;margin-left:6px;">任意</span></label>
+        <label class="label">データファイル<span class="opt">任意</span></label>
         <div class="drop" id="dsDrop" onclick="document.getElementById('dsFile').click()">
           📄 実データ（Excel / CSV・複数可）をクリックして選択
           <input type="file" id="dsFile" accept=".xlsx,.xls,.csv" multiple onchange="handleDsFiles(this.files)">
