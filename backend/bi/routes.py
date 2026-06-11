@@ -3,14 +3,16 @@
 データパレットの generate 2段階パイプライン(Step1=plan → Step2=design → 決定論レンダ)を
 ミラーリング。横断インフラは backend/_shared.py を再利用(app は本モジュールを include_router
 するだけ。本モジュールは app を import しない=循環なし)。
-"""
-from __future__ import annotations
 
+注: `from __future__ import annotations` は使わない。Body(...) と併用すると
+注釈が文字列(ForwardRef)化し、fastapi が body モデルの TypeAdapter を解決できず
+PydanticUserError になるため(2026-06-11 修正)。
+"""
 import json
 import time as _time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from .._shared import sessions, async_client, _parse_json_with_repair, verify_token, limiter
@@ -95,7 +97,7 @@ async def _run_pipeline(session_id: str, session: dict) -> BIResponse:
 
 @router.post("/generate", response_model=BIResponse)
 @limiter.limit("10/minute")
-async def bi_generate(request: Request, req: BIGenerateRequest):
+async def bi_generate(request: Request, req: BIGenerateRequest = Body(...)):
     session_id = req.session_id or str(uuid.uuid4())
     session = {
         "mode": "bi",
@@ -113,7 +115,7 @@ async def bi_generate(request: Request, req: BIGenerateRequest):
 
 @router.post("/chat", response_model=BIResponse)
 @limiter.limit("20/minute")
-async def bi_chat(request: Request, req: BIChatRequest):
+async def bi_chat(request: Request, req: BIChatRequest = Body(...)):
     session = sessions.get(req.session_id)
     if session is None or session.get("mode") != "bi":
         raise HTTPException(404, "BIセッションが見つかりません")
@@ -190,7 +192,7 @@ async def _run_design_pipeline(session_id: str, session: dict) -> DesignResponse
 
 @router.post("/design/generate", response_model=DesignResponse)
 @limiter.limit("10/minute")
-async def design_generate(request: Request, req: DesignGenerateRequest):
+async def design_generate(request: Request, req: DesignGenerateRequest = Body(...)):
     session_id = req.session_id or str(uuid.uuid4())
     session = {
         "mode": "design",
@@ -206,7 +208,7 @@ async def design_generate(request: Request, req: DesignGenerateRequest):
 
 @router.post("/design/chat", response_model=DesignResponse)
 @limiter.limit("20/minute")
-async def design_chat(request: Request, req: DesignChatRequest):
+async def design_chat(request: Request, req: DesignChatRequest = Body(...)):
     session = sessions.get(req.session_id)
     if session is None or session.get("mode") != "design":
         raise HTTPException(404, "設計セッションが見つかりません")
