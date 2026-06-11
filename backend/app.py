@@ -140,6 +140,18 @@ _DDL_STATEMENTS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at)",
+    # BI / 逆算設計モードのセッションは別テーブルに分離(同一DB)。
+    # admin統計/セッション一覧は sessions だけを見るため、自動的に混入しなくなる。
+    """
+    CREATE TABLE IF NOT EXISTS bi_sessions (
+        id TEXT PRIMARY KEY,
+        mode TEXT,
+        data JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_bi_sessions_created_at ON bi_sessions(created_at)",
     """
     CREATE TABLE IF NOT EXISTS feedback_log (
         id BIGSERIAL PRIMARY KEY,

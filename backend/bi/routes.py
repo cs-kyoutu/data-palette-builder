@@ -15,7 +15,8 @@ import uuid
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from .._shared import sessions, async_client, _parse_json_with_repair, verify_token, limiter
+# BI/設計モードは別テーブル(bi_sessions)に分離。既存パレットの sessions とデータを混ぜない。
+from .._shared import bi_sessions as sessions, async_client, _parse_json_with_repair, verify_token, limiter
 from . import prompts, report_engine, design_engine
 from .sql_builder import build_sql
 from .excel_builder import build_bi_spreadsheet, build_design_spreadsheet
