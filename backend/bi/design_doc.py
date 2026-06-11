@@ -30,3 +30,27 @@ class BIResponse(BaseModel):
     status: str                                     # "asking" | "done"
     sql: str | None = None
     download_url: str | None = None
+
+
+# === 逆算設計モード (レポート → テーブル定義) ============================
+# 演習資料(データマート設計 Vol.02)の4ステップを道具化したモード。
+# 入力は「完成テーブル」ではなく「目標レポート(自然文)」。data_file は受け取らない
+# (どんなテーブルを作るべきか=粒度/主キー/必要カラムを Claude が逆算するのが目的)。
+
+class DesignGenerateRequest(BaseModel):
+    session_id: str | None = None
+    report_requirement: str = ""                    # 目標レポートの自然文(複数レポート可)
+    additional_context: str = ""
+
+
+class DesignChatRequest(BaseModel):
+    session_id: str
+    message: str
+
+
+class DesignResponse(BaseModel):
+    session_id: str
+    reply: str
+    status: str                                     # "asking" | "done"
+    design: dict | None = None                      # 中間 table_design JSON (フロント表示用)
+    download_url: str | None = None

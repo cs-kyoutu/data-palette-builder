@@ -3410,6 +3410,17 @@ async def admin_page():
     return html
 
 
+@app.get("/bi", response_class=HTMLResponse)
+async def bi_console_page():
+    """BI / 設計コンソール。データパレット本体(index.html)とは別URLに分離(β)。
+    安定したら本体へ統合予定。/admin と同じくトークン注入してHTMLを返す。"""
+    html_path = FRONTEND_PATH / "bi.html"
+    html = html_path.read_text(encoding="utf-8")
+    token_script = f'<script>window.__APP_AUTH_TOKEN__="{AUTH_TOKEN}";</script>'
+    html = html.replace("</head>", f"{token_script}</head>")
+    return html
+
+
 @app.get("/healthz")
 async def healthz():
     """ALB/ECSヘルスチェック用。認証・DB・外部API非依存で即200を返す。"""
