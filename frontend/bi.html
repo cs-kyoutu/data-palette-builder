@@ -75,6 +75,8 @@
   .sql-label{font-size:11px;font-weight:700;color:var(--text-muted);margin:12px 0 4px}
   .sql-block{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:12px;font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;overflow-x:auto}
   .download-btn{display:inline-block;margin-top:10px;padding:8px 14px;background:var(--primary);color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600}
+  .bridge-btn{display:block;margin-top:10px;padding:9px 14px;background:#fff;color:var(--primary);border:1.5px solid var(--primary);border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .bridge-btn:hover{background:var(--primary-bg)}
   .input-row{display:none;gap:8px;margin-top:10px}
   .input-row.visible{display:flex}
   .input-row textarea{flex:1}
@@ -101,12 +103,12 @@
 
 <div class="wrap">
   <div class="tabs">
-    <button class="tab-btn active" id="tabBi" onclick="switchTab('bi')">📈 BI レポート設定</button>
-    <button class="tab-btn" id="tabDesign" onclick="switchTab('design')">🧩 設計（レポート→テーブル逆算）</button>
+    <button class="tab-btn active" id="tabDesign" onclick="switchTab('design')">🧩 設計（レポート→テーブル逆算）</button>
+    <button class="tab-btn" id="tabBi" onclick="switchTab('bi')">📈 BI レポート設定</button>
   </div>
 
   <!-- ===== BI レポート設定 ===== -->
-  <div id="biPane">
+  <div id="biPane" class="hidden">
     <div class="card">
       <div class="field">
         <label class="label">レポート種類<span class="req">必須</span></label>
@@ -148,7 +150,7 @@
   </div>
 
   <!-- ===== 設計（逆算） ===== -->
-  <div id="designPane" class="hidden">
+  <div id="designPane">
     <div class="card">
       <div class="field">
         <label class="label">作りたいレポート（自然文）<span class="req">必須</span></label>
@@ -238,6 +240,13 @@
       dl.className = 'download-btn';
       dl.textContent = opts.downloadLabel || '📥 ダウンロード';
       bubble.appendChild(dl);
+    }
+    if (opts.bridge) {
+      const b = document.createElement('button');
+      b.className = 'bridge-btn';
+      b.textContent = '→ この設計でBIレポート設定へ進む';
+      b.onclick = sendDesignToBi;
+      bubble.appendChild(b);
     }
     msg.appendChild(avatar);
     msg.appendChild(bubble);
@@ -379,6 +388,38 @@
   // ===== 設計（逆算）モード =====
   let dsSession = null, dsLoading = false;
   let dsDataFiles = [];  // 任意。アップロードした実テーブル {table_name, columns}
+  let dsLastDesign = null;  // 直近の設計結果(design JSON)。BIレポート設定への橋渡しに使う
+
+  // 設計結果 → BIレポート設定タブへ引き継ぐ(設計したテーブル定義をdata_file、レポートを要件に変換)
+  function sendDesignToBi() {
+    const d = dsLastDesign;
+    if (!d) return;
+    // 単一/複数テーブル: 先頭テーブルを使う
+    const t = (Array.isArray(d.テーブル) && d.テーブル.length) ? d.テーブル[0] : d;
+    const cols = (t.カラム || []).map(c => ({ name: c.name, type: c.type || 'テキスト' }));
+    biDataFile = { table_name: t.テーブル名 || '設計テーブル', columns: cols };
+    // レポート群を自然文の要件に変換
+    const reqLines = (t.レポート || []).map(r => {
+      const sosoku = (r.表側 || []).join('、') || 'なし';
+      const hyoto = (r.表頭 || []).join('、') || 'なし';
+      const metrics = (r.指標 || []).map(m => `${m.name || m.column}（${m.method || ''}）`).join('、');
+      return `・${r.name || 'レポート'}: 表側=${sosoku} / 表頭=${hyoto} / 指標=${metrics}`;
+    });
+    const multiNote = (Array.isArray(d.テーブル) && d.テーブル.length > 1)
+      ? '\n※ 複数テーブル設計のため先頭テーブルのみ取り込みました。' : '';
+    document.getElementById('biReq').value = reqLines.join('\n');
+    // report_type は custom 固定(表側/表頭/指標)
+    biReportType = 'custom';
+    document.querySelectorAll('#biRtype label').forEach(l => l.classList.remove('selected'));
+    const customLabel = document.querySelector('#biRtype label');
+    if (customLabel) { customLabel.classList.add('selected'); customLabel.querySelector('input').checked = true; }
+    // ファイル状態を「設計から取込」に
+    const st = document.getElementById('biFileStatus');
+    st.classList.add('ok');
+    st.textContent = `✓ 設計から取込: ${biDataFile.table_name}（${biDataFile.columns.length}列）${multiNote}`;
+    switchTab('bi');
+    updateBiBtn();
+  }
 
   function updateDsBtn() {
     const hasReq = document.getElementById('dsReq').value.trim().length > 0;
@@ -424,7 +465,9 @@
       const data = await res.json();
       removeTyping('dsMessages');
       dsSession = data.session_id;
-      addMsg('dsMessages', 'ai', data.reply, { downloadUrl: data.download_url, downloadLabel: '📥 設計書をダウンロード' });
+      const done = data.status === 'done' && data.design;
+      if (done) dsLastDesign = data.design;
+      addMsg('dsMessages', 'ai', data.reply, { downloadUrl: data.download_url, downloadLabel: '📥 設計書をダウンロード', bridge: done });
       document.getElementById('dsInputRow').classList.toggle('visible', data.status === 'asking');
     } catch (e) {
       removeTyping('dsMessages');
@@ -447,7 +490,9 @@
       const data = await res.json();
       removeTyping('dsMessages');
       dsSession = data.session_id;
-      addMsg('dsMessages', 'ai', data.reply, { downloadUrl: data.download_url, downloadLabel: '📥 設計書をダウンロード' });
+      const done = data.status === 'done' && data.design;
+      if (done) dsLastDesign = data.design;
+      addMsg('dsMessages', 'ai', data.reply, { downloadUrl: data.download_url, downloadLabel: '📥 設計書をダウンロード', bridge: done });
       document.getElementById('dsInputRow').classList.toggle('visible', data.status === 'asking');
     } catch (e) {
       removeTyping('dsMessages');
