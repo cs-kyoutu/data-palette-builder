@@ -5,6 +5,9 @@
   ③ テーブル定義(粒度/主キー/カラム)      ④ サンプルデータ + 検算
 さらに「BIだけでは出せない=DP事前計算が必要な指標」(発展B)を明示する。
 
+単一テーブル設計と、複数テーブル設計(結合キーを持たない別ファクトを無理に統合せず
+分割するケース。design に "テーブル":[...] が入る)の両方に対応する。
+
 集計方法の表示名は skills/bi/*.yaml を vocab 経由で解決する。
 """
 from __future__ import annotations
@@ -30,18 +33,21 @@ def _fmt_metric(m: dict) -> str:
     return base
 
 
-def render(design: dict) -> str:
-    """逆算設計 design → 設計書テキスト。"""
+def _tables_of(design: dict):
+    """複数テーブル構成なら テーブル のリストを返す。単一テーブルなら None。"""
+    t = design.get("テーブル")
+    if isinstance(t, list) and t:
+        return t
+    return None
+
+
+def _render_body(design: dict, L: list) -> None:
+    """1テーブル分の ①〜④ + 発展B を L に追記する(テーブル名ヘッダは呼び出し側が出す)。"""
     reports = design.get("レポート", []) or []
     columns = design.get("カラム", []) or []
     dp = design.get("DP事前計算", []) or []
     sample = design.get("サンプル") or {}
     kensan = design.get("検算", []) or []
-
-    L = ["【データテーブル設計書】 レポートからの逆算設計"]
-    if design.get("テーブル名"):
-        L.append(f"テーブル名: {design['テーブル名']}")
-    L.append("")
 
     # ① 各レポートのBI設定
     L.append("■ ① 各レポートのBI設定")
@@ -127,20 +133,51 @@ def render(design: dict) -> str:
             calc = " ".join(filter(None, [k.get("計算"), ("= " + str(k["結果"])) if k.get("結果") not in (None, "") else ""]))
             if calc.strip():
                 L.append(f"        {calc}")
+
+
+def render(design: dict) -> str:
+    """逆算設計 design → 設計書テキスト。単一/複数テーブル(別ファクト)両対応。"""
+    tables = _tables_of(design)
+    if tables:
+        L = ["【データテーブル設計書】 レポートからの逆算設計（複数テーブル構成）"]
+        if design.get("注記"):
+            L.append(f"※ {design['注記']}")
+        for i, t in enumerate(tables, 1):
+            L += ["", "=" * 50,
+                  f"▼ テーブル{i}: {t.get('テーブル名', '(無名テーブル)')}",
+                  "=" * 50]
+            _render_body(t, L)
+        return "\n".join(L)
+
+    # 単一テーブル
+    L = ["【データテーブル設計書】 レポートからの逆算設計"]
+    if design.get("テーブル名"):
+        L.append(f"テーブル名: {design['テーブル名']}")
+    L.append("")
+    _render_body(design, L)
     return "\n".join(L)
 
 
-def collect_warnings(design: dict) -> list[str]:
-    """設計の健全性チェック(致命的ではない注意喚起)。"""
+def _warnings_one(design: dict, prefix: str = "") -> list[str]:
     w: list[str] = []
     if not design.get("粒度"):
-        w.append("粒度が設定されていません。最小粒度を明示してください。")
+        w.append(f"{prefix}粒度が設定されていません。最小粒度を明示してください。")
     if not design.get("主キー"):
-        w.append("主キーが設定されていません。")
+        w.append(f"{prefix}主キーが設定されていません。")
     if not (design.get("レポート") or []):
-        w.append("レポートを検出できませんでした。要件をもう少し具体的にしてください。")
-    # 派生カラムなのに派生方法が無い
+        w.append(f"{prefix}レポートを検出できませんでした。要件をもう少し具体的にしてください。")
     for c in design.get("カラム", []) or []:
         if c.get("derived") and not c.get("派生方法"):
-            w.append(f"派生カラム『{c.get('name', '')}』の派生方法が未記載です。")
+            w.append(f"{prefix}派生カラム『{c.get('name', '')}』の派生方法が未記載です。")
     return w
+
+
+def collect_warnings(design: dict) -> list[str]:
+    """設計の健全性チェック(致命的ではない注意喚起)。単一/複数テーブル両対応。"""
+    tables = _tables_of(design)
+    if tables:
+        w: list[str] = []
+        for t in tables:
+            w += _warnings_one(t, prefix=f"[{t.get('テーブル名', 'テーブル')}] ")
+        return w
+    return _warnings_one(design)
