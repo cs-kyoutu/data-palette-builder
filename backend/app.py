@@ -33,6 +33,7 @@ from pydantic import BaseModel
 from .parser import (
     parse_input_excel, parse_input_csv,
     parse_output_excel, parse_output_csv,
+    parse_grid,
 )
 from .excel_builder import build_spreadsheet
 from .template_engine import generate_procedure_text, render_step, validate_column_flow
@@ -1473,6 +1474,34 @@ async def upload_file(req: UploadRequest):
             return {"type": "output", "mapping": result, "filename": req.filename}
     except Exception as e:
         raise HTTPException(400, f"ファイルの解析に失敗しました。ファイル形式を確認してください。")
+
+
+class ReportGridRequest(BaseModel):
+    filename: str
+    content: str  # base64 encoded file content
+
+
+@app.post("/api/bi/report-grid", dependencies=[Depends(verify_token)])
+async def bi_report_grid(req: ReportGridRequest):
+    """レポートイメージ(Excel/CSV)を生のセルグリッドテキストに変換して返す。
+    逆算設計の「作りたいレポート」をファイルで入力する用途。解釈は Claude が行う。"""
+    suffix = Path(req.filename).suffix.lower()
+    if suffix not in (".xlsx", ".xls", ".csv"):
+        raise HTTPException(400, "対応形式: .xlsx, .csv")
+
+    save_path = UPLOAD_DIR / f"{uuid.uuid4()}{suffix}"
+    with open(save_path, "wb") as f:
+        f.write(base64.b64decode(req.content))
+
+    try:
+        grid = parse_grid(str(save_path))
+        if not grid.strip():
+            raise HTTPException(400, "ファイルから表を読み取れませんでした。")
+        return {"filename": req.filename, "grid": grid}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(400, "ファイルの解析に失敗しました。ファイル形式を確認してください。")
 
 
 def _build_from_design_doc(session_id: str, session: dict, generation_data: dict, input_tables: list) -> "ChatResponse":

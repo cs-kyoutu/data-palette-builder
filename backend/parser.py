@@ -215,6 +215,71 @@ def parse_input_csv(file_path: str, table_name: str | None = None) -> list[dict]
 
 
 # =============================================================
+# レポートイメージの生グリッド抽出（逆算設計の「ファイル入力」用）
+# =============================================================
+# 通常のパーサ(parse_input_*)は「ヘッダ=カラム」のデータ定義表を想定するが、
+# レポートイメージ(完成ピボットの見た目)は表側/表頭/指標が入り混じる別物。
+# ここでは解釈を一切せず、セルをそのままテキストのグリッドに起こす。
+# 表側/表頭/指標の読み取りは Claude(設計 Step1/2)に委ねる。
+
+def _grid_from_rows(rows: list[list], max_rows: int, max_cols: int) -> list[str]:
+    """セル行の配列 → タブ区切りテキスト行の配列。末尾の空行/空列はトリムする。"""
+    norm = []
+    for row in rows:
+        cells = ["" if v is None else str(v).strip() for v in row]
+        norm.append(cells)
+    # 末尾の空行を落とす
+    while norm and not any(c for c in norm[-1]):
+        norm.pop()
+    if not norm:
+        return []
+    # 実データのある最大列数を求めて余分な空列を切る
+    width = 0
+    for cells in norm:
+        last = 0
+        for i, c in enumerate(cells):
+            if c:
+                last = i + 1
+        width = max(width, last)
+    width = min(width, max_cols) if width else 1
+    lines = []
+    for cells in norm[:max_rows]:
+        lines.append("\t".join(cells[:width]))
+    if len(norm) > max_rows:
+        lines.append(f"…(以下 {len(norm) - max_rows} 行省略)")
+    return lines
+
+
+def parse_grid(file_path: str, max_rows: int = 60, max_cols: int = 30) -> str:
+    """レポートイメージ(Excel/CSV)を「生のセルグリッド」テキストに変換する。
+
+    返り値はシート見出し付きのタブ区切りテキスト。データ抽出・型推論はしない。
+    """
+    suffix = Path(file_path).suffix.lower()
+    blocks: list[str] = []
+
+    if suffix == ".csv":
+        with open(file_path, encoding="utf-8-sig") as f:
+            rows = list(csv.reader(f))
+        lines = _grid_from_rows(rows, max_rows, max_cols)
+        if lines:
+            blocks.append("\n".join(lines))
+    else:
+        wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            if ws.max_row is None:
+                continue
+            rows = list(ws.iter_rows(values_only=True))
+            lines = _grid_from_rows(rows, max_rows, max_cols)
+            if lines:
+                blocks.append(f"【シート: {sheet_name}】\n" + "\n".join(lines))
+        wb.close()
+
+    return "\n\n".join(blocks)
+
+
+# =============================================================
 # アウトプットマッピングファイルの解析
 # =============================================================
 

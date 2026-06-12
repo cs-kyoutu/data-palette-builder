@@ -154,14 +154,38 @@
   <div id="designPane">
     <div class="card">
       <div class="field">
-        <label class="label">作りたいレポート（自然文）<span class="req">必須</span></label>
-        <textarea id="dsReq" rows="6" oninput="updateDsBtn()"
-          placeholder="作りたいレポートを説明してください（複数可）。例:&#10;・自社EC売上分析「年/月/日」: 表側=年・月、表頭=日、指標=売上金額の合計&#10;・商品別売上分析: 表側=商品名、指標=購入者数・購入回数・売上金額&#10;・顧客属性別売上分析: 表側=性別×年代、指標=購入者数・購入回数・売上金額"></textarea>
-        <div class="hint">レポートのイメージ（表側=行軸 / 表頭=列軸 / 指標）を書くほど精度が上がります。これらを1つのテーブルで満たす定義を逆算します。</div>
+        <label class="label">作りたいレポート<span class="req">必須</span></label>
+        <div class="rtype" id="dsInputMode" style="margin-bottom:10px">
+          <label class="selected" onclick="selectDsMode('text', this)">
+            <input type="radio" name="dsInputMode" value="text" checked>
+            <span><span class="rt-title">✍️ 自然文で書く</span><span class="rt-desc">表側/表頭/指標を文章で説明</span></span>
+          </label>
+          <label onclick="selectDsMode('file', this)">
+            <input type="radio" name="dsInputMode" value="file">
+            <span><span class="rt-title">📄 ファイルで入力</span><span class="rt-desc">完成レポートの見た目(Excel/CSV)を読み取る</span></span>
+          </label>
+        </div>
+
+        <!-- 自然文モード -->
+        <div id="dsTextInput">
+          <textarea id="dsReq" rows="6" oninput="updateDsBtn()"
+            placeholder="作りたいレポートを説明してください（複数可）。例:&#10;・自社EC売上分析「年/月/日」: 表側=年・月、表頭=日、指標=売上金額の合計&#10;・商品別売上分析: 表側=商品名、指標=購入者数・購入回数・売上金額&#10;・顧客属性別売上分析: 表側=性別×年代、指標=購入者数・購入回数・売上金額"></textarea>
+          <div class="hint">レポートのイメージ（表側=行軸 / 表頭=列軸 / 指標）を書くほど精度が上がります。これらを1つのテーブルで満たす定義を逆算します。</div>
+        </div>
+
+        <!-- ファイルモード（完成レポートの見た目を読み取る） -->
+        <div id="dsFileInput" class="hidden">
+          <div class="drop" id="dsReportDrop" onclick="document.getElementById('dsReportFile').click()">
+            📄 作りたいレポート（完成イメージ）の Excel / CSV をクリックして選択
+            <input type="file" id="dsReportFile" accept=".xlsx,.xls,.csv" onchange="handleDsReportFile(this.files)">
+          </div>
+          <div class="file-status" id="dsReportStatus">未選択 — レポートの見た目（表側/表頭/指標が分かる表）を選んでください</div>
+          <div class="hint">アップロードした表のレイアウトから、表側/表頭/指標を自動で読み取って設計します。※これは「完成イメージ」です。実データは下の任意欄へ。</div>
+        </div>
       </div>
 
       <div class="field">
-        <label class="label">データファイル<span class="opt">任意</span></label>
+        <label class="label">データファイル（実データ）<span class="opt">任意</span></label>
         <div class="drop" id="dsDrop" onclick="document.getElementById('dsFile').click()">
           📄 実データ（Excel / CSV・複数可）をクリックして選択
           <input type="file" id="dsFile" accept=".xlsx,.xls,.csv" multiple onchange="handleDsFiles(this.files)">
@@ -390,6 +414,47 @@
   let dsSession = null, dsLoading = false;
   let dsDataFiles = [];  // 任意。アップロードした実テーブル {table_name, columns}
   let dsLastDesign = null;  // 直近の設計結果(design JSON)。BIレポート設定への橋渡しに使う
+  let dsInputMode = 'text';   // 'text'=自然文 / 'file'=完成レポートのファイル
+  let dsReportGrid = '';      // ファイルモード: 読み取ったレポートのグリッドテキスト
+  let dsReportFileName = '';
+
+  // 「作りたいレポート」の入力方式トグル（自然文 ↔ ファイル）
+  function selectDsMode(mode, el) {
+    dsInputMode = mode;
+    document.querySelectorAll('#dsInputMode label').forEach(l => l.classList.remove('selected'));
+    el.classList.add('selected');
+    el.querySelector('input').checked = true;
+    document.getElementById('dsTextInput').classList.toggle('hidden', mode !== 'text');
+    document.getElementById('dsFileInput').classList.toggle('hidden', mode !== 'file');
+    updateDsBtn();
+  }
+
+  // 完成レポート(Excel/CSV)を生グリッドとして読み取る。解釈は設計時に Claude が行う
+  async function handleDsReportFile(files) {
+    if (!files || !files.length) return;
+    const file = files[0];
+    const status = document.getElementById('dsReportStatus');
+    status.classList.remove('ok');
+    status.textContent = '読み込み中...';
+    dsReportGrid = ''; dsReportFileName = '';
+    try {
+      const content = await fileToBase64(file);
+      const res = await fetch('/api/bi/report-grid', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, content }),
+      });
+      if (!res.ok) throw new Error('解析に失敗しました');
+      const data = await res.json();
+      dsReportGrid = data.grid || '';
+      dsReportFileName = file.name;
+      if (!dsReportGrid.trim()) throw new Error('表を読み取れませんでした');
+      status.classList.add('ok');
+      status.textContent = `✓ ${file.name} を読み込みました — このレイアウトから表側/表頭/指標を逆算します`;
+    } catch (e) {
+      status.textContent = 'エラー: ' + (e.message || '読み込み失敗');
+    }
+    updateDsBtn();
+  }
 
   // 設計結果 → BIレポート設定タブへ引き継ぐ(設計したテーブル定義をdata_file、レポートを要件に変換)
   function sendDesignToBi() {
@@ -424,7 +489,9 @@
   }
 
   function updateDsBtn() {
-    const hasReq = document.getElementById('dsReq').value.trim().length > 0;
+    const hasReq = dsInputMode === 'file'
+      ? dsReportGrid.trim().length > 0
+      : document.getElementById('dsReq').value.trim().length > 0;
     document.getElementById('dsGen').disabled = !(hasReq && !dsLoading);
   }
   async function handleDsFiles(files) {
@@ -451,13 +518,23 @@
     }
   }
   async function dsGenerate() {
-    const requirement = document.getElementById('dsReq').value.trim();
-    if (!requirement || dsLoading) return;
+    let requirement, userMsg;
+    if (dsInputMode === 'file') {
+      if (!dsReportGrid.trim() || dsLoading) return;
+      requirement = `下記は「作りたいレポート」の完成イメージ（レイアウト表）です（ファイル: ${dsReportFileName}）。`
+        + `各表のレイアウトから 表側(行軸) / 表頭(列軸) / 指標 を読み取り、これらを満たすテーブル定義を逆算してください。\n\n`
+        + dsReportGrid;
+      userMsg = `レポート画像（${dsReportFileName}）からテーブル定義を逆算します...`;
+    } else {
+      requirement = document.getElementById('dsReq').value.trim();
+      if (!requirement || dsLoading) return;
+      userMsg = 'レポートからテーブル定義を逆算します...';
+    }
     dsLoading = true; dsSession = null; updateDsBtn();
     document.getElementById('dsAssistant').classList.remove('hidden');
     document.getElementById('dsMessages').innerHTML = '';
-    const dataNote = dsDataFiles.length ? `（実データ ${dsDataFiles.length}テーブルを使用）` : '（要件のみ）';
-    addMsg('dsMessages', 'user', 'レポートからテーブル定義を逆算します...' + dataNote);
+    const dataNote = dsDataFiles.length ? `（実データ ${dsDataFiles.length}テーブルを使用）` : '';
+    addMsg('dsMessages', 'user', userMsg + dataNote);
     addTyping('dsMessages', DS_STAGES);
     try {
       const res = await fetch('/api/bi/design/generate', {
