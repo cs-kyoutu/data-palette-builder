@@ -53,7 +53,8 @@
   .drop:hover{border-color:var(--primary);color:var(--text)}
   .drop input{display:none}
   .file-status{font-size:12px;color:var(--text-muted);margin-top:6px}
-  .file-status.ok{color:var(--ok)}
+  /* 取込済みは小さく埋もれないよう、はっきりした成功ボックスにする */
+  .file-status.ok{color:#065f46;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:700;margin-top:8px}
 
   textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box}
   textarea:focus{border-color:var(--primary);outline:none}
@@ -413,12 +414,13 @@
     document.querySelectorAll('#biRtype label').forEach(l => l.classList.remove('selected'));
     const customLabel = document.querySelector('#biRtype label');
     if (customLabel) { customLabel.classList.add('selected'); customLabel.querySelector('input').checked = true; }
-    // ファイル状態を「設計から取込」に
+    // ファイル状態を「設計から取込」に(目立つ成功ボックス)
     const st = document.getElementById('biFileStatus');
     st.classList.add('ok');
-    st.textContent = `✓ 設計から取込: ${biDataFile.table_name}（${biDataFile.columns.length}列）${multiNote}`;
+    st.textContent = `✓ 設計から自動取込済み: ${biDataFile.table_name}（${biDataFile.columns.length}列）— アップロード不要。下の「生成」へ${multiNote}`;
     switchTab('bi');
     updateBiBtn();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function updateDsBtn() {
