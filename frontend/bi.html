@@ -113,16 +113,26 @@
     <div class="card">
       <div class="field">
         <label class="label">レポート種類<span class="req">必須</span></label>
-        <div class="rtype" id="biRtype">
-          <label class="selected" onclick="selectRtype('custom', this)">
-            <input type="radio" name="biRtype" value="custom" checked>
-            <span><span class="rt-title">カスタムレポート</span><span class="rt-desc">表頭/表側/指標で集計・可視化</span></span>
-          </label>
-          <label onclick="selectRtype('segment', this)">
-            <input type="radio" name="biRtype" value="segment">
-            <span><span class="rt-title">セグメント</span><span class="rt-desc">抽出条件で対象顧客リストを定義</span></span>
-          </label>
+        <div id="biRtypeWrap">
+          <div class="rtype" id="biRtype">
+            <label class="selected" onclick="selectRtype('custom', this)">
+              <input type="radio" name="biRtype" value="custom" checked>
+              <span><span class="rt-title">カスタムレポート</span><span class="rt-desc">表頭/表側/指標で自由に集計（データマート保存）</span></span>
+            </label>
+            <label onclick="selectRtype('standard', this)">
+              <input type="radio" name="biRtype" value="standard">
+              <span><span class="rt-title">定型レポート</span><span class="rt-desc">テンプレート＋カラム選択（オンライン実行）</span></span>
+            </label>
+          </div>
+          <div class="hint" style="margin-top:10px">▼ これは「レポート」ではなく顧客抽出機能（b→dashでは別カテゴリ）:</div>
+          <div class="rtype" style="margin-top:4px">
+            <label onclick="selectRtype('segment', this)">
+              <input type="radio" name="biRtype" value="segment">
+              <span><span class="rt-title">セグメント</span><span class="rt-desc">抽出条件で対象顧客リストを定義（SELECT DISTINCT）</span></span>
+            </label>
+          </div>
         </div>
+        <div class="hint" style="margin-top:8px">※ サマリレポート（ダッシュボード）は、作成したカスタム／定型レポートを b→dash 上でウィジェットとして組み合わせて作成します（本ツールの設計対象外）。</div>
       </div>
       <div class="field">
         <label class="label">データファイル<span class="req">必須</span></label>
@@ -331,7 +341,8 @@
 
   function selectRtype(rtype, label) {
     biReportType = rtype;
-    document.querySelectorAll('#biRtype label').forEach(l => l.classList.remove('selected'));
+    // カスタム/定型/セグメントは別グループに分かれているので wrapper 全体で選択解除する
+    document.querySelectorAll('#biRtypeWrap label').forEach(l => l.classList.remove('selected'));
     label.classList.add('selected');
     label.querySelector('input').checked = true;
   }

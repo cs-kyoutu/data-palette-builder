@@ -7,9 +7,11 @@ BI_.md 4章のマッピングを skills/bi/*.yaml 語彙経由で適用する。
     build_sql(design_doc: dict) -> {"sql": str, "warnings": [str]}
 
 design_doc 形 (docs/bi_mode_design.md §2):
-  custom : {report_type, data_file, 表頭[], 表側[], 指標[{column,method,name,condition?}],
-            抽出条件[{column,op,value,value2?,values?}], 期間設定{type,range,column}, グラフ}
-  segment: {report_type, data_file, 顧客IDカラム, 抽出条件[...]}
+  custom  : {report_type, data_file, 表頭[], 表側[], 指標[{column,method,name,condition?}],
+             抽出条件[{column,op,value,value2?,values?}], 期間設定{type,range,column}, グラフ}
+             → データマート保存(CREATE TRANSIENT TABLE)
+  standard: custom と同形(グラフ/計算指標なし)。定型=テンプレベース・オンライン実行(SELECTのみ)
+  segment : {report_type, data_file, 顧客IDカラム, 抽出条件[...]} ← 本来は顧客抽出機能(別カテゴリ)
 
 op / method は yaml の key・ui どちらで来ても解決する(Step2 Claude のブレ吸収)。
 """
@@ -164,6 +166,20 @@ def _build_measures(metrics: list, warnings: list) -> list[str]:
     return cols
 
 
+def _build_aggregation(design_doc: dict, warnings: list) -> tuple[str, str, str]:
+    """custom / standard 共通: 軸+指標から SELECT句・GROUP BY句・WHERE句を組む。"""
+    axes = list(design_doc.get("表頭", []) or []) + list(design_doc.get("表側", []) or [])
+    measures = _build_measures(design_doc.get("指標", []), warnings)
+    where = _build_where(design_doc.get("抽出条件", []), design_doc.get("期間設定"), warnings)
+    if not axes:
+        warnings.append("表頭/表側(軸)が空です")
+    if not measures:
+        warnings.append("指標が空です")
+    select_cols = ", ".join(axes + measures) if (axes or measures) else "*"
+    group_by = ", ".join(str(i + 1) for i in range(len(axes))) if axes else ""
+    return select_cols, group_by, where
+
+
 def build_sql(design_doc: dict) -> dict:
     """design_doc → {"sql": str, "warnings": [str]}。report_type で分岐。"""
     warnings: list[str] = []
@@ -171,19 +187,22 @@ def build_sql(design_doc: dict) -> dict:
     data_file = design_doc.get("data_file", "{data_file}")
 
     if rtype == "custom":
-        axes = list(design_doc.get("表頭", []) or []) + list(design_doc.get("表側", []) or [])
-        measures = _build_measures(design_doc.get("指標", []), warnings)
-        where = _build_where(design_doc.get("抽出条件", []), design_doc.get("期間設定"), warnings)
+        select_cols, group_by, where = _build_aggregation(design_doc, warnings)
         report_id = design_doc.get("report_id", "preview")
-
-        if not axes:
-            warnings.append("表頭/表側(軸)が空です")
-        if not measures:
-            warnings.append("指標が空です")
-        select_cols = ", ".join(axes + measures) if (axes or measures) else "*"
-        group_by = ", ".join(str(i + 1) for i in range(len(axes))) if axes else ""
-
+        # カスタムはデータマートに保存(TRANSIENT TABLE)
         lines = [f"CREATE OR REPLACE TRANSIENT TABLE bi_custom_{report_id} AS",
+                 f"SELECT {select_cols}",
+                 f"FROM {data_file}"]
+        if where:
+            lines.append(where)
+        if group_by:
+            lines.append(f"GROUP BY {group_by}")
+        return {"sql": "\n".join(lines), "warnings": warnings}
+
+    if rtype == "standard":
+        select_cols, group_by, where = _build_aggregation(design_doc, warnings)
+        # 定型はテンプレートベースで常にオンライン実行(マート非保存)→ SELECT のみ
+        lines = ["-- 定型レポート: オンライン実行(データマート非保存)",
                  f"SELECT {select_cols}",
                  f"FROM {data_file}"]
         if where:
@@ -203,5 +222,5 @@ def build_sql(design_doc: dict) -> dict:
             lines.append(where)
         return {"sql": "\n".join(lines), "warnings": warnings}
 
-    warnings.append(f"未対応の report_type: {rtype!r} (custom / segment のみ)")
+    warnings.append(f"未対応の report_type: {rtype!r} (custom / standard / segment のみ)")
     return {"sql": "", "warnings": warnings}

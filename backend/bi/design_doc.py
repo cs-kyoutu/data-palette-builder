@@ -13,7 +13,10 @@ from pydantic import BaseModel
 
 class BIGenerateRequest(BaseModel):
     session_id: str | None = None
-    report_type: Literal["custom", "segment"]      # 必須・明示選択
+    # b→dash 実分類に整合: レポート種類=custom(カスタム)/standard(定型)。
+    # segment は本来「レポート種類」ではなく顧客抽出機能(segment4th)だが、対応済みなので残す。
+    # summary(サマリ=ウィジェット合成ダッシュボード)は単一SQL設計と馴染まないため対象外。
+    report_type: Literal["custom", "standard", "segment"]   # 必須・明示選択
     data_file: dict                                 # {table_name, columns:[{name,type,...}]}
     report_requirement: str = ""                    # 自然文。Step2 が design_doc へ
     additional_context: str = ""

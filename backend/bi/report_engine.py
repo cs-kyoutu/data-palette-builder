@@ -77,6 +77,32 @@ def render(design_doc: dict) -> str:
         L.append(f"  - 更新頻度: {design_doc.get('更新頻度', '（設定してください）')}")
         return "\n".join(L)
 
+    if rtype == "standard":
+        L = [f"【BIレポート設定手順書】 定型レポート",
+             f"データファイル: {data_file}"]
+        if design_doc.get("テンプレート名"):
+            L.append(f"テンプレート: {design_doc.get('テンプレート名')}")
+        L.append("（テンプレートベース・常にオンライン実行＝データマート非保存）")
+        L.append("")
+        L.append("■ Step1 データファイル選択")
+        L.append(f"  - 「{data_file}」を選択")
+        L.append("")
+        L.append("■ Step2 カラム選択")
+        col_h = design_doc.get("表頭", []) or []
+        row_h = design_doc.get("表側", []) or []
+        L.append(f"  - 表頭(列軸): {', '.join(col_h) if col_h else '（なし）'}")
+        L.append(f"  - 表側(行軸): {', '.join(row_h) if row_h else '（なし）'}")
+        for m in design_doc.get("指標", []) or []:
+            L.append(f"  - 指標: {_fmt_metric(m)}")
+        for c in design_doc.get("抽出条件", []) or []:
+            L.append(f"  - 抽出条件: {_fmt_condition(c)}")
+        if design_doc.get("期間設定"):
+            L.append(f"  - 期間設定: {_fmt_period(design_doc['期間設定'])}")
+        L.append("")
+        L.append("■ Step3 更新頻度設定")
+        L.append(f"  - 更新頻度: {design_doc.get('更新頻度', '（設定してください）')}")
+        return "\n".join(L)
+
     if rtype == "segment":
         L = [f"【BIレポート設定手順書】 セグメント",
              f"データファイル: {data_file}",
@@ -96,4 +122,4 @@ def render(design_doc: dict) -> str:
             L.append("  - 抽出条件: （なし）")
         return "\n".join(L)
 
-    return f"未対応の report_type: {rtype}（custom / segment のみ対応）"
+    return f"未対応の report_type: {rtype}（custom / standard / segment のみ対応）"

@@ -71,6 +71,19 @@ def get_bi_prompt_step2(data_file: dict, report_type: str,
 ```
 - condition は ~IFS 系 method のときだけ付ける。value2 は範囲(between)、values は多値のときだけ。
 - 期間設定.column は必ず日付カラムを指定(無いと期間SQLが作れない)。"""
+    elif report_type == "standard":
+        schema = """```json
+{"action":"design","report_type":"standard","data_file":"<テーブル名>",
+ "テンプレート名":"<定型レポートのテンプレート名(分かれば)>",
+ "表頭":["<列軸カラム>"],"表側":["<行軸カラム>"],
+ "指標":[{"column":"<カラム>","method":"<methodのkey>","name":"<表示名>"}],
+ "抽出条件":[{"column":"<カラム>","op":"<opのkey>","value":"","value2":"","values":[]}],
+ "期間設定":{"type":"daily|weekly|monthly","range":"過去Nヶ月 等","column":"<日付カラム>"},
+ "更新頻度":""}
+```
+- 定型レポートはテンプレート(StandardReportMaster)ベースで、常に**オンライン実行**(データマートに保存しない)。
+- カスタムと違い グラフ/計算指標 は持たない。集計指標・軸・抽出条件・期間のみ。
+- 期間設定.column は必ず日付カラムを指定(無いと期間SQLが作れない)。"""
     else:
         schema = """```json
 {"action":"design","report_type":"segment","data_file":"<テーブル名>",
