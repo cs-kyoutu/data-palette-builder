@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>データパレット / BI — b→dash</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{font-family:"Noto Sans JP",sans-serif;background:#0B4C6F}
+
+  /* ===== 切替バー(ワークスペース・スイッチャー) ===== */
+  .switchbar{height:46px;display:flex;align-items:center;gap:16px;padding:0 16px;
+    background:linear-gradient(90deg,#0B4C6F 0%,#0d5a82 100%);
+    box-shadow:0 2px 10px rgba(0,0,0,.20);position:relative;z-index:20}
+  .brand{display:flex;align-items:center;gap:8px;user-select:none}
+  .brand img{width:24px;height:auto;display:block}
+  .brand .nm{color:#fff;font-size:13px;font-weight:800;letter-spacing:.03em;opacity:.95}
+
+  /* セグメント・トグル(スライドするピル) */
+  .seg{position:relative;display:flex;background:rgba(255,255,255,.13);border-radius:999px;padding:3px}
+  .seg .pill{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:999px;
+    background:#0CAAEB;box-shadow:0 2px 8px rgba(12,170,235,.45);
+    transition:transform .38s cubic-bezier(.5,.05,.2,1),background-color .38s,box-shadow .38s}
+  .seg.bi .pill{transform:translateX(100%);background:#e8323d;box-shadow:0 2px 8px rgba(232,50,61,.45)}
+  .seg button{position:relative;z-index:1;border:none;background:none;cursor:pointer;font-family:inherit;
+    font-size:12.5px;font-weight:700;color:rgba(255,255,255,.65);padding:6px 20px;
+    transition:color .25s;white-space:nowrap}
+  .seg button.on{color:#fff}
+
+  /* ===== iframe スライド領域 ===== */
+  .stage{position:absolute;top:46px;left:0;right:0;bottom:0;overflow:hidden;background:#f7f9fb}
+  .track{display:flex;width:200%;height:100%;transition:transform .44s cubic-bezier(.5,.05,.2,1)}
+  .track.bi{transform:translateX(-50%)}
+  .track.no-anim{transition:none}
+  .pane{width:50%;height:100%}
+  .pane iframe{width:100%;height:100%;border:0;display:block}
+</style>
+</head>
+<body>
+  <div class="switchbar">
+    <div class="brand">
+      <img src="/cloud_logo.svg" alt="b→dash">
+      <span class="nm">b→dash</span>
+    </div>
+    <div class="seg" id="seg">
+      <span class="pill"></span>
+      <button class="on" id="segPalette" onclick="show('palette')">データパレット</button>
+      <button id="segBi" onclick="show('bi')">BI</button>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="track" id="track">
+      <div class="pane"><iframe id="fPalette" src="/palette" title="データパレット"></iframe></div>
+      <!-- BI は初回切替時に lazy ロード(普段使わない人の起動コストを増やさない) -->
+      <div class="pane"><iframe id="fBi" title="BI" data-src="/bi"></iframe></div>
+    </div>
+  </div>
+<script>
+  let cur = 'palette';
+  function show(which){
+    if(which === cur) return;
+    cur = which;
+    const isBi = which === 'bi';
+    const fBi = document.getElementById('fBi');
+    if(isBi && !fBi.src){ fBi.src = fBi.dataset.src; }   // 初回のみロード
+    document.getElementById('track').classList.toggle('bi', isBi);
+    document.getElementById('seg').classList.toggle('bi', isBi);
+    document.getElementById('segPalette').classList.toggle('on', !isBi);
+    document.getElementById('segBi').classList.toggle('on', isBi);
+    history.replaceState(null, '', isBi ? '#bi' : '#palette');   // 状態保持(リロード/ブックマーク)
+  }
+  // 起動時に #bi が付いていれば、アニメ無しで BI を初期表示
+  if(location.hash === '#bi'){
+    const track = document.getElementById('track');
+    track.classList.add('no-anim');
+    show('bi');
+    // 次フレームでアニメを戻す(以降の切替はスライドする)
+    requestAnimationFrame(() => requestAnimationFrame(() => track.classList.remove('no-anim')));
+  }
+</script>
+</body>
+</html>

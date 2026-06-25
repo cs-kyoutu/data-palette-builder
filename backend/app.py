@@ -3487,6 +3487,16 @@ async def healthz():
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
+    """データパレット / BI を内包する統合シェル(上部の切替バー)。
+    実体は iframe で /palette と /bi を読み込むだけで、各アプリのロジックは混ざらない。
+    シェル自身は /api を叩かないためトークン注入は不要。"""
+    html_path = FRONTEND_PATH / "shell.html"
+    return html_path.read_text(encoding="utf-8")
+
+
+@app.get("/palette", response_class=HTMLResponse)
+async def palette_page():
+    """データパレット本体。シェルの iframe から読み込む(従来の / 相当)。"""
     html_path = FRONTEND_PATH / "index.html"
     html = html_path.read_text(encoding="utf-8")
     # Bearer Token をフロントに注入（全fetchリクエストで自動送信させる）
@@ -3502,3 +3512,8 @@ async def avatar_image():
 @app.get("/favicon.png")
 async def favicon():
     return FileResponse(FRONTEND_PATH / "favicon.png", media_type="image/png")
+
+@app.get("/cloud_logo.svg")
+async def cloud_logo():
+    """統合シェルの切替バーで使うクラウドロゴ。"""
+    return FileResponse(FRONTEND_PATH / "cloud_logo.svg", media_type="image/svg+xml")
