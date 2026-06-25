@@ -3518,11 +3518,6 @@ async def cloud_logo():
     """統合シェルの切替バーで使うクラウドロゴ。"""
     return FileResponse(FRONTEND_PATH / "cloud_logo.svg", media_type="image/svg+xml")
 
-@app.get("/datax_logo_white.png")
-async def datax_logo_white():
-    """統合シェルの切替バー(濃紺背景)用の dataX 白ロゴ。"""
-    return FileResponse(FRONTEND_PATH / "datax_logo_white.png", media_type="image/png")
-
 @app.get("/datax_favicon.png")
 async def datax_favicon():
     """統合シェルのファビコン(dataX ロゴ)。"""

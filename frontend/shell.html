@@ -18,7 +18,8 @@
     background:linear-gradient(90deg,#0B4C6F 0%,#0d5a82 100%);
     box-shadow:0 2px 10px rgba(0,0,0,.20);position:relative;z-index:20}
   .brand{display:flex;align-items:center;gap:8px;user-select:none}
-  .brand img{height:20px;width:auto;display:block}
+  .brand img{width:24px;height:auto;display:block}
+  .brand .nm{color:#fff;font-size:13px;font-weight:800;letter-spacing:.03em;opacity:.95}
 
   /* セグメント・トグル(スライドするピル)。2列を等幅にしてピルと一致させる */
   .seg{position:relative;display:grid;grid-template-columns:1fr 1fr;
@@ -44,7 +45,8 @@
 <body>
   <div class="switchbar">
     <div class="brand">
-      <img src="/datax_logo_white.png" alt="dataX">
+      <img src="/cloud_logo.svg" alt="b→dash">
+      <span class="nm">b→dash</span>
     </div>
     <div class="seg" id="seg">
       <span class="pill"></span>
