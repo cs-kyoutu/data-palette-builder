@@ -58,6 +58,18 @@
 
   textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box}
   textarea:focus{border-color:var(--primary);outline:none}
+  input[type=text]{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;box-sizing:border-box}
+  input[type=text]:focus{border-color:var(--primary);outline:none}
+  /* 項目入力（逆算設計） */
+  .ds-report-block{border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:var(--primary-bg)}
+  .ds-block-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .ds-block-head .t{font-size:13px;font-weight:800;color:var(--primary)}
+  .ds-remove{border:1px solid var(--border);background:#fff;color:var(--text-muted);border-radius:6px;font-size:11px;font-weight:700;padding:3px 10px;cursor:pointer;font-family:inherit}
+  .ds-row{display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:center;margin-bottom:8px}
+  .ds-row:last-child{margin-bottom:0}
+  .ds-row>label{font-size:12px;font-weight:700;color:var(--text);line-height:1.3}
+  .ds-row .sub{display:block;font-size:10px;color:var(--text-muted);font-weight:600}
+  .ds-add-btn{width:100%;border:1.5px dashed var(--primary);background:#fff;color:var(--primary);border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
 
   .gen-btn{width:100%;padding:12px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-size:14px;font-weight:700;cursor:pointer}
   .gen-btn:disabled{opacity:.4;cursor:not-allowed}
@@ -166,9 +178,9 @@
       <div class="field">
         <label class="label">作りたいレポート<span class="req">必須</span></label>
         <div class="rtype" id="dsInputMode" style="margin-bottom:10px">
-          <label class="selected" onclick="selectDsMode('text', this)">
-            <input type="radio" name="dsInputMode" value="text" checked>
-            <span><span class="rt-title">✍️ 自然文で書く</span><span class="rt-desc">表側/表頭/指標を文章で説明</span></span>
+          <label class="selected" onclick="selectDsMode('form', this)">
+            <input type="radio" name="dsInputMode" value="form" checked>
+            <span><span class="rt-title">🧱 項目で入力</span><span class="rt-desc">表側/表頭/指標を欄ごとに入力</span></span>
           </label>
           <label onclick="selectDsMode('file', this)">
             <input type="radio" name="dsInputMode" value="file">
@@ -176,11 +188,16 @@
           </label>
         </div>
 
-        <!-- 自然文モード -->
-        <div id="dsTextInput">
-          <textarea id="dsReq" rows="6" oninput="updateDsBtn()"
-            placeholder="作りたいレポートを説明してください（複数可）。例:&#10;・自社EC売上分析「年/月/日」: 表側=年・月、表頭=日、指標=売上金額の合計&#10;・商品別売上分析: 表側=商品名、指標=購入者数・購入回数・売上金額&#10;・顧客属性別売上分析: 表側=性別×年代、指標=購入者数・購入回数・売上金額"></textarea>
-          <div class="hint">レポートのイメージ（表側=行軸 / 表頭=列軸 / 指標）を書くほど精度が上がります。これらを1つのテーブルで満たす定義を逆算します。</div>
+        <!-- 項目入力モード（表側/表頭/指標を欄ごとに） -->
+        <div id="dsFormInput">
+          <div id="dsReportList"></div>
+          <button type="button" class="ds-add-btn" onclick="addReportBlock()">＋ レポートを追加</button>
+          <div class="field" style="margin-top:14px;margin-bottom:0">
+            <label class="label" style="font-size:13px">抽出条件・期間など<span class="opt">任意</span></label>
+            <textarea id="dsNote" rows="2" oninput="updateDsBtn()"
+              placeholder="例: ステータスが「確定」のみ / 過去12ヶ月 / 自社チャネル限定 など（全レポート共通の補足）"></textarea>
+          </div>
+          <div class="hint">レポートごとに 表側=行軸 / 表頭=列軸 / 指標 を入力します。複数レポートを 1 つのテーブルで満たす定義を逆算します。</div>
         </div>
 
         <!-- ファイルモード（完成レポートの見た目を読み取る） -->
@@ -425,19 +442,71 @@
   let dsSession = null, dsLoading = false;
   let dsDataFiles = [];  // 任意。アップロードした実テーブル {table_name, columns}
   let dsLastDesign = null;  // 直近の設計結果(design JSON)。BIレポート設定への橋渡しに使う
-  let dsInputMode = 'text';   // 'text'=自然文 / 'file'=完成レポートのファイル
+  let dsInputMode = 'form';   // 'form'=項目入力 / 'file'=完成レポートのファイル
   let dsReportGrid = '';      // ファイルモード: 読み取ったレポートのグリッドテキスト
   let dsReportFileName = '';
 
-  // 「作りたいレポート」の入力方式トグル（自然文 ↔ ファイル）
+  // 「作りたいレポート」の入力方式トグル（項目入力 ↔ ファイル）
   function selectDsMode(mode, el) {
     dsInputMode = mode;
     document.querySelectorAll('#dsInputMode label').forEach(l => l.classList.remove('selected'));
     el.classList.add('selected');
     el.querySelector('input').checked = true;
-    document.getElementById('dsTextInput').classList.toggle('hidden', mode !== 'text');
+    document.getElementById('dsFormInput').classList.toggle('hidden', mode !== 'form');
     document.getElementById('dsFileInput').classList.toggle('hidden', mode !== 'file');
     updateDsBtn();
+  }
+
+  // ===== 項目入力（レポート単位の 表側/表頭/指標 ブロック） =====
+  const DS_CIRC = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+  function dsReportBlockHTML() {
+    return `<div class="ds-report-block">
+      <div class="ds-block-head"><span class="t"></span>
+        <button type="button" class="ds-remove" onclick="removeReportBlock(this)">削除</button></div>
+      <div class="ds-row"><label>レポート名</label>
+        <input type="text" class="ds-name" oninput="updateDsBtn()" placeholder="例: クリック数分析"></div>
+      <div class="ds-row"><label>表側<span class="sub">行軸</span></label>
+        <input type="text" class="ds-sosoku" oninput="updateDsBtn()" placeholder="例: 配信日・施策名・リンクURL"></div>
+      <div class="ds-row"><label>表頭<span class="sub">列軸・任意</span></label>
+        <input type="text" class="ds-hyoto" oninput="updateDsBtn()" placeholder="例: 日 / 性別 など（無ければ空欄）"></div>
+      <div class="ds-row"><label>指標</label>
+        <input type="text" class="ds-metrics" oninput="updateDsBtn()" placeholder="例: クリック数・クリック者数"></div>
+    </div>`;
+  }
+  function renumberReportBlocks() {
+    const blocks = [...document.querySelectorAll('#dsReportList .ds-report-block')];
+    blocks.forEach((b, i) => {
+      b.querySelector('.t').textContent = `レポート ${DS_CIRC[i] || (i + 1)}`;
+      b.querySelector('.ds-remove').style.display = blocks.length > 1 ? '' : 'none';
+    });
+  }
+  function addReportBlock() {
+    document.getElementById('dsReportList').insertAdjacentHTML('beforeend', dsReportBlockHTML());
+    renumberReportBlocks();
+    updateDsBtn();
+  }
+  function removeReportBlock(btn) {
+    const list = document.getElementById('dsReportList');
+    if (list.children.length <= 1) return;  // 最低1つは残す
+    btn.closest('.ds-report-block').remove();
+    renumberReportBlocks();
+    updateDsBtn();
+  }
+  // 項目入力フォーム → 設計エンジン用の要件テキストを組み立てる
+  function buildDsRequirementFromForm() {
+    const lines = [...document.querySelectorAll('#dsReportList .ds-report-block')].map((b, i) => {
+      const name = b.querySelector('.ds-name').value.trim() || `レポート${i + 1}`;
+      const sosoku = b.querySelector('.ds-sosoku').value.trim();
+      const hyoto = b.querySelector('.ds-hyoto').value.trim();
+      const metrics = b.querySelector('.ds-metrics').value.trim();
+      const parts = [];
+      if (sosoku) parts.push(`表側=${sosoku}`);
+      if (hyoto) parts.push(`表頭=${hyoto}`);
+      if (metrics) parts.push(`指標=${metrics}`);
+      return parts.length ? `・${name}: ${parts.join(' / ')}` : '';
+    }).filter(Boolean);
+    const note = document.getElementById('dsNote').value.trim();
+    return lines.join('\n') + (note ? `\n\n# 補足条件\n${note}` : '');
   }
 
   // 完成レポート(Excel/CSV)を生グリッドとして読み取る。解釈は設計時に Claude が行う
@@ -500,9 +569,14 @@
   }
 
   function updateDsBtn() {
-    const hasReq = dsInputMode === 'file'
-      ? dsReportGrid.trim().length > 0
-      : document.getElementById('dsReq').value.trim().length > 0;
+    let hasReq;
+    if (dsInputMode === 'file') {
+      hasReq = dsReportGrid.trim().length > 0;
+    } else {
+      // 表側 か 指標 が入ったブロックが1つでもあれば生成可
+      hasReq = [...document.querySelectorAll('#dsReportList .ds-report-block')].some(b =>
+        b.querySelector('.ds-sosoku').value.trim() || b.querySelector('.ds-metrics').value.trim());
+    }
     document.getElementById('dsGen').disabled = !(hasReq && !dsLoading);
   }
   async function handleDsFiles(files) {
@@ -537,8 +611,8 @@
         + dsReportGrid;
       userMsg = `レポート画像（${dsReportFileName}）からテーブル定義を逆算します...`;
     } else {
-      requirement = document.getElementById('dsReq').value.trim();
-      if (!requirement || dsLoading) return;
+      requirement = buildDsRequirementFromForm();
+      if (!requirement.trim() || dsLoading) return;
       userMsg = 'レポートからテーブル定義を逆算します...';
     }
     dsLoading = true; dsSession = null; updateDsBtn();
@@ -598,6 +672,9 @@
   document.getElementById('dsChatInput').addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dsChat(); }
   });
+
+  // 初期レポートブロックを1つ用意
+  addReportBlock();
 </script>
 </body>
 </html>
