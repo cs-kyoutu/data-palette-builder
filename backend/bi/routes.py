@@ -8,8 +8,12 @@
 注釈が文字列(ForwardRef)化し、fastapi が body モデルの TypeAdapter を解決できず
 PydanticUserError になるため(2026-06-11 修正)。
 """
+import asyncio
 import json
+import socket
 import time as _time
+import urllib.error
+import urllib.request
 import uuid
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
@@ -328,3 +332,29 @@ async def design_download_procedure(session_id: str):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename=session.get("procedure_filename", "procedure.xlsx"),
     )
+
+
+# === TEMPORARY: Redash到達性診断 (2026-07-01) ==============================
+# DPB(ECS)からRedashの受信SGが通っているか未確認のため一時的に追加。
+# 確認できたらこのエンドポイントは削除する。API keyは使わず匿名アクセスのみ
+# (SGが通っていれば /api/session は未認証でも302で返る=到達性の判定に十分)。
+_REDASH_HOST = "43.207.242.222"
+
+
+def _check_redash_reachable() -> dict:
+    url = f"http://{_REDASH_HOST}/api/session"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            return {"reachable": True, "status": resp.status, "detail": "connected (no redirect)"}
+    except urllib.error.HTTPError as e:
+        # 302(未ログイン)等もここに来る。到達はしている。
+        return {"reachable": True, "status": e.code, "detail": str(e)}
+    except (urllib.error.URLError, socket.timeout, TimeoutError) as e:
+        return {"reachable": False, "status": None, "detail": str(e)}
+
+
+@router.get("/_debug/redash-ping")
+async def debug_redash_ping():
+    """一時診断用。DPBのネットワークからRedash({_REDASH_HOST}:80)に到達できるか確認する。"""
+    result = await asyncio.to_thread(_check_redash_reachable)
+    return {"target": f"http://{_REDASH_HOST}/api/session", **result}
