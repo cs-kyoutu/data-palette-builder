@@ -218,6 +218,15 @@
           <input type="file" id="dsFile" accept=".xlsx,.xls,.csv" multiple onchange="handleDsFiles(this.files)">
         </div>
         <div class="file-status" id="dsFileStatus">未選択 — 実カラムで設計するため、生成前に1つ以上アップロードしてください</div>
+
+        <!-- Redashから直接取込(社内網/VPN経由のブラウザから直接Redashを呼ぶ。DPBサーバ経由ではない) -->
+        <div class="hint" style="margin-top:10px">または、Redashのアカウントからテーブル定義を直接取込めます（社内網/VPN接続時のみ）</div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <input type="text" id="dsRedashAccountId" placeholder="Redash アカウントID" style="flex:1">
+          <button type="button" class="ds-add-btn" onclick="importFromRedash()">Redashから取得</button>
+        </div>
+        <div class="file-status" id="dsRedashStatus"></div>
+        <div id="dsRedashTables" class="hidden" style="margin-top:8px"></div>
       </div>
 
       <button class="gen-btn" id="dsGen" onclick="dsGenerate()" disabled>レポートからテーブル定義を逆算する</button>
@@ -637,6 +646,91 @@
     }
     updateDsBtn();
   }
+
+  // ===== Redashから直接取込 =====
+  // DPBサーバ(ECS)からRedashへの直接アクセスがSGで拒否されているため、
+  // ユーザーのブラウザ(社内網/VPN経由=既に到達可能)から直接Redashを呼ぶ方式。
+  // APIキーは静的JSに埋め込まず、認証済みエンドポイント/api/bi/redash-configから都度取得する。
+  let _redashConfig = null;
+  async function _getRedashConfig() {
+    if (_redashConfig) return _redashConfig;
+    const res = await fetch('/api/bi/redash-config');
+    const data = await res.json();
+    if (!data.enabled) throw new Error('Redash連携が設定されていません（管理者に確認してください）');
+    _redashConfig = data;
+    return data;
+  }
+
+  // b→dashメタデータ形式の行(データファイル名/カラム論理名/データ型/顧客IDフラグ)を
+  // dsDataFilesと同じ {table_name, columns} 形式にまとめる。backend/parser.pyの
+  // _parse_bdash_metaと同じロジック(顧客IDフラグの判定値も含む)。
+  function _redashRowsToTables(rows) {
+    const groups = {};
+    for (const row of rows) {
+      const tbl = String(row['データファイル名'] ?? '').trim();
+      const name = String(row['カラム論理名'] ?? '').trim();
+      if (!tbl || !name) continue;
+      const type = String(row['データ型'] ?? '').trim();
+      const cidRaw = String(row['顧客IDフラグ'] ?? '').trim().toLowerCase();
+      const isCid = ['true', '1', '○', 'yes'].includes(cidRaw);
+      if (!groups[tbl]) groups[tbl] = [];
+      groups[tbl].push({ name, type, description: isCid ? '顧客ID（結合キー）' : '' });
+    }
+    return Object.entries(groups).map(([table_name, columns]) => ({ table_name, columns }));
+  }
+
+  async function importFromRedash() {
+    const accountId = document.getElementById('dsRedashAccountId').value.trim();
+    const status = document.getElementById('dsRedashStatus');
+    document.getElementById('dsRedashTables').classList.add('hidden');
+    if (!accountId) { status.textContent = 'アカウントIDを入力してください'; return; }
+    status.classList.remove('ok');
+    status.textContent = '取得中...（社内網 / VPN 接続が必要です）';
+    try {
+      const cfg = await _getRedashConfig();
+      const url = `http://${cfg.host}/api/queries/157/results?api_key=${encodeURIComponent(cfg.api_key)}`;
+      const res = await fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ max_age: 1800, parameters: { 'アカウントID': accountId } }),
+      });
+      if (!res.ok) throw new Error(`Redash応答エラー: ${res.status}`);
+      const data = await res.json();
+      if (data.job) throw new Error('Redashでクエリを実行中です。少し待ってから再度お試しください。');
+      const rows = data?.query_result?.data?.rows || [];
+      if (!rows.length) throw new Error('該当するデータファイルが見つかりませんでした');
+      const tables = _redashRowsToTables(rows);
+      status.classList.add('ok');
+      status.textContent = `✓ ${tables.length}テーブル見つかりました。追加したいテーブルを選択してください`;
+      _showRedashTableSelection(tables);
+    } catch (e) {
+      status.textContent = 'エラー: ' + (e.message || String(e))
+        + '（応答がCORSエラーの場合はRedashサーバー側の設定が必要です。ブラウザのコンソールを確認してください）';
+    }
+  }
+
+  let _redashFoundTables = [];
+  function _showRedashTableSelection(tables) {
+    _redashFoundTables = tables;
+    const box = document.getElementById('dsRedashTables');
+    box.classList.remove('hidden');
+    box.innerHTML = tables.map((t, i) =>
+      `<label style="display:block;font-size:13px;margin:4px 0">`
+      + `<input type="checkbox" class="redash-tbl-check" data-idx="${i}" checked> `
+      + `${t.table_name}（${t.columns.length}列）</label>`
+    ).join('') + `<button type="button" class="ds-add-btn" onclick="_addSelectedRedashTables()">選択したテーブルを追加</button>`;
+  }
+
+  function _addSelectedRedashTables() {
+    const checks = [...document.querySelectorAll('.redash-tbl-check:checked')];
+    checks.forEach(c => dsDataFiles.push(_redashFoundTables[Number(c.dataset.idx)]));
+    document.getElementById('dsRedashTables').classList.add('hidden');
+    const status = document.getElementById('dsFileStatus');
+    status.classList.add('ok');
+    const names = dsDataFiles.map(t => `${t.table_name}(${t.columns.length}列)`).join(' / ');
+    status.textContent = `✓ ${dsDataFiles.length}テーブル: ${names} — 実カラムで設計します`;
+    updateDsBtn();
+  }
+
   async function dsGenerate() {
     if (!dsDataFiles.length || dsLoading) return;
     let requirement, userMsg;

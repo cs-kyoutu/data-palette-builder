@@ -10,6 +10,7 @@ PydanticUserError になるため(2026-06-11 修正)。
 """
 import asyncio
 import json
+import os
 import socket
 import time as _time
 import urllib.error
@@ -358,3 +359,21 @@ async def debug_redash_ping():
     """一時診断用。DPBのネットワークからRedash({_REDASH_HOST}:80)に到達できるか確認する。"""
     result = await asyncio.to_thread(_check_redash_reachable)
     return {"target": f"http://{_REDASH_HOST}/api/session", **result}
+
+
+# === Redash連携: ブラウザから直接呼ぶ方式 ==================================
+# DPB(ECS)からRedashへの直接アクセスはSGで拒否されている(_debug/redash-ping参照)。
+# 一方ユーザーのブラウザ(社内網/VPN経由)からは到達できるため、実際のRedash呼び出しは
+# フロントエンドJS(frontend/bi.html の importFromRedash)が直接行う。
+# ここでは認証済みユーザーにのみ、その呼び出しに必要な設定(ホスト・APIキー)を渡す。
+# APIキーは静的JS/gitに残さないため、都度このエンドポイント経由で取得する
+# (=ブラウザの通信内容としては露出する。専用サービスアカウントの最小権限キーを使うこと)。
+_REDASH_API_KEY_ENV = "REDASH_API_KEY"
+
+
+@router.get("/redash-config")
+async def redash_config():
+    api_key = os.environ.get(_REDASH_API_KEY_ENV, "")
+    if not api_key:
+        return {"enabled": False}
+    return {"enabled": True, "host": _REDASH_HOST, "api_key": api_key}
