@@ -175,6 +175,117 @@ sessions = SessionStore()                    # データパレット(既存)
 bi_sessions = SessionStore("bi_sessions")    # BI / 逆算設計モード(分離)
 
 
+# --- トークン使用量ロギング(RDS-backed, append-only) ---
+# Claude 呼び出しごとに resp.usage を bi_usage テーブルへ追記するだけ。合計は持たず、
+# 集計は usage_summary() で都度クエリする(「貯めておいて、後で訊かれたら集計して返す」)。
+# DB 未設定(ローカル)なら no-op。記録の失敗は本処理を絶対に止めない(握りつぶしてログのみ)。
+
+# モデル別の単価(USD / 1M tokens)。集計時のコスト概算に使う。未知モデルはコスト null。
+_MODEL_PRICING = {
+    # input / output / cache読取(~0.1x) / cache書込(~1.25x)
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "cache_read": 0.30, "cache_write": 3.75},
+}
+
+
+def record_usage(usage, *, model: str, session_id: str = "", mode: str = "", label: str = "") -> None:
+    """1 回の Claude 応答の usage を bi_usage に追記。失敗しても例外は投げない。"""
+    if usage is None:
+        return
+    try:
+        with _db_conn() as conn:
+            if conn is None:
+                return
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO bi_usage
+                        (session_id, mode, label, model,
+                         input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        session_id, mode, label, model,
+                        getattr(usage, "input_tokens", 0) or 0,
+                        getattr(usage, "output_tokens", 0) or 0,
+                        getattr(usage, "cache_read_input_tokens", 0) or 0,
+                        getattr(usage, "cache_creation_input_tokens", 0) or 0,
+                    ),
+                )
+    except Exception as e:
+        print(f"[WARN] record_usage failed: {e}", flush=True)
+
+
+def usage_summary(*, since_hours: int | None = None) -> dict:
+    """bi_usage を集計し、呼び出し回数・トークン合計・概算コスト(USD)を返す。
+    since_hours 指定で直近 N 時間に絞る(省略時は全期間)。DB 未設定なら空集計。"""
+    empty = {
+        "calls": 0, "input_tokens": 0, "output_tokens": 0,
+        "cache_read_tokens": 0, "cache_creation_tokens": 0,
+        "estimated_cost_usd": 0.0, "by_model": [], "by_label": [],
+    }
+    where, params = "", ()
+    if since_hours is not None:
+        where = "WHERE created_at >= NOW() - make_interval(hours => %s)"
+        params = (since_hours,)
+
+    with _db_conn() as conn:
+        if conn is None:
+            return empty
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT model, COUNT(*),
+                       COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0),
+                       COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(cache_creation_tokens),0)
+                FROM bi_usage {where}
+                GROUP BY model ORDER BY 2 DESC
+                """,
+                params,
+            )
+            model_rows = cur.fetchall()
+            cur.execute(
+                f"""
+                SELECT COALESCE(NULLIF(label,''),'(none)'), COUNT(*),
+                       COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0)
+                FROM bi_usage {where}
+                GROUP BY 1 ORDER BY 2 DESC
+                """,
+                params,
+            )
+            label_rows = cur.fetchall()
+
+    out = dict(empty)
+    by_model = []
+    for model, calls, inp, outp, cr, cw in model_rows:
+        out["calls"] += calls
+        out["input_tokens"] += inp
+        out["output_tokens"] += outp
+        out["cache_read_tokens"] += cr
+        out["cache_creation_tokens"] += cw
+        p = _MODEL_PRICING.get(model)
+        cost = None
+        if p:
+            cost = round(
+                inp / 1e6 * p["input"] + outp / 1e6 * p["output"]
+                + cr / 1e6 * p["cache_read"] + cw / 1e6 * p["cache_write"],
+                4,
+            )
+            out["estimated_cost_usd"] += cost
+        by_model.append({
+            "model": model, "calls": calls,
+            "input_tokens": inp, "output_tokens": outp,
+            "cache_read_tokens": cr, "cache_creation_tokens": cw,
+            "estimated_cost_usd": cost,
+        })
+    out["estimated_cost_usd"] = round(out["estimated_cost_usd"], 4)
+    out["by_model"] = by_model
+    out["by_label"] = [
+        {"label": lbl, "calls": c, "input_tokens": i, "output_tokens": o}
+        for (lbl, c, i, o) in label_rows
+    ]
+    return out
+
+
 # --- Claude APIクライアント ---
 # 全リクエストハンドラは async。ブロッキングする同期クライアント(client.messages.create)を
 # 使うと uvicorn の単一イベントループが止まり、誰か 1 人の生成中は他ユーザーの要求も待たされる。

@@ -1703,7 +1703,10 @@
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = filename;
+      // iframe内ではDOM未接続のアンカーのclick()が無視されるため、必ず追加→クリック→削除する
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
     } catch(e) {
       alert('ダウンロードに失敗しました。もう一度お試しください。');
@@ -4006,7 +4009,11 @@
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename;
+    // iframe内ではDOM未接続のアンカーのclick()が無視されるため、必ず追加→クリック→削除する
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
   }
 
   async function finalizeOrganization() {
