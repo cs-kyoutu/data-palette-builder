@@ -212,12 +212,12 @@
       </div>
 
       <div class="field">
-        <label class="label">データファイル（実データ）<span class="opt">任意</span></label>
+        <label class="label">データファイル（実データ）<span class="req">必須</span></label>
         <div class="drop" id="dsDrop" onclick="document.getElementById('dsFile').click()">
           📄 実データ（Excel / CSV・複数可）をクリックして選択
           <input type="file" id="dsFile" accept=".xlsx,.xls,.csv" multiple onchange="handleDsFiles(this.files)">
         </div>
-        <div class="file-status" id="dsFileStatus">未選択 — アップロードすると実カラムで設計します（なければ要件のみで設計）</div>
+        <div class="file-status" id="dsFileStatus">未選択 — 実カラムで設計するため、生成前に1つ以上アップロードしてください</div>
       </div>
 
       <button class="gen-btn" id="dsGen" onclick="dsGenerate()" disabled>レポートからテーブル定義を逆算する</button>
@@ -298,6 +298,13 @@
       b.className = 'bridge-btn';
       b.textContent = '→ この設計でBIレポート設定へ進む';
       b.onclick = sendDesignToBi;
+      bubble.appendChild(b);
+    }
+    if (opts.dpBridge) {
+      const b = document.createElement('button');
+      b.className = 'bridge-btn';
+      b.textContent = '→ DP事前計算の手順書を生成';
+      b.onclick = generateDpProcedure;
       bubble.appendChild(b);
     }
     msg.appendChild(avatar);
@@ -568,6 +575,32 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  // designのDP事前計算が1件でもあるか(単一/複数テーブル両対応)。ボタン表示判定に使う。
+  function _hasDpItems(d) {
+    if (!d) return false;
+    const tables = (Array.isArray(d.テーブル) && d.テーブル.length) ? d.テーブル : [d];
+    return tables.some(t => Array.isArray(t.DP事前計算) && t.DP事前計算.length > 0);
+  }
+
+  // DP事前計算 → 施策の生成エンジンで実行可能な手順書を生成する
+  async function generateDpProcedure() {
+    if (!dsSession) return;
+    addMsg('dsMessages', 'user', 'DP事前計算の手順書を生成します...');
+    addTyping('dsMessages', DS_STAGES);
+    try {
+      const res = await fetch('/api/bi/design/generate-procedure', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: dsSession }),
+      });
+      const data = await res.json();
+      removeTyping('dsMessages');
+      addMsg('dsMessages', 'ai', data.reply, { downloadUrl: data.download_url, downloadLabel: '📥 手順書をダウンロード' });
+    } catch (e) {
+      removeTyping('dsMessages');
+      addMsg('dsMessages', 'ai', 'エラーが発生しました。');
+    }
+  }
+
   function updateDsBtn() {
     let hasReq;
     if (dsInputMode === 'file') {
@@ -577,7 +610,8 @@
       hasReq = [...document.querySelectorAll('#dsReportList .ds-report-block')].some(b =>
         b.querySelector('.ds-sosoku').value.trim() || b.querySelector('.ds-metrics').value.trim());
     }
-    document.getElementById('dsGen').disabled = !(hasReq && !dsLoading);
+    const hasData = dsDataFiles.length > 0;
+    document.getElementById('dsGen').disabled = !(hasReq && hasData && !dsLoading);
   }
   async function handleDsFiles(files) {
     if (!files || !files.length) return;
@@ -599,27 +633,28 @@
       const names = dsDataFiles.map(t => `${t.table_name}(${t.columns.length}列)`).join(' / ');
       status.textContent = `✓ ${dsDataFiles.length}テーブル: ${names} — 実カラムで設計します`;
     } catch (e) {
-      status.textContent = 'エラー: ' + (e.message || '読み込み失敗') + '（要件のみで設計します）';
+      status.textContent = 'エラー: ' + (e.message || '読み込み失敗') + '。実データが無いと設計できません。';
     }
+    updateDsBtn();
   }
   async function dsGenerate() {
+    if (!dsDataFiles.length || dsLoading) return;
     let requirement, userMsg;
     if (dsInputMode === 'file') {
-      if (!dsReportGrid.trim() || dsLoading) return;
+      if (!dsReportGrid.trim()) return;
       requirement = `下記は「作りたいレポート」の完成イメージ（レイアウト表）です（ファイル: ${dsReportFileName}）。`
         + `各表のレイアウトから 表側(行軸) / 表頭(列軸) / 指標 を読み取り、これらを満たすテーブル定義を逆算してください。\n\n`
         + dsReportGrid;
       userMsg = `レポート画像（${dsReportFileName}）からテーブル定義を逆算します...`;
     } else {
       requirement = buildDsRequirementFromForm();
-      if (!requirement.trim() || dsLoading) return;
+      if (!requirement.trim()) return;
       userMsg = 'レポートからテーブル定義を逆算します...';
     }
     dsLoading = true; dsSession = null; updateDsBtn();
     document.getElementById('dsAssistant').classList.remove('hidden');
     document.getElementById('dsMessages').innerHTML = '';
-    const dataNote = dsDataFiles.length ? `（実データ ${dsDataFiles.length}テーブルを使用）` : '';
-    addMsg('dsMessages', 'user', userMsg + dataNote);
+    addMsg('dsMessages', 'user', userMsg + `（実データ ${dsDataFiles.length}テーブルを使用）`);
     addTyping('dsMessages', DS_STAGES);
     try {
       const res = await fetch('/api/bi/design/generate', {
@@ -631,7 +666,10 @@
       dsSession = data.session_id;
       const done = data.status === 'done' && data.design;
       if (done) dsLastDesign = data.design;
-      addMsg('dsMessages', 'ai', data.reply, { downloadUrl: data.download_url, downloadLabel: '📥 設計書をダウンロード', bridge: done });
+      addMsg('dsMessages', 'ai', data.reply, {
+        downloadUrl: data.download_url, downloadLabel: '📥 設計書をダウンロード',
+        bridge: done, dpBridge: done && _hasDpItems(data.design),
+      });
       document.getElementById('dsInputRow').classList.toggle('visible', data.status === 'asking');
     } catch (e) {
       removeTyping('dsMessages');
@@ -656,7 +694,10 @@
       dsSession = data.session_id;
       const done = data.status === 'done' && data.design;
       if (done) dsLastDesign = data.design;
-      addMsg('dsMessages', 'ai', data.reply, { downloadUrl: data.download_url, downloadLabel: '📥 設計書をダウンロード', bridge: done });
+      addMsg('dsMessages', 'ai', data.reply, {
+        downloadUrl: data.download_url, downloadLabel: '📥 設計書をダウンロード',
+        bridge: done, dpBridge: done && _hasDpItems(data.design),
+      });
       document.getElementById('dsInputRow').classList.toggle('visible', data.status === 'asking');
     } catch (e) {
       removeTyping('dsMessages');

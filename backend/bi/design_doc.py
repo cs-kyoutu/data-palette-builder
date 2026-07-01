@@ -8,7 +8,7 @@
 """
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class BIGenerateRequest(BaseModel):
@@ -37,15 +37,15 @@ class BIResponse(BaseModel):
 
 # === 逆算設計モード (レポート → テーブル定義) ============================
 # 演習資料(データマート設計 Vol.02)の4ステップを道具化したモード。
-# 入力は「完成テーブル」ではなく「目標レポート(自然文)」。data_file は受け取らない
-# (どんなテーブルを作るべきか=粒度/主キー/必要カラムを Claude が逆算するのが目的)。
+# 入力は「目標レポート(自然文)」+「実データ(data_files, 必須)」。
+# 実カラムを前提にすることで、DP事前計算が必要な指標を施策の生成エンジンに渡して
+# 実行可能な手順書まで生成できるようにする (docs/bi_mode_design.md 改訂, 2026-07-01)。
 
 class DesignGenerateRequest(BaseModel):
     session_id: str | None = None
     report_requirement: str = ""                    # 目標レポートの自然文(複数レポート可)
     additional_context: str = ""
-    data_files: list[dict] = []                     # 任意。{table_name, columns:[...]} の配列。
-    #   あり → 実カラムで設計(データ基準) / なし → 要件のみで設計(従来どおり)
+    data_files: list[dict] = Field(min_length=1)     # 必須。{table_name, columns:[...]} の配列。実カラムで設計する。
 
 
 class DesignChatRequest(BaseModel):
@@ -59,3 +59,10 @@ class DesignResponse(BaseModel):
     status: str                                     # "asking" | "done"
     design: dict | None = None                      # 中間 table_design JSON (フロント表示用)
     download_url: str | None = None
+
+
+# DP事前計算 → 施策の生成エンジンで実行可能な手順書に変換するリクエスト。
+# 逆算設計セッション(design_generate/design_chat)が確定済みで、design.DP事前計算 が
+# 1件以上あることが前提(フロントは空のときボタンを出さない)。
+class DesignProcedureRequest(BaseModel):
+    session_id: str
